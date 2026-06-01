@@ -20,6 +20,8 @@ void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
 
     nlohmann::json payload;
     payload["type"] = DAMAGE_ENEMY;
+    payload["sceneNum"] = gPlayState->sceneNum;
+    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -43,7 +45,13 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+    if (client.sceneNum != gPlayState->sceneNum) {
+        return;
+    }
+
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
@@ -89,6 +97,8 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     nlohmann::json payload;
     payload["type"] = REPORT_ENEMY_DAMAGE;
     payload["targetClientId"] = authorityClientId;
+    payload["sceneNum"] = gPlayState->sceneNum;
+    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -112,7 +122,13 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+    if (client.sceneNum != gPlayState->sceneNum) {
+        return;
+    }
+
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 

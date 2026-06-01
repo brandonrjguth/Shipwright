@@ -20,6 +20,8 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
 
     nlohmann::json payload;
     payload["type"] = KILL_ENEMY;
+    payload["sceneNum"] = gPlayState->sceneNum;
+    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["posX"] = actor->world.pos.x;
@@ -42,7 +44,13 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+    if (client.sceneNum != gPlayState->sceneNum) {
+        return;
+    }
+
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 

@@ -124,7 +124,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+    if (client.sceneNum != gPlayState->sceneNum) {
         return;
     }
 
