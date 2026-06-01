@@ -11,6 +11,14 @@ extern "C" {
 #undef this
 #include "src/overlays/actors/ovl_En_Ssh/z_en_ssh.h"
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
+#include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
+#include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
+#include "src/overlays/actors/ovl_En_Okuta/z_en_okuta.h"
+#include "src/overlays/actors/ovl_En_Firefly/z_en_firefly.h"
+#include "src/overlays/actors/ovl_En_Bb/z_en_bb.h"
+#include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
+#include "src/overlays/actors/ovl_En_Peehat/z_en_peehat.h"
+#include "src/overlays/actors/ovl_En_Reeba/z_en_reeba.h"
 extern PlayState* gPlayState;
 }
 
@@ -118,6 +126,123 @@ static nlohmann::json GetEnemyExtraState(Actor* actor) {
             AddSkelAnimeState(extra, &sw->skelAnime);
             break;
         }
+        case ACTOR_EN_WF: {
+            EnWf* wf = (EnWf*)actor;
+            extra["kind"] = "EnWf";
+            extra["action"] = wf->action;
+            extra["actionTimer"] = wf->actionTimer;
+            extra["runSpeed"] = wf->runSpeed;
+            extra["slashStatus"] = wf->slashStatus;
+            extra["switchFlag"] = wf->switchFlag;
+            extra["runAngle"] = wf->runAngle;
+            extra["fireTimer"] = wf->fireTimer;
+            extra["damageEffect"] = wf->damageEffect;
+            AddSkelAnimeState(extra, &wf->skelAnime);
+            break;
+        }
+        case ACTOR_EN_ZF: {
+            EnZf* zf = (EnZf*)actor;
+            extra["kind"] = "EnZf";
+            extra["action"] = zf->action;
+            extra["hopAnimIndex"] = zf->hopAnimIndex;
+            extra["headRot"] = zf->headRot;
+            extra["headRotTemp"] = zf->headRotTemp;
+            extra["iceTimer"] = zf->iceTimer;
+            extra["swordSheathed"] = zf->swordSheathed;
+            extra["clearFlag"] = zf->clearFlag;
+            extra["curPlatform"] = zf->curPlatform;
+            extra["homePlatform"] = zf->homePlatform;
+            extra["nextPlatform"] = zf->nextPlatform;
+            extra["damageEffect"] = zf->damageEffect;
+            AddSkelAnimeState(extra, &zf->skelAnime);
+            break;
+        }
+        case ACTOR_EN_OKUTA: {
+            EnOkuta* okuta = (EnOkuta*)actor;
+            extra["kind"] = "EnOkuta";
+            extra["timer"] = okuta->timer;
+            extra["numShots"] = okuta->numShots;
+            extra["jumpHeight"] = okuta->jumpHeight;
+            extra["headScaleX"] = okuta->headScale.x;
+            extra["headScaleY"] = okuta->headScale.y;
+            extra["headScaleZ"] = okuta->headScale.z;
+            AddSkelAnimeState(extra, &okuta->skelAnime);
+            break;
+        }
+        case ACTOR_EN_FIREFLY: {
+            EnFirefly* firefly = (EnFirefly*)actor;
+            extra["kind"] = "EnFirefly";
+            extra["auraType"] = firefly->auraType;
+            extra["onFire"] = firefly->onFire;
+            extra["timer"] = firefly->timer;
+            extra["targetPitch"] = firefly->targetPitch;
+            extra["maxAltitude"] = firefly->maxAltitude;
+            AddSkelAnimeState(extra, &firefly->skelAnime);
+            break;
+        }
+        case ACTOR_EN_BB: {
+            EnBb* bb = (EnBb*)actor;
+            extra["kind"] = "EnBb";
+            extra["action"] = bb->action;
+            extra["moveMode"] = bb->moveMode;
+            extra["timer"] = bb->timer;
+            extra["actionState"] = bb->actionState;
+            extra["charge"] = bb->charge;
+            extra["actionVar1"] = bb->actionVar1;
+            extra["actionVar2"] = bb->actionVar2;
+            extra["flameScrollMod"] = bb->flameScrollMod;
+            extra["bobPhase"] = bb->bobPhase;
+            extra["bobSize"] = bb->bobSize;
+            extra["maxSpeed"] = bb->maxSpeed;
+            extra["fireIceTimer"] = bb->fireIceTimer;
+            extra["dmgEffect"] = bb->dmgEffect;
+            AddSkelAnimeState(extra, &bb->skelAnime);
+            break;
+        }
+        case ACTOR_EN_TITE: {
+            EnTite* tite = (EnTite*)actor;
+            extra["kind"] = "EnTite";
+            extra["action"] = tite->action;
+            extra["flipState"] = tite->flipState;
+            extra["actionVar1"] = tite->actionVar1;
+            extra["actionVar2"] = tite->actionVar2;
+            extra["spawnIceTimer"] = tite->spawnIceTimer;
+            extra["damageEffect"] = tite->damageEffect;
+            AddSkelAnimeState(extra, &tite->skelAnime);
+            break;
+        }
+        case ACTOR_EN_PEEHAT: {
+            EnPeehat* peehat = (EnPeehat*)actor;
+            extra["kind"] = "EnPeehat";
+            extra["state"] = peehat->state;
+            extra["bladeRotVel"] = peehat->bladeRotVel;
+            extra["bladeRot"] = peehat->bladeRot;
+            extra["riseDelayTimer"] = peehat->riseDelayTimer;
+            extra["seekPlayerTimer"] = peehat->seekPlayerTimer;
+            extra["animTimer"] = peehat->animTimer;
+            extra["jiggleRot"] = peehat->jiggleRot;
+            extra["jiggleRotInc"] = peehat->jiggleRotInc;
+            extra["scaleShift"] = peehat->scaleShift;
+            AddSkelAnimeState(extra, &peehat->skelAnime);
+            break;
+        }
+        case ACTOR_EN_REEBA: {
+            EnReeba* reeba = (EnReeba*)actor;
+            extra["kind"] = "EnReeba";
+            extra["bigLeeverTimer"] = reeba->bigLeeverTimer;
+            extra["moveTimer"] = reeba->moveTimer;
+            extra["sfxTimer"] = reeba->sfxTimer;
+            extra["damagedTimer"] = reeba->damagedTimer;
+            extra["waitTimer"] = reeba->waitTimer;
+            extra["isBig"] = reeba->isBig;
+            extra["stunType"] = reeba->stunType;
+            extra["aimType"] = reeba->aimType;
+            extra["yOffsetTarget"] = reeba->yOffsetTarget;
+            extra["yOffsetStep"] = reeba->yOffsetStep;
+            extra["scale"] = reeba->scale;
+            AddSkelAnimeState(extra, &reeba->skelanime);
+            break;
+        }
     }
 
     return extra;
@@ -187,6 +312,101 @@ static void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         sw->unk_444 = extra.value("unk_444", sw->unk_444);
         sw->unk_446 = extra.value("unk_446", sw->unk_446);
         ApplySkelAnimeState(extra, &sw->skelAnime);
+    } else if (actor->id == ACTOR_EN_WF && kind == "EnWf") {
+        EnWf* wf = (EnWf*)actor;
+        wf->action = extra.value("action", wf->action);
+        wf->actionTimer = extra.value("actionTimer", wf->actionTimer);
+        wf->runSpeed = extra.value("runSpeed", wf->runSpeed);
+        wf->slashStatus = extra.value("slashStatus", wf->slashStatus);
+        wf->switchFlag = extra.value("switchFlag", wf->switchFlag);
+        wf->runAngle = extra.value("runAngle", wf->runAngle);
+        wf->fireTimer = extra.value("fireTimer", wf->fireTimer);
+        wf->damageEffect = extra.value("damageEffect", wf->damageEffect);
+        ApplySkelAnimeState(extra, &wf->skelAnime);
+    } else if (actor->id == ACTOR_EN_ZF && kind == "EnZf") {
+        EnZf* zf = (EnZf*)actor;
+        zf->action = extra.value("action", zf->action);
+        zf->hopAnimIndex = extra.value("hopAnimIndex", zf->hopAnimIndex);
+        zf->headRot = extra.value("headRot", zf->headRot);
+        zf->headRotTemp = extra.value("headRotTemp", zf->headRotTemp);
+        zf->iceTimer = extra.value("iceTimer", zf->iceTimer);
+        zf->swordSheathed = extra.value("swordSheathed", zf->swordSheathed);
+        zf->clearFlag = extra.value("clearFlag", zf->clearFlag);
+        zf->curPlatform = extra.value("curPlatform", zf->curPlatform);
+        zf->homePlatform = extra.value("homePlatform", zf->homePlatform);
+        zf->nextPlatform = extra.value("nextPlatform", zf->nextPlatform);
+        zf->damageEffect = extra.value("damageEffect", zf->damageEffect);
+        ApplySkelAnimeState(extra, &zf->skelAnime);
+    } else if (actor->id == ACTOR_EN_OKUTA && kind == "EnOkuta") {
+        EnOkuta* okuta = (EnOkuta*)actor;
+        okuta->timer = extra.value("timer", okuta->timer);
+        okuta->numShots = extra.value("numShots", okuta->numShots);
+        okuta->jumpHeight = extra.value("jumpHeight", okuta->jumpHeight);
+        if (extra.contains("headScaleX")) {
+            okuta->headScale.x = extra.value("headScaleX", okuta->headScale.x);
+            okuta->headScale.y = extra.value("headScaleY", okuta->headScale.y);
+            okuta->headScale.z = extra.value("headScaleZ", okuta->headScale.z);
+        }
+        ApplySkelAnimeState(extra, &okuta->skelAnime);
+    } else if (actor->id == ACTOR_EN_FIREFLY && kind == "EnFirefly") {
+        EnFirefly* firefly = (EnFirefly*)actor;
+        firefly->auraType = extra.value("auraType", firefly->auraType);
+        firefly->onFire = extra.value("onFire", firefly->onFire);
+        firefly->timer = extra.value("timer", firefly->timer);
+        firefly->targetPitch = extra.value("targetPitch", firefly->targetPitch);
+        firefly->maxAltitude = extra.value("maxAltitude", firefly->maxAltitude);
+        ApplySkelAnimeState(extra, &firefly->skelAnime);
+    } else if (actor->id == ACTOR_EN_BB && kind == "EnBb") {
+        EnBb* bb = (EnBb*)actor;
+        bb->action = extra.value("action", bb->action);
+        bb->moveMode = extra.value("moveMode", bb->moveMode);
+        bb->timer = extra.value("timer", bb->timer);
+        bb->actionState = extra.value("actionState", bb->actionState);
+        bb->charge = extra.value("charge", bb->charge);
+        bb->actionVar1 = extra.value("actionVar1", bb->actionVar1);
+        bb->actionVar2 = extra.value("actionVar2", bb->actionVar2);
+        bb->flameScrollMod = extra.value("flameScrollMod", bb->flameScrollMod);
+        bb->bobPhase = extra.value("bobPhase", bb->bobPhase);
+        bb->bobSize = extra.value("bobSize", bb->bobSize);
+        bb->maxSpeed = extra.value("maxSpeed", bb->maxSpeed);
+        bb->fireIceTimer = extra.value("fireIceTimer", bb->fireIceTimer);
+        bb->dmgEffect = extra.value("dmgEffect", bb->dmgEffect);
+        ApplySkelAnimeState(extra, &bb->skelAnime);
+    } else if (actor->id == ACTOR_EN_TITE && kind == "EnTite") {
+        EnTite* tite = (EnTite*)actor;
+        tite->action = extra.value("action", tite->action);
+        tite->flipState = extra.value("flipState", tite->flipState);
+        tite->actionVar1 = extra.value("actionVar1", tite->actionVar1);
+        tite->actionVar2 = extra.value("actionVar2", tite->actionVar2);
+        tite->spawnIceTimer = extra.value("spawnIceTimer", tite->spawnIceTimer);
+        tite->damageEffect = extra.value("damageEffect", tite->damageEffect);
+        ApplySkelAnimeState(extra, &tite->skelAnime);
+    } else if (actor->id == ACTOR_EN_PEEHAT && kind == "EnPeehat") {
+        EnPeehat* peehat = (EnPeehat*)actor;
+        peehat->state = extra.value("state", peehat->state);
+        peehat->bladeRotVel = extra.value("bladeRotVel", peehat->bladeRotVel);
+        peehat->bladeRot = extra.value("bladeRot", peehat->bladeRot);
+        peehat->riseDelayTimer = extra.value("riseDelayTimer", peehat->riseDelayTimer);
+        peehat->seekPlayerTimer = extra.value("seekPlayerTimer", peehat->seekPlayerTimer);
+        peehat->animTimer = extra.value("animTimer", peehat->animTimer);
+        peehat->jiggleRot = extra.value("jiggleRot", peehat->jiggleRot);
+        peehat->jiggleRotInc = extra.value("jiggleRotInc", peehat->jiggleRotInc);
+        peehat->scaleShift = extra.value("scaleShift", peehat->scaleShift);
+        ApplySkelAnimeState(extra, &peehat->skelAnime);
+    } else if (actor->id == ACTOR_EN_REEBA && kind == "EnReeba") {
+        EnReeba* reeba = (EnReeba*)actor;
+        reeba->bigLeeverTimer = extra.value("bigLeeverTimer", reeba->bigLeeverTimer);
+        reeba->moveTimer = extra.value("moveTimer", reeba->moveTimer);
+        reeba->sfxTimer = extra.value("sfxTimer", reeba->sfxTimer);
+        reeba->damagedTimer = extra.value("damagedTimer", reeba->damagedTimer);
+        reeba->waitTimer = extra.value("waitTimer", reeba->waitTimer);
+        reeba->isBig = extra.value("isBig", reeba->isBig);
+        reeba->stunType = extra.value("stunType", reeba->stunType);
+        reeba->aimType = extra.value("aimType", reeba->aimType);
+        reeba->yOffsetTarget = extra.value("yOffsetTarget", reeba->yOffsetTarget);
+        reeba->yOffsetStep = extra.value("yOffsetStep", reeba->yOffsetStep);
+        reeba->scale = extra.value("scale", reeba->scale);
+        ApplySkelAnimeState(extra, &reeba->skelanime);
     }
 }
 
