@@ -180,6 +180,8 @@ void Anchor::ProcessIncomingPacketQueue() {
                 HandlePacket_SendRoomEnemies(payload);
             else if (packetType == ENEMY_UPDATE)
                 HandlePacket_EnemyUpdate(payload);
+            else if (packetType == ENEMY_EVENT)
+                HandlePacket_EnemyEvent(payload);
             else if (packetType == REPORT_ENEMY_DAMAGE)
                 HandlePacket_ReportEnemyDamage(payload);
         } catch (const std::exception& e) {
@@ -276,7 +278,7 @@ Actor* Anchor::FindClosestActorByCategoryAndId(ActorCategory category, s16 actor
     float closestDist = -1.0f;
 
     while (currAct != nullptr) {
-        if (currAct->id == actorId) {
+        if (currAct->id == actorId && !IsEnemyMarkedDead(GetEnemyNetworkId(currAct))) {
             float dx = currAct->world.pos.x - pos.x;
             float dy = currAct->world.pos.y - pos.y;
             float dz = currAct->world.pos.z - pos.z;
@@ -429,6 +431,9 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     actor->xyzDistToPlayerSq = state.xyzDistToPlayerSq;
     actor->freezeTimer = state.freezeTimer;
     actor->colorFilterTimer = state.colorFilterTimer;
+    if (state.colorFilterParams != 0) {
+        actor->colorFilterParams = state.colorFilterParams;
+    }
 }
 
 void Anchor::ApplyEnemyAuthorityTargets() {

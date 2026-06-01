@@ -89,6 +89,7 @@ typedef struct {
     f32 xyzDistToPlayerSq;
     u16 freezeTimer;
     u8 colorFilterTimer;
+    u16 colorFilterParams;
     u8 health;
 } EnemyAuthorityState;
 
@@ -163,6 +164,7 @@ class Anchor : public Network {
     void HandlePacket_RequestRoomEnemies(nlohmann::json payload);
     void HandlePacket_SendRoomEnemies(nlohmann::json payload);
     void HandlePacket_EnemyUpdate(nlohmann::json payload);
+    void HandlePacket_EnemyEvent(nlohmann::json payload);
     void HandlePacket_ReportEnemyDamage(nlohmann::json payload);
 
   public:
@@ -197,6 +199,7 @@ class Anchor : public Network {
     inline static const std::string REQUEST_ROOM_ENEMIES = "REQUEST_ROOM_ENEMIES";
     inline static const std::string SEND_ROOM_ENEMIES = "SEND_ROOM_ENEMIES";
     inline static const std::string ENEMY_UPDATE = "ENEMY_UPDATE";
+    inline static const std::string ENEMY_EVENT = "ENEMY_EVENT";
     inline static const std::string REPORT_ENEMY_DAMAGE = "REPORT_ENEMY_DAMAGE";
 
     static Anchor* Instance;
@@ -241,6 +244,7 @@ class Anchor : public Network {
     void SendPacket_RequestRoomEnemies();
     void SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category);
     void SendPacket_EnemyUpdate(std::vector<Actor*> actors);
+    void SendPacket_EnemyEvent(Actor* actor, std::string eventType, nlohmann::json eventData);
     void SendPacket_ReportEnemyDamage(Actor* actor, u8 health);
 };
 

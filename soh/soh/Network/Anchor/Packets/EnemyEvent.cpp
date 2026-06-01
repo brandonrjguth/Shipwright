@@ -1,15 +1,13 @@
 #include "soh/Network/Anchor/Anchor.h"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
-#include "soh/Enhancements/game-interactor/GameInteractor.h"
 
 extern "C" {
-#include "macros.h"
-#include "functions.h"
+#include "variables.h"
 extern PlayState* gPlayState;
 }
 
-void Anchor::SendPacket_KillEnemy(Actor* actor) {
+void Anchor::SendPacket_EnemyEvent(Actor* actor, std::string eventType, nlohmann::json eventData) {
     if (!IsSaveLoaded()) {
         return;
     }
@@ -18,10 +16,8 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
         return;
     }
 
-    MarkEnemyDead(GetEnemyNetworkId(actor));
-
     nlohmann::json payload;
-    payload["type"] = KILL_ENEMY;
+    payload["type"] = ENEMY_EVENT;
     payload["sceneNum"] = gPlayState->sceneNum;
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = ownClientId;
@@ -32,38 +28,30 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
     payload["category"] = actor->category;
+    payload["eventType"] = eventType;
+    payload["eventData"] = eventData;
     payload["quiet"] = true;
 
     SendJsonToRemote(payload);
 }
 
-void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
+void Anchor::HandlePacket_EnemyEvent(nlohmann::json payload) {
     if (!IsSaveLoaded()) {
         return;
     }
 
-    uint32_t clientId = payload.at("clientId").get<uint32_t>();
-    if (!clients.contains(clientId)) {
-        return;
-    }
-
-    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
-    s8 roomNum = payload.value("roomNum", (s8)-1);
-    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+    if (!IsValidEnemyAuthorityPacket(payload)) {
         return;
     }
 
     uint64_t networkId = payload.value("networkId", (uint64_t)0);
-
-    if (IsEnemyMarkedDead(networkId)) {
-        return;
-    }
-
     s16 actorId = payload.at("actorId").get<s16>();
     float posX = payload.at("posX").get<float>();
     float posY = payload.at("posY").get<float>();
     float posZ = payload.at("posZ").get<float>();
     s16 category = payload.at("category").get<s16>();
+    std::string eventType = payload.at("eventType").get<std::string>();
+    nlohmann::json eventData = payload.value("eventData", nlohmann::json::object());
 
     Vec3f pos = { posX, posY, posZ };
     Actor* target = FindActorByEnemyNetworkId(networkId);
@@ -71,9 +59,18 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
         target = FindClosestActorByCategoryAndId((ActorCategory)category, actorId, pos);
         SetEnemyNetworkId(target, networkId);
     }
+    if (target == nullptr) {
+        return;
+    }
 
-    if (target != nullptr) {
-        MarkEnemyDead(GetEnemyNetworkId(target));
-        actorKillBuffer.push_back(target);
+    if (eventType == "STUN") {
+        u16 duration = eventData.value("duration", (u16)30);
+        target->freezeTimer = duration;
+        u8 colorFilterTimer = eventData.value("colorFilterTimer", (u8)30);
+        target->colorFilterTimer = colorFilterTimer;
+    } else if (eventType == "FREEZE") {
+        u16 duration = eventData.value("duration", (u16)30);
+        target->freezeTimer = duration;
+        target->colorFilterTimer = duration;
     }
 }

@@ -53,6 +53,11 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
     }
 
     uint64_t networkId = payload.value("networkId", (uint64_t)0);
+
+    if (IsEnemyMarkedDead(networkId)) {
+        return;
+    }
+
     s16 actorId = payload.at("actorId").get<s16>();
     u8 health = payload.at("health").get<u8>();
     float posX = payload.at("posX").get<float>();
@@ -137,6 +142,11 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     uint64_t networkId = payload.value("networkId", (uint64_t)0);
+
+    if (IsEnemyMarkedDead(networkId)) {
+        return;
+    }
+
     s16 actorId = payload.at("actorId").get<s16>();
     u8 health = payload.at("health").get<u8>();
     float posX = payload.at("posX").get<float>();

@@ -453,6 +453,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     std::vector<float> xyzDistToPlayerSq;
     std::vector<u16> freezeTimer;
     std::vector<u8> colorFilterTimer;
+    std::vector<u16> colorFilterParams;
     std::vector<u8> health;
     std::vector<nlohmann::json> extraStates;
 
@@ -488,6 +489,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         xyzDistToPlayerSq.push_back(actor->xyzDistToPlayerSq);
         freezeTimer.push_back(actor->freezeTimer);
         colorFilterTimer.push_back(actor->colorFilterTimer);
+        colorFilterParams.push_back(actor->colorFilterParams);
         health.push_back(actor->colChkInfo.health);
         extraStates.push_back(GetEnemyExtraState(actor));
     }
@@ -529,6 +531,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["xyzDistToPlayerSq"] = xyzDistToPlayerSq;
     payload["freezeTimer"] = freezeTimer;
     payload["colorFilterTimer"] = colorFilterTimer;
+    payload["colorFilterParams"] = colorFilterParams;
     payload["health"] = health;
     payload["extraStates"] = extraStates;
     payload["quiet"] = true;
@@ -578,6 +581,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     auto xyzDistToPlayerSq = payload.value("xyzDistToPlayerSq", std::vector<float>{});
     auto freezeTimer = payload.at("freezeTimer").get<std::vector<u16>>();
     auto colorFilterTimer = payload.at("colorFilterTimer").get<std::vector<u8>>();
+    auto colorFilterParams = payload.value("colorFilterParams", std::vector<u16>{});
     auto health = payload.at("health").get<std::vector<u8>>();
     auto extraStates = payload.value("extraStates", std::vector<nlohmann::json>{});
 
@@ -594,6 +598,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         (!yDistToPlayer.empty() && yDistToPlayer.size() != enemyCount) ||
         (!xyzDistToPlayerSq.empty() && xyzDistToPlayerSq.size() != enemyCount) ||
         freezeTimer.size() != enemyCount || colorFilterTimer.size() != enemyCount ||
+        (!colorFilterParams.empty() && colorFilterParams.size() != enemyCount) ||
         (!extraStates.empty() && extraStates.size() != enemyCount) ||
         health.size() != enemyCount) {
         return;
@@ -632,6 +637,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                       xyzDistToPlayerSq.empty() ? 0.0f : xyzDistToPlayerSq[i],
                                       freezeTimer[i],
                                       colorFilterTimer[i],
+                                      colorFilterParams.empty() ? (u16)0 : colorFilterParams[i],
                                       health[i] };
         enemyAuthorityTargets[networkIds[i]] = state;
         ApplyEnemyAuthorityState(target, state, false);

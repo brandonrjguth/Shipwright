@@ -88,6 +88,9 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
     }
 
     for (uint64_t networkId : deadEnemiesNetworkId) {
+        if (IsEnemyMarkedDead(networkId)) {
+            continue;
+        }
         deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].insert(networkId);
         Actor* deadActor = FindActorByEnemyNetworkId(networkId);
         if (deadActor != nullptr) {
@@ -96,6 +99,10 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
     }
 
     for (size_t li = 0; li < localActors.size(); li++) {
+        if (IsEnemyMarkedDead(GetEnemyNetworkId(localActors[li]))) {
+            continue;
+        }
+
         float closestDist = -1.0f;
         int closestIdx = -1;
 
@@ -104,6 +111,9 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
                 continue;
             }
             if (localActors[li]->id != enemiesId[ri]) {
+                continue;
+            }
+            if (enemiesHealth[ri] == 0) {
                 continue;
             }
 
