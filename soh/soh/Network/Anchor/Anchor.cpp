@@ -635,11 +635,7 @@ void Anchor::DetectEnemyDamage() {
         if (enemyHealthTracker.contains(act)) {
             u8 lastHealth = enemyHealthTracker[act];
             if (currentHealth < lastHealth) {
-                if (HasEnemySyncAuthority()) {
-                    SendPacket_DamageEnemy(act, currentHealth);
-                } else {
-                    SendPacket_ReportEnemyDamage(act, currentHealth);
-                }
+                SendPacket_DamageEnemy(act, currentHealth);
             }
         }
 

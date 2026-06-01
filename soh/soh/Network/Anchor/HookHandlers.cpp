@@ -154,11 +154,7 @@ void Anchor::RegisterHooks() {
     // Enemy sync hooks
     COND_HOOK(OnEnemyDefeat, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
-        if (HasEnemySyncAuthority()) {
-            SendPacket_KillEnemy(actor);
-        } else {
-            SendPacket_ReportEnemyDamage(actor, 0);
-        }
+        SendPacket_KillEnemy(actor);
 
         if (HasEnemySyncAuthority()) {
             for (auto& [clientId, client] : clients) {
@@ -203,11 +199,7 @@ void Anchor::RegisterHooks() {
 
     COND_HOOK(OnBossDefeat, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
-        if (HasEnemySyncAuthority()) {
-            SendPacket_KillEnemy(actor);
-        } else {
-            SendPacket_ReportEnemyDamage(actor, 0);
-        }
+        SendPacket_KillEnemy(actor);
     });
 
     COND_HOOK(OnItemReceive, isConnected, [&](GetItemEntry itemEntry) {

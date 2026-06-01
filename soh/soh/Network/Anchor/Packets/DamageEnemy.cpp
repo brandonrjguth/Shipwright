@@ -41,7 +41,14 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
         return;
     }
 
-    if (!IsValidEnemyAuthorityPacket(payload)) {
+    uint32_t clientId = payload.at("clientId").get<uint32_t>();
+    if (!clients.contains(clientId)) {
+        return;
+    }
+
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
@@ -60,12 +67,14 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
         SetEnemyNetworkId(target, networkId);
     }
 
-    if (target != nullptr) {
-        if (health > 0) {
-            target->colChkInfo.health = health;
-        } else {
-            target->colChkInfo.health = 1;
+    if (target != nullptr && health < target->colChkInfo.health) {
+        if (health == 0) {
+            MarkEnemyDead(GetEnemyNetworkId(target));
+            actorKillBuffer.push_back(target);
+            return;
         }
+
+        target->colChkInfo.health = health;
         enemyHealthTracker[target] = target->colChkInfo.health;
     }
 }

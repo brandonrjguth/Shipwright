@@ -42,7 +42,14 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
         return;
     }
 
-    if (!IsValidEnemyAuthorityPacket(payload)) {
+    uint32_t clientId = payload.at("clientId").get<uint32_t>();
+    if (!clients.contains(clientId)) {
+        return;
+    }
+
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
