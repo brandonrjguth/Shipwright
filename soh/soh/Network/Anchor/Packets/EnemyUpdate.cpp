@@ -13,6 +13,80 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
 #include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
+
+extern "C" {
+void EnDekubaba_Wait(EnDekubaba*, PlayState*);
+void EnDekubaba_Grow(EnDekubaba*, PlayState*);
+void EnDekubaba_Retract(EnDekubaba*, PlayState*);
+void EnDekubaba_DecideLunge(EnDekubaba*, PlayState*);
+void EnDekubaba_PrepareLunge(EnDekubaba*, PlayState*);
+void EnDekubaba_Lunge(EnDekubaba*, PlayState*);
+void EnDekubaba_PullBack(EnDekubaba*, PlayState*);
+void EnDekubaba_Recover(EnDekubaba*, PlayState*);
+void EnDekubaba_Hit(EnDekubaba*, PlayState*);
+void EnDekubaba_StunnedVertical(EnDekubaba*, PlayState*);
+void EnDekubaba_Sway(EnDekubaba*, PlayState*);
+void EnDekubaba_PrunedSomersault(EnDekubaba*, PlayState*);
+void EnDekubaba_ShrinkDie(EnDekubaba*, PlayState*);
+void EnDekubaba_DeadStickDrop(EnDekubaba*, PlayState*);
+}
+
+enum DekubabaAction : s32 {
+    DEKUBABA_ACTION_WAIT = 0,
+    DEKUBABA_ACTION_GROW = 1,
+    DEKUBABA_ACTION_RETRACT = 2,
+    DEKUBABA_ACTION_DECIDE_LUNGE = 3,
+    DEKUBABA_ACTION_PREPARE_LUNGE = 4,
+    DEKUBABA_ACTION_LUNGE = 5,
+    DEKUBABA_ACTION_PULL_BACK = 6,
+    DEKUBABA_ACTION_RECOVER = 7,
+    DEKUBABA_ACTION_HIT = 8,
+    DEKUBABA_ACTION_STUNNED_VERTICAL = 9,
+    DEKUBABA_ACTION_SWAY = 10,
+    DEKUBABA_ACTION_PRUNED_SOMERSAULT = 11,
+    DEKUBABA_ACTION_SHRINK_DIE = 12,
+    DEKUBABA_ACTION_DEAD_STICK_DROP = 13,
+};
+
+static s32 GetDekubabaActionId(EnDekubabaActionFunc actionFunc) {
+    if (actionFunc == EnDekubaba_Wait) return DEKUBABA_ACTION_WAIT;
+    if (actionFunc == EnDekubaba_Grow) return DEKUBABA_ACTION_GROW;
+    if (actionFunc == EnDekubaba_Retract) return DEKUBABA_ACTION_RETRACT;
+    if (actionFunc == EnDekubaba_DecideLunge) return DEKUBABA_ACTION_DECIDE_LUNGE;
+    if (actionFunc == EnDekubaba_PrepareLunge) return DEKUBABA_ACTION_PREPARE_LUNGE;
+    if (actionFunc == EnDekubaba_Lunge) return DEKUBABA_ACTION_LUNGE;
+    if (actionFunc == EnDekubaba_PullBack) return DEKUBABA_ACTION_PULL_BACK;
+    if (actionFunc == EnDekubaba_Recover) return DEKUBABA_ACTION_RECOVER;
+    if (actionFunc == EnDekubaba_Hit) return DEKUBABA_ACTION_HIT;
+    if (actionFunc == EnDekubaba_StunnedVertical) return DEKUBABA_ACTION_STUNNED_VERTICAL;
+    if (actionFunc == EnDekubaba_Sway) return DEKUBABA_ACTION_SWAY;
+    if (actionFunc == EnDekubaba_PrunedSomersault) return DEKUBABA_ACTION_PRUNED_SOMERSAULT;
+    if (actionFunc == EnDekubaba_ShrinkDie) return DEKUBABA_ACTION_SHRINK_DIE;
+    if (actionFunc == EnDekubaba_DeadStickDrop) return DEKUBABA_ACTION_DEAD_STICK_DROP;
+    return -1;
+}
+
+static EnDekubabaActionFunc GetDekubabaActionFunc(s32 actionId) {
+    switch (actionId) {
+        case DEKUBABA_ACTION_WAIT: return EnDekubaba_Wait;
+        case DEKUBABA_ACTION_GROW: return EnDekubaba_Grow;
+        case DEKUBABA_ACTION_RETRACT: return EnDekubaba_Retract;
+        case DEKUBABA_ACTION_DECIDE_LUNGE: return EnDekubaba_DecideLunge;
+        case DEKUBABA_ACTION_PREPARE_LUNGE: return EnDekubaba_PrepareLunge;
+        case DEKUBABA_ACTION_LUNGE: return EnDekubaba_Lunge;
+        case DEKUBABA_ACTION_PULL_BACK: return EnDekubaba_PullBack;
+        case DEKUBABA_ACTION_RECOVER: return EnDekubaba_Recover;
+        case DEKUBABA_ACTION_HIT: return EnDekubaba_Hit;
+        case DEKUBABA_ACTION_STUNNED_VERTICAL: return EnDekubaba_StunnedVertical;
+        case DEKUBABA_ACTION_SWAY: return EnDekubaba_Sway;
+        case DEKUBABA_ACTION_PRUNED_SOMERSAULT: return EnDekubaba_PrunedSomersault;
+        case DEKUBABA_ACTION_SHRINK_DIE: return EnDekubaba_ShrinkDie;
+        case DEKUBABA_ACTION_DEAD_STICK_DROP: return EnDekubaba_DeadStickDrop;
+        default: return nullptr;
+    }
+}
+#include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
+#include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 #include "src/overlays/actors/ovl_En_Okuta/z_en_okuta.h"
 #include "src/overlays/actors/ovl_En_Firefly/z_en_firefly.h"
 #include "src/overlays/actors/ovl_En_Bb/z_en_bb.h"
@@ -68,6 +142,7 @@ static nlohmann::json GetEnemyExtraState(Actor* actor) {
         case ACTOR_EN_DEKUBABA: {
             EnDekubaba* dekubaba = (EnDekubaba*)actor;
             extra["kind"] = "EnDekubaba";
+            extra["action"] = GetDekubabaActionId(dekubaba->actionFunc);
             extra["timer"] = dekubaba->timer;
             extra["targetSwayAngle"] = dekubaba->targetSwayAngle;
             extra["stemSectionAngle"] = { dekubaba->stemSectionAngle[0], dekubaba->stemSectionAngle[1],
@@ -261,6 +336,14 @@ static void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplySkelAnimeState(extra, &dekunuts->skelAnime);
     } else if (actor->id == ACTOR_EN_DEKUBABA && kind == "EnDekubaba") {
         EnDekubaba* dekubaba = (EnDekubaba*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetDekubabaActionId(dekubaba->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            EnDekubabaActionFunc remoteFunc = GetDekubabaActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                dekubaba->actionFunc = remoteFunc;
+            }
+        }
         dekubaba->timer = extra.value("timer", dekubaba->timer);
         dekubaba->targetSwayAngle = extra.value("targetSwayAngle", dekubaba->targetSwayAngle);
         std::vector<s16> stemSectionAngle = extra.value("stemSectionAngle", std::vector<s16>{});
