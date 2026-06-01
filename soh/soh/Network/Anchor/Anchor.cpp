@@ -178,6 +178,8 @@ void Anchor::ProcessIncomingPacketQueue() {
                 HandlePacket_RequestRoomEnemies(payload);
             else if (packetType == SEND_ROOM_ENEMIES)
                 HandlePacket_SendRoomEnemies(payload);
+            else if (packetType == ENEMY_UPDATE)
+                HandlePacket_EnemyUpdate(payload);
         } catch (const std::exception& e) {
             SPDLOG_ERROR("[Anchor] Exception while processing incoming packet {}", e.what());
             SPDLOG_ERROR("[Anchor] Packet: {}", payload.dump());
@@ -283,6 +285,24 @@ Actor* Anchor::FindClosestActorByCategoryAndId(ActorCategory category, s16 actor
     return closestAct;
 }
 
+bool Anchor::HasEnemySyncAuthority() {
+    if (!IsSaveLoaded() || ownClientId == 0) {
+        return false;
+    }
+
+    for (auto& [clientId, client] : clients) {
+        if (!client.online || client.self || !client.isSaveLoaded) {
+            continue;
+        }
+        if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
+            clientId < ownClientId) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void Anchor::ProcessActorBuffers() {
     if (!IsSaveLoaded()) {
         return;
@@ -344,5 +364,11 @@ void Anchor::DetectEnemyDamage() {
         }
 
         enemyHealthTracker[act] = currentHealth;
+    }
+
+    enemyTransformFrameCounter++;
+    if (enemyTransformFrameCounter >= 2) {
+        enemyTransformFrameCounter = 0;
+        SendPacket_EnemyUpdate(currentEnemies);
     }
 }

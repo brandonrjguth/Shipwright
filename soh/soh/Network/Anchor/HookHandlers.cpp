@@ -66,6 +66,7 @@ void Anchor::RegisterHooks() {
 
         if (IsSaveLoaded()) {
             enemyHealthTracker.clear();
+            enemyTransformFrameCounter = 0;
             RefreshClientActors();
             SendPacket_RequestRoomEnemies();
         }

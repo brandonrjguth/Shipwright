@@ -85,6 +85,7 @@ class Anchor : public Network {
     std::vector<Actor*> actorKillBuffer;
     std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
     std::unordered_map<Actor*, u8> enemyHealthTracker;
+    u8 enemyTransformFrameCounter = 0;
 
     nlohmann::json PrepClientState();
     nlohmann::json PrepRoomState();
@@ -94,6 +95,7 @@ class Anchor : public Network {
     Actor* FindClosestActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos);
     void ProcessActorBuffers();
     void DetectEnemyDamage();
+    bool HasEnemySyncAuthority();
 
     void HandlePacket_AllClientState(nlohmann::json payload);
     void HandlePacket_ConsumeAdultTradeItem(nlohmann::json payload);
@@ -121,6 +123,7 @@ class Anchor : public Network {
     void HandlePacket_KillEnemy(nlohmann::json payload);
     void HandlePacket_RequestRoomEnemies(nlohmann::json payload);
     void HandlePacket_SendRoomEnemies(nlohmann::json payload);
+    void HandlePacket_EnemyUpdate(nlohmann::json payload);
 
   public:
     uint32_t ownClientId;
@@ -153,6 +156,7 @@ class Anchor : public Network {
     inline static const std::string KILL_ENEMY = "KILL_ENEMY";
     inline static const std::string REQUEST_ROOM_ENEMIES = "REQUEST_ROOM_ENEMIES";
     inline static const std::string SEND_ROOM_ENEMIES = "SEND_ROOM_ENEMIES";
+    inline static const std::string ENEMY_UPDATE = "ENEMY_UPDATE";
 
     static Anchor* Instance;
     std::map<uint32_t, AnchorClient> clients;
@@ -195,6 +199,7 @@ class Anchor : public Network {
     void SendPacket_KillEnemy(Actor* actor);
     void SendPacket_RequestRoomEnemies();
     void SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category);
+    void SendPacket_EnemyUpdate(std::vector<Actor*> actors);
 };
 
 typedef enum {
