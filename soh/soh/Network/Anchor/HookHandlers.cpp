@@ -66,6 +66,7 @@ void Anchor::RegisterHooks() {
 
         if (IsSaveLoaded()) {
             enemyHealthTracker.clear();
+            enemyAuthorityTargets.clear();
             enemyTransformFrameCounter = 0;
             RefreshClientActors();
             SendPacket_RequestRoomEnemies();
@@ -153,21 +154,31 @@ void Anchor::RegisterHooks() {
     // Enemy sync hooks
     COND_HOOK(OnEnemyDefeat, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
-        SendPacket_KillEnemy(actor);
+        if (HasEnemySyncAuthority()) {
+            SendPacket_KillEnemy(actor);
+        } else {
+            SendPacket_ReportEnemyDamage(actor, 0);
+        }
 
-        for (auto& [clientId, client] : clients) {
-            if (!client.online || client.self) {
-                continue;
-            }
-            if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num) {
-                SendPacket_SendRoomEnemies(clientId, (ActorCategory)actor->category);
+        if (HasEnemySyncAuthority()) {
+            for (auto& [clientId, client] : clients) {
+                if (!client.online || client.self) {
+                    continue;
+                }
+                if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num) {
+                    SendPacket_SendRoomEnemies(clientId, (ActorCategory)actor->category);
+                }
             }
         }
     });
 
     COND_HOOK(OnBossDefeat, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
-        SendPacket_KillEnemy(actor);
+        if (HasEnemySyncAuthority()) {
+            SendPacket_KillEnemy(actor);
+        } else {
+            SendPacket_ReportEnemyDamage(actor, 0);
+        }
     });
 
     COND_HOOK(OnItemReceive, isConnected, [&](GetItemEntry itemEntry) {

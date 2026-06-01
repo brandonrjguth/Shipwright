@@ -71,6 +71,21 @@ typedef struct {
     u8 syncItemsAndFlags; // 0 = off, 1 = on
 } RoomState;
 
+typedef struct {
+    s16 actorId;
+    ActorCategory category;
+    Vec3f pos;
+    Vec3s worldRot;
+    Vec3s shapeRot;
+    Vec3f velocity;
+    f32 speedXZ;
+    f32 gravity;
+    f32 minVelocityY;
+    u16 freezeTimer;
+    u8 colorFilterTimer;
+    u8 health;
+} EnemyAuthorityState;
+
 class Anchor : public Network {
   private:
     uint32_t spawningDummyPlayerForClientId = 0;
@@ -85,6 +100,7 @@ class Anchor : public Network {
     std::vector<Actor*> actorKillBuffer;
     std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
     std::unordered_map<Actor*, u8> enemyHealthTracker;
+    std::unordered_map<uint64_t, EnemyAuthorityState> enemyAuthorityTargets;
     u8 enemyTransformFrameCounter = 0;
 
     nlohmann::json PrepClientState();
@@ -93,8 +109,15 @@ class Anchor : public Network {
     void RefreshClientActors();
     void SetDummyPlayerClientId(const Actor* actor, uint32_t clientId);
     Actor* FindClosestActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos);
+    Actor* FindActorByEnemyNetworkId(uint64_t networkId);
+    uint64_t GetEnemyNetworkId(Actor* actor);
+    void SetEnemyNetworkId(Actor* actor, uint64_t networkId);
+    void AssignEnemyNetworkIds(std::vector<Actor*> actors);
     void ProcessActorBuffers();
     void DetectEnemyDamage();
+    void ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate);
+    void ApplyEnemyAuthorityTargets();
+    uint32_t GetEnemySyncAuthorityClientId();
     bool HasEnemySyncAuthority();
 
     void HandlePacket_AllClientState(nlohmann::json payload);
@@ -124,6 +147,7 @@ class Anchor : public Network {
     void HandlePacket_RequestRoomEnemies(nlohmann::json payload);
     void HandlePacket_SendRoomEnemies(nlohmann::json payload);
     void HandlePacket_EnemyUpdate(nlohmann::json payload);
+    void HandlePacket_ReportEnemyDamage(nlohmann::json payload);
 
   public:
     uint32_t ownClientId;
@@ -157,6 +181,7 @@ class Anchor : public Network {
     inline static const std::string REQUEST_ROOM_ENEMIES = "REQUEST_ROOM_ENEMIES";
     inline static const std::string SEND_ROOM_ENEMIES = "SEND_ROOM_ENEMIES";
     inline static const std::string ENEMY_UPDATE = "ENEMY_UPDATE";
+    inline static const std::string REPORT_ENEMY_DAMAGE = "REPORT_ENEMY_DAMAGE";
 
     static Anchor* Instance;
     std::map<uint32_t, AnchorClient> clients;
@@ -200,6 +225,7 @@ class Anchor : public Network {
     void SendPacket_RequestRoomEnemies();
     void SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category);
     void SendPacket_EnemyUpdate(std::vector<Actor*> actors);
+    void SendPacket_ReportEnemyDamage(Actor* actor, u8 health);
 };
 
 typedef enum {

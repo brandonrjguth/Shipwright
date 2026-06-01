@@ -5,6 +5,7 @@
 #include "soh/Enhancements/nametag.h"
 #include "soh/ObjectExtension/ObjectExtension.h"
 #include "soh/Enhancements/randomizer/randomizer.h"
+#include <unordered_set>
 
 extern "C" {
 #include "variables.h"
@@ -180,6 +181,8 @@ void Anchor::ProcessIncomingPacketQueue() {
                 HandlePacket_SendRoomEnemies(payload);
             else if (packetType == ENEMY_UPDATE)
                 HandlePacket_EnemyUpdate(payload);
+            else if (packetType == REPORT_ENEMY_DAMAGE)
+                HandlePacket_ReportEnemyDamage(payload);
         } catch (const std::exception& e) {
             SPDLOG_ERROR("[Anchor] Exception while processing incoming packet {}", e.what());
             SPDLOG_ERROR("[Anchor] Packet: {}", payload.dump());
@@ -197,6 +200,11 @@ struct DummyPlayerClientId {
     uint32_t clientId = 0;
 };
 static ObjectExtension::Register<DummyPlayerClientId> DummyPlayerClientIdRegister;
+
+struct EnemyNetworkId {
+    uint64_t networkId = 0;
+};
+static ObjectExtension::Register<EnemyNetworkId> EnemyNetworkIdRegister;
 
 uint32_t Anchor::GetDummyPlayerClientId(const Actor* actor) {
     const DummyPlayerClientId* clientId = ObjectExtension::GetInstance().Get<DummyPlayerClientId>(actor);
@@ -285,22 +293,168 @@ Actor* Anchor::FindClosestActorByCategoryAndId(ActorCategory category, s16 actor
     return closestAct;
 }
 
-bool Anchor::HasEnemySyncAuthority() {
-    if (!IsSaveLoaded() || ownClientId == 0) {
-        return false;
+uint64_t Anchor::GetEnemyNetworkId(Actor* actor) {
+    if (actor == nullptr) {
+        return 0;
     }
 
+    const EnemyNetworkId* networkId = ObjectExtension::GetInstance().Get<EnemyNetworkId>(actor);
+    return networkId != nullptr ? networkId->networkId : 0;
+}
+
+void Anchor::SetEnemyNetworkId(Actor* actor, uint64_t networkId) {
+    if (actor != nullptr && networkId != 0) {
+        ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
+    }
+}
+
+Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
+    if (networkId == 0 || gPlayState == nullptr) {
+        return nullptr;
+    }
+
+    ActorCategory categories[] = { ACTORCAT_ENEMY, ACTORCAT_BOSS };
+    for (ActorCategory category : categories) {
+        Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
+        while (currAct != nullptr) {
+            if (GetEnemyNetworkId(currAct) == networkId) {
+                return currAct;
+            }
+            currAct = currAct->next;
+        }
+    }
+
+    return nullptr;
+}
+
+void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
+    if (!IsSaveLoaded()) {
+        return;
+    }
+
+    std::unordered_set<uint64_t> usedNetworkIds;
+    std::unordered_map<uint32_t, uint16_t> nextOccurrence;
+
+    for (Actor* actor : actors) {
+        uint64_t existingNetworkId = GetEnemyNetworkId(actor);
+        if (existingNetworkId != 0) {
+            usedNetworkIds.insert(existingNetworkId);
+        }
+    }
+
+    for (Actor* actor : actors) {
+        if (actor == nullptr || GetEnemyNetworkId(actor) != 0) {
+            continue;
+        }
+
+        uint32_t counterKey = ((uint32_t)actor->category << 16) | (uint16_t)actor->id;
+        uint16_t occurrence = nextOccurrence[counterKey];
+        uint64_t networkId = 0;
+        do {
+            networkId = ((uint64_t)(uint16_t)gPlayState->sceneNum << 48) |
+                        ((uint64_t)(uint8_t)gPlayState->roomCtx.curRoom.num << 40) |
+                        ((uint64_t)actor->category << 32) | ((uint64_t)(uint16_t)actor->id << 16) | occurrence;
+            occurrence++;
+        } while (usedNetworkIds.contains(networkId));
+
+        nextOccurrence[counterKey] = occurrence;
+        usedNetworkIds.insert(networkId);
+        ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
+    }
+}
+
+static float AnchorLerpFloat(float from, float to, float amount) {
+    return from + ((to - from) * amount);
+}
+
+static s16 AnchorLerpAngle(s16 from, s16 to, float amount) {
+    s16 diff = to - from;
+    return from + (s16)(diff * amount);
+}
+
+static Vec3f AnchorLerpVec3f(Vec3f from, Vec3f to, float amount) {
+    return { AnchorLerpFloat(from.x, to.x, amount), AnchorLerpFloat(from.y, to.y, amount),
+             AnchorLerpFloat(from.z, to.z, amount) };
+}
+
+static float AnchorVec3fDistSq(Vec3f a, Vec3f b) {
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    float dz = a.z - b.z;
+    return (dx * dx) + (dy * dy) + (dz * dz);
+}
+
+void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate) {
+    if (actor == nullptr) {
+        return;
+    }
+
+    float distSq = AnchorVec3fDistSq(actor->world.pos, state.pos);
+    float correction = 0.2f;
+    if (immediate || distSq > 250000.0f) {
+        correction = 1.0f;
+    } else if (distSq > 40000.0f) {
+        correction = 0.75f;
+    } else if (distSq > 10000.0f) {
+        correction = 0.5f;
+    }
+
+    Vec3f correctedPos = AnchorLerpVec3f(actor->world.pos, state.pos, correction);
+    actor->world.pos = correctedPos;
+    actor->prevPos = AnchorLerpVec3f(actor->prevPos, correctedPos, correction);
+    actor->world.rot.x = AnchorLerpAngle(actor->world.rot.x, state.worldRot.x, correction);
+    actor->world.rot.y = AnchorLerpAngle(actor->world.rot.y, state.worldRot.y, correction);
+    actor->world.rot.z = AnchorLerpAngle(actor->world.rot.z, state.worldRot.z, correction);
+    actor->shape.rot.x = AnchorLerpAngle(actor->shape.rot.x, state.shapeRot.x, correction);
+    actor->shape.rot.y = AnchorLerpAngle(actor->shape.rot.y, state.shapeRot.y, correction);
+    actor->shape.rot.z = AnchorLerpAngle(actor->shape.rot.z, state.shapeRot.z, correction);
+    actor->velocity = AnchorLerpVec3f(actor->velocity, state.velocity, correction);
+    actor->speedXZ = AnchorLerpFloat(actor->speedXZ, state.speedXZ, correction);
+    actor->gravity = state.gravity;
+    actor->minVelocityY = state.minVelocityY;
+    actor->freezeTimer = state.freezeTimer;
+    actor->colorFilterTimer = state.colorFilterTimer;
+    actor->colChkInfo.health = state.health > 0 ? state.health : 1;
+    enemyHealthTracker[actor] = actor->colChkInfo.health;
+}
+
+void Anchor::ApplyEnemyAuthorityTargets() {
+    if (!IsSaveLoaded() || HasEnemySyncAuthority()) {
+        return;
+    }
+
+    for (auto it = enemyAuthorityTargets.begin(); it != enemyAuthorityTargets.end();) {
+        Actor* actor = FindActorByEnemyNetworkId(it->first);
+        if (actor == nullptr) {
+            it = enemyAuthorityTargets.erase(it);
+            continue;
+        }
+        ApplyEnemyAuthorityState(actor, it->second, false);
+        ++it;
+    }
+}
+
+uint32_t Anchor::GetEnemySyncAuthorityClientId() {
+    if (!IsSaveLoaded() || ownClientId == 0) {
+        return 0;
+    }
+
+    uint32_t authorityClientId = ownClientId;
     for (auto& [clientId, client] : clients) {
         if (!client.online || client.self || !client.isSaveLoaded) {
             continue;
         }
         if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
-            clientId < ownClientId) {
-            return false;
+            clientId < authorityClientId) {
+            authorityClientId = clientId;
         }
     }
 
-    return true;
+    return authorityClientId;
+}
+
+bool Anchor::HasEnemySyncAuthority() {
+    return GetEnemySyncAuthorityClientId() == ownClientId;
 }
 
 void Anchor::ProcessActorBuffers() {
@@ -340,6 +494,9 @@ void Anchor::DetectEnemyDamage() {
         }
     }
 
+    AssignEnemyNetworkIds(currentEnemies);
+    ApplyEnemyAuthorityTargets();
+
     std::unordered_map<Actor*, bool> stillAlive;
     for (Actor* act : currentEnemies) {
         stillAlive[act] = true;
@@ -359,7 +516,11 @@ void Anchor::DetectEnemyDamage() {
         if (enemyHealthTracker.contains(act)) {
             u8 lastHealth = enemyHealthTracker[act];
             if (currentHealth < lastHealth) {
-                SendPacket_DamageEnemy(act, currentHealth);
+                if (HasEnemySyncAuthority()) {
+                    SendPacket_DamageEnemy(act, currentHealth);
+                } else {
+                    SendPacket_ReportEnemyDamage(act, currentHealth);
+                }
             }
         }
 

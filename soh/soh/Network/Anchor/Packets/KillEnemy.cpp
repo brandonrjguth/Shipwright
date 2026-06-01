@@ -20,6 +20,7 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
 
     nlohmann::json payload;
     payload["type"] = KILL_ENEMY;
+    payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["posX"] = actor->world.pos.x;
     payload["posY"] = actor->world.pos.y;
@@ -45,6 +46,7 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
         return;
     }
 
+    uint64_t networkId = payload.value("networkId", (uint64_t)0);
     s16 actorId = payload.at("actorId").get<s16>();
     float posX = payload.at("posX").get<float>();
     float posY = payload.at("posY").get<float>();
@@ -52,7 +54,11 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
     s16 category = payload.at("category").get<s16>();
 
     Vec3f pos = { posX, posY, posZ };
-    Actor* target = FindClosestActorByCategoryAndId((ActorCategory)category, actorId, pos);
+    Actor* target = FindActorByEnemyNetworkId(networkId);
+    if (target == nullptr) {
+        target = FindClosestActorByCategoryAndId((ActorCategory)category, actorId, pos);
+        SetEnemyNetworkId(target, networkId);
+    }
 
     if (target != nullptr) {
         actorKillBuffer.push_back(target);

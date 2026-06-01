@@ -7,26 +7,6 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
-static float LerpFloat(float from, float to, float amount) {
-    return from + ((to - from) * amount);
-}
-
-static s16 LerpAngle(s16 from, s16 to, float amount) {
-    s16 diff = to - from;
-    return from + (s16)(diff * amount);
-}
-
-static Vec3f LerpVec3f(Vec3f from, Vec3f to, float amount) {
-    return { LerpFloat(from.x, to.x, amount), LerpFloat(from.y, to.y, amount), LerpFloat(from.z, to.z, amount) };
-}
-
-static float Vec3fDistSq(Vec3f a, Vec3f b) {
-    float dx = a.x - b.x;
-    float dy = a.y - b.y;
-    float dz = a.z - b.z;
-    return (dx * dx) + (dy * dy) + (dz * dz);
-}
-
 void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     if (!IsSaveLoaded() || !HasEnemySyncAuthority()) {
         return;
@@ -43,6 +23,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         return;
     }
 
+    std::vector<uint64_t> networkIds;
     std::vector<s16> actorIds;
     std::vector<s16> categories;
     std::vector<float> posX;
@@ -70,6 +51,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         }
 
         actorIds.push_back(actor->id);
+        networkIds.push_back(GetEnemyNetworkId(actor));
         categories.push_back(actor->category);
         posX.push_back(actor->world.pos.x);
         posY.push_back(actor->world.pos.y);
@@ -99,6 +81,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["type"] = ENEMY_UPDATE;
     payload["sceneNum"] = gPlayState->sceneNum;
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["networkIds"] = networkIds;
     payload["actorIds"] = actorIds;
     payload["categories"] = categories;
     payload["posX"] = posX;
@@ -164,6 +147,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         return;
     }
 
+    auto networkIds = payload.at("networkIds").get<std::vector<uint64_t>>();
     auto actorIds = payload.at("actorIds").get<std::vector<s16>>();
     auto categories = payload.at("categories").get<std::vector<s16>>();
     auto posX = payload.at("posX").get<std::vector<float>>();
@@ -186,10 +170,10 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     auto health = payload.at("health").get<std::vector<u8>>();
 
     size_t enemyCount = actorIds.size();
-    if (categories.size() != enemyCount || posX.size() != enemyCount || posY.size() != enemyCount ||
-        posZ.size() != enemyCount || worldRotX.size() != enemyCount || worldRotY.size() != enemyCount ||
-        worldRotZ.size() != enemyCount || shapeRotX.size() != enemyCount || shapeRotY.size() != enemyCount ||
-        shapeRotZ.size() != enemyCount || velocityX.size() != enemyCount || velocityY.size() != enemyCount ||
+    if (networkIds.size() != enemyCount || categories.size() != enemyCount || posX.size() != enemyCount ||
+        posY.size() != enemyCount || posZ.size() != enemyCount || worldRotX.size() != enemyCount ||
+        worldRotY.size() != enemyCount || worldRotZ.size() != enemyCount || shapeRotX.size() != enemyCount ||
+        shapeRotY.size() != enemyCount || shapeRotZ.size() != enemyCount || velocityX.size() != enemyCount || velocityY.size() != enemyCount ||
         velocityZ.size() != enemyCount || speedXZ.size() != enemyCount || gravity.size() != enemyCount ||
         minVelocityY.size() != enemyCount || freezeTimer.size() != enemyCount || colorFilterTimer.size() != enemyCount ||
         health.size() != enemyCount) {
@@ -203,39 +187,28 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         }
 
         Vec3f pos = { posX[i], posY[i], posZ[i] };
-        Actor* target = FindClosestActorByCategoryAndId(category, actorIds[i], pos);
+        Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
+        if (target == nullptr) {
+            target = FindClosestActorByCategoryAndId(category, actorIds[i], pos);
+            SetEnemyNetworkId(target, networkIds[i]);
+        }
         if (target == nullptr) {
             continue;
         }
 
-        float distSq = Vec3fDistSq(target->world.pos, pos);
-        float correction = 0.25f;
-        if (distSq > 250000.0f) {
-            correction = 1.0f;
-        } else if (distSq > 40000.0f) {
-            correction = 0.75f;
-        } else if (distSq > 10000.0f) {
-            correction = 0.5f;
-        }
-
-        Vec3f correctedPos = LerpVec3f(target->world.pos, pos, correction);
-        target->world.pos = correctedPos;
-        target->prevPos = LerpVec3f(target->prevPos, correctedPos, correction);
-        target->world.rot.x = LerpAngle(target->world.rot.x, worldRotX[i], correction);
-        target->world.rot.y = LerpAngle(target->world.rot.y, worldRotY[i], correction);
-        target->world.rot.z = LerpAngle(target->world.rot.z, worldRotZ[i], correction);
-        target->shape.rot.x = LerpAngle(target->shape.rot.x, shapeRotX[i], correction);
-        target->shape.rot.y = LerpAngle(target->shape.rot.y, shapeRotY[i], correction);
-        target->shape.rot.z = LerpAngle(target->shape.rot.z, shapeRotZ[i], correction);
-        target->velocity.x = LerpFloat(target->velocity.x, velocityX[i], correction);
-        target->velocity.y = LerpFloat(target->velocity.y, velocityY[i], correction);
-        target->velocity.z = LerpFloat(target->velocity.z, velocityZ[i], correction);
-        target->speedXZ = LerpFloat(target->speedXZ, speedXZ[i], correction);
-        target->gravity = gravity[i];
-        target->minVelocityY = minVelocityY[i];
-        target->freezeTimer = freezeTimer[i];
-        target->colorFilterTimer = colorFilterTimer[i];
-        target->colChkInfo.health = health[i] > 0 ? health[i] : 1;
-        enemyHealthTracker[target] = target->colChkInfo.health;
+        EnemyAuthorityState state = { actorIds[i],
+                                      category,
+                                      pos,
+                                      { worldRotX[i], worldRotY[i], worldRotZ[i] },
+                                      { shapeRotX[i], shapeRotY[i], shapeRotZ[i] },
+                                      { velocityX[i], velocityY[i], velocityZ[i] },
+                                      speedXZ[i],
+                                      gravity[i],
+                                      minVelocityY[i],
+                                      freezeTimer[i],
+                                      colorFilterTimer[i],
+                                      health[i] };
+        enemyAuthorityTargets[networkIds[i]] = state;
+        ApplyEnemyAuthorityState(target, state, false);
     }
 }
