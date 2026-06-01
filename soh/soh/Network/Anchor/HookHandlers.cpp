@@ -168,6 +168,12 @@ void Anchor::RegisterHooks() {
         }
     });
 
+    COND_ID_HOOK(OnActorKill, ACTOR_EN_DEKUNUTS, isConnected, [&](void* refActor) {
+        if (!isProcessingIncomingPacket) {
+            SendPacket_KillEnemy((Actor*)refActor);
+        }
+    });
+
     COND_HOOK(ShouldActorUpdate, isConnected, [&](void* refActor, bool* should) {
         Actor* actor = (Actor*)refActor;
         if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {

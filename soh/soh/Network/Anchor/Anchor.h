@@ -78,10 +78,15 @@ typedef struct {
     Vec3f pos;
     Vec3s worldRot;
     Vec3s shapeRot;
+    Vec3f scale;
     Vec3f velocity;
     f32 speedXZ;
     f32 gravity;
     f32 minVelocityY;
+    s16 yawTowardsPlayer;
+    f32 xzDistToPlayer;
+    f32 yDistToPlayer;
+    f32 xyzDistToPlayerSq;
     u16 freezeTimer;
     u8 colorFilterTimer;
     u8 health;

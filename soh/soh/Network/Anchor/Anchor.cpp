@@ -416,16 +416,17 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     Vec3f correctedPos = AnchorLerpVec3f(actor->world.pos, state.pos, correction);
     actor->world.pos = correctedPos;
     actor->prevPos = AnchorLerpVec3f(actor->prevPos, correctedPos, correction);
-    actor->world.rot.x = AnchorLerpAngle(actor->world.rot.x, state.worldRot.x, correction);
-    actor->world.rot.y = AnchorLerpAngle(actor->world.rot.y, state.worldRot.y, correction);
-    actor->world.rot.z = AnchorLerpAngle(actor->world.rot.z, state.worldRot.z, correction);
-    actor->shape.rot.x = AnchorLerpAngle(actor->shape.rot.x, state.shapeRot.x, correction);
-    actor->shape.rot.y = AnchorLerpAngle(actor->shape.rot.y, state.shapeRot.y, correction);
-    actor->shape.rot.z = AnchorLerpAngle(actor->shape.rot.z, state.shapeRot.z, correction);
+    actor->world.rot = state.worldRot;
+    actor->shape.rot = state.shapeRot;
+    actor->scale = state.scale;
     actor->velocity = AnchorLerpVec3f(actor->velocity, state.velocity, correction);
     actor->speedXZ = AnchorLerpFloat(actor->speedXZ, state.speedXZ, correction);
     actor->gravity = state.gravity;
     actor->minVelocityY = state.minVelocityY;
+    actor->yawTowardsPlayer = state.yawTowardsPlayer;
+    actor->xzDistToPlayer = state.xzDistToPlayer;
+    actor->yDistToPlayer = state.yDistToPlayer;
+    actor->xyzDistToPlayerSq = state.xyzDistToPlayerSq;
     actor->freezeTimer = state.freezeTimer;
     actor->colorFilterTimer = state.colorFilterTimer;
 }
