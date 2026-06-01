@@ -9,6 +9,7 @@
 #include <vector>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 
 extern "C" {
 #include "variables.h"
@@ -101,6 +102,9 @@ class Anchor : public Network {
     std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
     std::unordered_map<Actor*, u8> enemyHealthTracker;
     std::unordered_map<uint64_t, EnemyAuthorityState> enemyAuthorityTargets;
+    std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorities;
+    std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
+    std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
     u8 enemyTransformFrameCounter = 0;
 
     nlohmann::json PrepClientState();
@@ -117,8 +121,15 @@ class Anchor : public Network {
     void DetectEnemyDamage();
     void ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate);
     void ApplyEnemyAuthorityTargets();
+    uint32_t GetEnemyRoomKey(s16 sceneNum, s8 roomNum);
+    uint32_t GetEnemyRoomAuthorityGeneration(s16 sceneNum, s8 roomNum);
     uint32_t GetEnemySyncAuthorityClientId();
+    uint32_t GetEnemySyncAuthorityClientId(s16 sceneNum, s8 roomNum);
     bool HasEnemySyncAuthority();
+    bool HasEnemySyncAuthority(s16 sceneNum, s8 roomNum);
+    bool IsValidEnemyAuthorityPacket(nlohmann::json payload);
+    void MarkEnemyDead(uint64_t networkId);
+    bool IsEnemyMarkedDead(uint64_t networkId);
 
     void HandlePacket_AllClientState(nlohmann::json payload);
     void HandlePacket_ConsumeAdultTradeItem(nlohmann::json payload);

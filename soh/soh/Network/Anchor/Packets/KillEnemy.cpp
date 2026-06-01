@@ -18,10 +18,14 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
         return;
     }
 
+    MarkEnemyDead(GetEnemyNetworkId(actor));
+
     nlohmann::json payload;
     payload["type"] = KILL_ENEMY;
     payload["sceneNum"] = gPlayState->sceneNum;
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["authorityClientId"] = ownClientId;
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["posX"] = actor->world.pos.x;
@@ -38,19 +42,7 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
         return;
     }
 
-    uint32_t clientId = payload.at("clientId").get<uint32_t>();
-    if (!clients.contains(clientId)) {
-        return;
-    }
-
-    AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum) {
-        return;
-    }
-
-    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
-    s8 roomNum = payload.value("roomNum", (s8)-1);
-    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+    if (!IsValidEnemyAuthorityPacket(payload)) {
         return;
     }
 
@@ -69,6 +61,7 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
     }
 
     if (target != nullptr) {
+        MarkEnemyDead(GetEnemyNetworkId(target));
         actorKillBuffer.push_back(target);
     }
 }

@@ -81,6 +81,8 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["type"] = ENEMY_UPDATE;
     payload["sceneNum"] = gPlayState->sceneNum;
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["authorityClientId"] = ownClientId;
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
     payload["networkIds"] = networkIds;
     payload["actorIds"] = actorIds;
     payload["categories"] = categories;
@@ -118,32 +120,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         return;
     }
 
-    uint32_t clientId = payload.at("clientId").get<uint32_t>();
-    if (!clients.contains(clientId)) {
-        return;
-    }
-
-    AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum) {
-        return;
-    }
-
-    if (ownClientId != 0 && ownClientId < clientId) {
-        return;
-    }
-    for (auto& [otherClientId, otherClient] : clients) {
-        if (otherClientId == clientId || !otherClient.online || otherClient.self || !otherClient.isSaveLoaded) {
-            continue;
-        }
-        if (otherClient.sceneNum == gPlayState->sceneNum && otherClient.curRoomNum == gPlayState->roomCtx.curRoom.num &&
-            otherClientId < clientId) {
-            return;
-        }
-    }
-
-    s16 sceneNum = payload.at("sceneNum").get<s16>();
-    s8 roomNum = payload.at("roomNum").get<s8>();
-    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+    if (!IsValidEnemyAuthorityPacket(payload)) {
         return;
     }
 

@@ -39,8 +39,12 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
     payload["targetClientId"] = targetClientId;
     payload["sceneNum"] = gPlayState->sceneNum;
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["authorityClientId"] = ownClientId;
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
     payload["category"] = category;
     payload["enemiesNetworkId"] = enemiesNetworkId;
+    payload["deadEnemiesNetworkId"] = std::vector<uint64_t>(deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].begin(),
+                                                             deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].end());
     payload["enemiesId"] = enemiesId;
     payload["enemiesParams"] = enemiesParams;
     payload["enemiesX"] = enemiesX;
@@ -57,28 +61,13 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         return;
     }
 
-    uint32_t clientId = payload.at("clientId").get<uint32_t>();
-    if (!clients.contains(clientId)) {
-        return;
-    }
-
-    AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum) {
-        return;
-    }
-
-    if (clientId != GetEnemySyncAuthorityClientId()) {
-        return;
-    }
-
-    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
-    s8 roomNum = payload.value("roomNum", (s8)-1);
-    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+    if (!IsValidEnemyAuthorityPacket(payload)) {
         return;
     }
 
     ActorCategory category = (ActorCategory)payload.at("category").get<s16>();
     auto enemiesNetworkId = payload.value("enemiesNetworkId", std::vector<uint64_t>{});
+    auto deadEnemiesNetworkId = payload.value("deadEnemiesNetworkId", std::vector<uint64_t>{});
     auto enemiesId = payload.at("enemiesId").get<std::vector<s16>>();
     auto enemiesX = payload.at("enemiesX").get<std::vector<float>>();
     auto enemiesY = payload.at("enemiesY").get<std::vector<float>>();
@@ -96,6 +85,14 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
     while (currAct != nullptr) {
         localActors.push_back(currAct);
         currAct = currAct->next;
+    }
+
+    for (uint64_t networkId : deadEnemiesNetworkId) {
+        deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].insert(networkId);
+        Actor* deadActor = FindActorByEnemyNetworkId(networkId);
+        if (deadActor != nullptr) {
+            actorKillBuffer.push_back(deadActor);
+        }
     }
 
     for (size_t li = 0; li < localActors.size(); li++) {

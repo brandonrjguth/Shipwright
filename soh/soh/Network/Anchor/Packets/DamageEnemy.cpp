@@ -22,6 +22,8 @@ void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     payload["type"] = DAMAGE_ENEMY;
     payload["sceneNum"] = gPlayState->sceneNum;
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["authorityClientId"] = ownClientId;
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -39,19 +41,7 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
         return;
     }
 
-    uint32_t clientId = payload.at("clientId").get<uint32_t>();
-    if (!clients.contains(clientId)) {
-        return;
-    }
-
-    AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum) {
-        return;
-    }
-
-    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
-    s8 roomNum = payload.value("roomNum", (s8)-1);
-    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+    if (!IsValidEnemyAuthorityPacket(payload)) {
         return;
     }
 
@@ -99,6 +89,8 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["targetClientId"] = authorityClientId;
     payload["sceneNum"] = gPlayState->sceneNum;
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["authorityClientId"] = authorityClientId;
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -131,6 +123,9 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
+    if (payload.value("authorityClientId", (uint32_t)0) != ownClientId) {
+        return;
+    }
 
     uint64_t networkId = payload.value("networkId", (uint64_t)0);
     s16 actorId = payload.at("actorId").get<s16>();
@@ -149,6 +144,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     if (target != nullptr && health < target->colChkInfo.health) {
         if (health == 0) {
+            MarkEnemyDead(GetEnemyNetworkId(target));
             actorKillBuffer.push_back(target);
             SendPacket_KillEnemy(target);
             return;

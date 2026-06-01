@@ -5,7 +5,6 @@
 #include "soh/Enhancements/nametag.h"
 #include "soh/ObjectExtension/ObjectExtension.h"
 #include "soh/Enhancements/randomizer/randomizer.h"
-#include <unordered_set>
 
 extern "C" {
 #include "variables.h"
@@ -347,13 +346,28 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
             continue;
         }
 
+        s16 homeX = (s16)(actor->home.pos.x / 20.0f);
+        s16 homeY = (s16)(actor->home.pos.y / 20.0f);
+        s16 homeZ = (s16)(actor->home.pos.z / 20.0f);
         uint32_t counterKey = ((uint32_t)actor->category << 16) | (uint16_t)actor->id;
         uint16_t occurrence = nextOccurrence[counterKey];
         uint64_t networkId = 0;
         do {
-            networkId = ((uint64_t)(uint16_t)gPlayState->sceneNum << 48) |
-                        ((uint64_t)(uint8_t)gPlayState->roomCtx.curRoom.num << 40) |
-                        ((uint64_t)actor->category << 32) | ((uint64_t)(uint16_t)actor->id << 16) | occurrence;
+            uint64_t hash = 1469598103934665603ULL;
+            auto hashValue = [&](uint64_t value) {
+                hash ^= value;
+                hash *= 1099511628211ULL;
+            };
+            hashValue((uint16_t)gPlayState->sceneNum);
+            hashValue((uint8_t)gPlayState->roomCtx.curRoom.num);
+            hashValue(actor->category);
+            hashValue((uint16_t)actor->id);
+            hashValue((uint16_t)actor->params);
+            hashValue((uint16_t)homeX);
+            hashValue((uint16_t)homeY);
+            hashValue((uint16_t)homeZ);
+            hashValue(occurrence);
+            networkId = hash;
             occurrence++;
         } while (usedNetworkIds.contains(networkId));
 
@@ -434,9 +448,44 @@ void Anchor::ApplyEnemyAuthorityTargets() {
     }
 }
 
+uint32_t Anchor::GetEnemyRoomKey(s16 sceneNum, s8 roomNum) {
+    return ((uint32_t)(uint16_t)sceneNum << 8) | (uint8_t)roomNum;
+}
+
+uint32_t Anchor::GetEnemyRoomAuthorityGeneration(s16 sceneNum, s8 roomNum) {
+    uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
+    if (!enemyRoomAuthorityGenerations.contains(roomKey)) {
+        enemyRoomAuthorityGenerations[roomKey] = 1;
+    }
+    return enemyRoomAuthorityGenerations[roomKey];
+}
+
 uint32_t Anchor::GetEnemySyncAuthorityClientId() {
+    if (!IsSaveLoaded()) {
+        return 0;
+    }
+
+    return GetEnemySyncAuthorityClientId(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+}
+
+uint32_t Anchor::GetEnemySyncAuthorityClientId(s16 sceneNum, s8 roomNum) {
     if (!IsSaveLoaded() || ownClientId == 0) {
         return 0;
+    }
+
+    uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
+    uint32_t currentAuthority = enemyRoomAuthorities.contains(roomKey) ? enemyRoomAuthorities[roomKey] : 0;
+    if (currentAuthority == ownClientId) {
+        enemyRoomAuthorities[roomKey] = ownClientId;
+        return ownClientId;
+    }
+
+    if (currentAuthority != 0 && clients.contains(currentAuthority)) {
+        AnchorClient& currentClient = clients[currentAuthority];
+        if (currentClient.online && currentClient.isSaveLoaded && currentClient.sceneNum == sceneNum &&
+            currentClient.curRoomNum == roomNum) {
+            return currentAuthority;
+        }
     }
 
     uint32_t authorityClientId = ownClientId;
@@ -444,17 +493,84 @@ uint32_t Anchor::GetEnemySyncAuthorityClientId() {
         if (!client.online || client.self || !client.isSaveLoaded) {
             continue;
         }
-        if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
-            clientId < authorityClientId) {
+        if (client.sceneNum == sceneNum && client.curRoomNum == roomNum && clientId < authorityClientId) {
             authorityClientId = clientId;
         }
+    }
+
+    if (!enemyRoomAuthorities.contains(roomKey) || enemyRoomAuthorities[roomKey] != authorityClientId) {
+        enemyRoomAuthorities[roomKey] = authorityClientId;
+        enemyRoomAuthorityGenerations[roomKey] = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum) + 1;
     }
 
     return authorityClientId;
 }
 
 bool Anchor::HasEnemySyncAuthority() {
-    return GetEnemySyncAuthorityClientId() == ownClientId;
+    if (!IsSaveLoaded()) {
+        return false;
+    }
+
+    return HasEnemySyncAuthority(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+}
+
+bool Anchor::HasEnemySyncAuthority(s16 sceneNum, s8 roomNum) {
+    return GetEnemySyncAuthorityClientId(sceneNum, roomNum) == ownClientId;
+}
+
+bool Anchor::IsValidEnemyAuthorityPacket(nlohmann::json payload) {
+    if (!IsSaveLoaded()) {
+        return false;
+    }
+
+    uint32_t clientId = payload.value("clientId", (uint32_t)0);
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    uint32_t authorityClientId = payload.value("authorityClientId", (uint32_t)0);
+    uint32_t authorityGeneration = payload.value("authorityGeneration", (uint32_t)0);
+
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+        return false;
+    }
+    if (authorityClientId == 0) {
+        authorityClientId = clientId;
+    }
+    uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
+    if (!enemyRoomAuthorities.contains(roomKey) && authorityClientId != 0) {
+        enemyRoomAuthorities[roomKey] = authorityClientId;
+        enemyRoomAuthorityGenerations[roomKey] = authorityGeneration > 0 ? authorityGeneration : 1;
+    }
+    if (clientId != authorityClientId || authorityClientId != GetEnemySyncAuthorityClientId(sceneNum, roomNum)) {
+        return false;
+    }
+
+    uint32_t localGeneration = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum);
+    if (authorityGeneration != 0 && authorityGeneration < localGeneration) {
+        return false;
+    }
+    if (authorityGeneration > localGeneration) {
+        enemyRoomAuthorityGenerations[roomKey] = authorityGeneration;
+    }
+
+    return true;
+}
+
+void Anchor::MarkEnemyDead(uint64_t networkId) {
+    if (!IsSaveLoaded() || networkId == 0) {
+        return;
+    }
+
+    deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].insert(networkId);
+    enemyAuthorityTargets.erase(networkId);
+}
+
+bool Anchor::IsEnemyMarkedDead(uint64_t networkId) {
+    if (!IsSaveLoaded() || networkId == 0) {
+        return false;
+    }
+
+    uint32_t roomKey = GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    return deadEnemyLedger.contains(roomKey) && deadEnemyLedger[roomKey].contains(networkId);
 }
 
 void Anchor::ProcessActorBuffers() {
@@ -496,6 +612,12 @@ void Anchor::DetectEnemyDamage() {
 
     AssignEnemyNetworkIds(currentEnemies);
     ApplyEnemyAuthorityTargets();
+
+    for (Actor* act : currentEnemies) {
+        if (IsEnemyMarkedDead(GetEnemyNetworkId(act))) {
+            actorKillBuffer.push_back(act);
+        }
+    }
 
     std::unordered_map<Actor*, bool> stillAlive;
     for (Actor* act : currentEnemies) {
