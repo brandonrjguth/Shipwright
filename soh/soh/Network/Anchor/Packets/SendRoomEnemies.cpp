@@ -20,7 +20,6 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
     std::vector<float> enemiesX;
     std::vector<float> enemiesY;
     std::vector<float> enemiesZ;
-    std::vector<u8> enemiesHealth;
 
     Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
     while (currAct != nullptr) {
@@ -30,7 +29,6 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
         enemiesX.push_back(currAct->world.pos.x);
         enemiesY.push_back(currAct->world.pos.y);
         enemiesZ.push_back(currAct->world.pos.z);
-        enemiesHealth.push_back(currAct->colChkInfo.health);
         currAct = currAct->next;
     }
 
@@ -50,7 +48,6 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
     payload["enemiesX"] = enemiesX;
     payload["enemiesY"] = enemiesY;
     payload["enemiesZ"] = enemiesZ;
-    payload["enemiesHealth"] = enemiesHealth;
     payload["quiet"] = true;
 
     SendJsonToRemote(payload);
@@ -72,19 +69,10 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
     auto enemiesX = payload.at("enemiesX").get<std::vector<float>>();
     auto enemiesY = payload.at("enemiesY").get<std::vector<float>>();
     auto enemiesZ = payload.at("enemiesZ").get<std::vector<float>>();
-    auto enemiesHealth = payload.at("enemiesHealth").get<std::vector<u8>>();
+    auto enemiesParams = payload.value("enemiesParams", std::vector<s16>{});
 
     if (!enemiesNetworkId.empty() && enemiesNetworkId.size() != enemiesId.size()) {
         return;
-    }
-
-    std::vector<bool> remoteMatched(enemiesId.size(), false);
-    std::vector<Actor*> localActors;
-
-    Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
-    while (currAct != nullptr) {
-        localActors.push_back(currAct);
-        currAct = currAct->next;
     }
 
     for (uint64_t networkId : deadEnemiesNetworkId) {
@@ -98,46 +86,53 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         }
     }
 
-    for (size_t li = 0; li < localActors.size(); li++) {
-        if (IsEnemyMarkedDead(GetEnemyNetworkId(localActors[li]))) {
+    std::vector<Actor*> localActors;
+    Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
+    while (currAct != nullptr) {
+        localActors.push_back(currAct);
+        currAct = currAct->next;
+    }
+
+    for (size_t ri = 0; ri < enemiesId.size(); ri++) {
+        if (enemiesNetworkId.empty() || enemiesNetworkId[ri] == 0) {
             continue;
         }
 
+        Actor* matchedActor = FindActorByEnemyNetworkId(enemiesNetworkId[ri]);
+        if (matchedActor != nullptr) {
+            continue;
+        }
+
+        Vec3f remotePos = { enemiesX[ri], enemiesY[ri], enemiesZ[ri] };
         float closestDist = -1.0f;
-        int closestIdx = -1;
+        Actor* closestActor = nullptr;
 
-        for (size_t ri = 0; ri < enemiesId.size(); ri++) {
-            if (remoteMatched[ri]) {
+        for (size_t li = 0; li < localActors.size(); li++) {
+            Actor* local = localActors[li];
+            if (local->id != enemiesId[ri]) {
                 continue;
             }
-            if (localActors[li]->id != enemiesId[ri]) {
+            if (IsEnemyMarkedDead(GetEnemyNetworkId(local))) {
                 continue;
             }
-            if (enemiesHealth[ri] == 0) {
+            if (GetEnemyNetworkId(local) != 0) {
                 continue;
             }
-
-            float dx = localActors[li]->world.pos.x - enemiesX[ri];
-            float dy = localActors[li]->world.pos.y - enemiesY[ri];
-            float dz = localActors[li]->world.pos.z - enemiesZ[ri];
+            if (!enemiesParams.empty() && local->params != enemiesParams[ri]) {
+                continue;
+            }
+            float dx = local->world.pos.x - remotePos.x;
+            float dy = local->world.pos.y - remotePos.y;
+            float dz = local->world.pos.z - remotePos.z;
             float distance = dx * dx + dy * dy + dz * dz;
-            if (closestIdx == -1 || distance < closestDist) {
+            if (closestDist < 0.0f || distance < closestDist) {
                 closestDist = distance;
-                closestIdx = (int)ri;
+                closestActor = local;
             }
         }
 
-        if (closestIdx >= 0) {
-            remoteMatched[closestIdx] = true;
-            if (!enemiesNetworkId.empty()) {
-                SetEnemyNetworkId(localActors[li], enemiesNetworkId[closestIdx]);
-            }
-            if (enemiesHealth[closestIdx] > 0) {
-                localActors[li]->colChkInfo.health = enemiesHealth[closestIdx];
-                enemyHealthTracker[localActors[li]] = enemiesHealth[closestIdx];
-            } else {
-                actorKillBuffer.push_back(localActors[li]);
-            }
+        if (closestActor != nullptr) {
+            SetEnemyNetworkId(closestActor, enemiesNetworkId[ri]);
         }
     }
 }
