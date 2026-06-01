@@ -6,6 +6,9 @@
 #include <libultraship/libultraship.h>
 #include <queue>
 #include <mutex>
+#include <vector>
+#include <tuple>
+#include <unordered_map>
 
 extern "C" {
 #include "variables.h"
@@ -79,12 +82,18 @@ class Anchor : public Network {
     std::mutex incomingPacketQueueMutex;
     std::queue<nlohmann::json> outgoingPacketQueue;
     std::mutex outgoingPacketQueueMutex;
+    std::vector<Actor*> actorKillBuffer;
+    std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
+    std::unordered_map<Actor*, u8> enemyHealthTracker;
 
     nlohmann::json PrepClientState();
     nlohmann::json PrepRoomState();
     void RegisterHooks();
     void RefreshClientActors();
     void SetDummyPlayerClientId(const Actor* actor, uint32_t clientId);
+    Actor* FindClosestActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos);
+    void ProcessActorBuffers();
+    void DetectEnemyDamage();
 
     void HandlePacket_AllClientState(nlohmann::json payload);
     void HandlePacket_ConsumeAdultTradeItem(nlohmann::json payload);
@@ -108,6 +117,10 @@ class Anchor : public Network {
     void HandlePacket_UpdateDungeonItems(nlohmann::json payload);
     void HandlePacket_UpdateRoomState(nlohmann::json payload);
     void HandlePacket_UpdateTeamState(nlohmann::json payload);
+    void HandlePacket_DamageEnemy(nlohmann::json payload);
+    void HandlePacket_KillEnemy(nlohmann::json payload);
+    void HandlePacket_RequestRoomEnemies(nlohmann::json payload);
+    void HandlePacket_SendRoomEnemies(nlohmann::json payload);
 
   public:
     uint32_t ownClientId;
@@ -136,6 +149,10 @@ class Anchor : public Network {
     inline static const std::string UPDATE_DUNGEON_ITEMS = "UPDATE_DUNGEON_ITEMS";
     inline static const std::string UPDATE_ROOM_STATE = "UPDATE_ROOM_STATE";
     inline static const std::string UPDATE_TEAM_STATE = "UPDATE_TEAM_STATE";
+    inline static const std::string DAMAGE_ENEMY = "DAMAGE_ENEMY";
+    inline static const std::string KILL_ENEMY = "KILL_ENEMY";
+    inline static const std::string REQUEST_ROOM_ENEMIES = "REQUEST_ROOM_ENEMIES";
+    inline static const std::string SEND_ROOM_ENEMIES = "SEND_ROOM_ENEMIES";
 
     static Anchor* Instance;
     std::map<uint32_t, AnchorClient> clients;
@@ -174,6 +191,10 @@ class Anchor : public Network {
     void SendPacket_UpdateDungeonItems();
     void SendPacket_UpdateRoomState();
     void SendPacket_UpdateTeamState();
+    void SendPacket_DamageEnemy(Actor* actor, u8 health);
+    void SendPacket_KillEnemy(Actor* actor);
+    void SendPacket_RequestRoomEnemies();
+    void SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category);
 };
 
 typedef enum {

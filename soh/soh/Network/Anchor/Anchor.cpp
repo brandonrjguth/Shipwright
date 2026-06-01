@@ -170,6 +170,14 @@ void Anchor::ProcessIncomingPacketQueue() {
                 HandlePacket_UpdateRoomState(payload);
             else if (packetType == UPDATE_DUNGEON_ITEMS)
                 HandlePacket_UpdateDungeonItems(payload);
+            else if (packetType == DAMAGE_ENEMY)
+                HandlePacket_DamageEnemy(payload);
+            else if (packetType == KILL_ENEMY)
+                HandlePacket_KillEnemy(payload);
+            else if (packetType == REQUEST_ROOM_ENEMIES)
+                HandlePacket_RequestRoomEnemies(payload);
+            else if (packetType == SEND_ROOM_ENEMIES)
+                HandlePacket_SendRoomEnemies(payload);
         } catch (const std::exception& e) {
             SPDLOG_ERROR("[Anchor] Exception while processing incoming packet {}", e.what());
             SPDLOG_ERROR("[Anchor] Packet: {}", payload.dump());
@@ -247,4 +255,94 @@ bool Anchor::IsSaveLoaded() {
     }
 
     return true;
+}
+
+Actor* Anchor::FindClosestActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos) {
+    if (gPlayState == nullptr) {
+        return nullptr;
+    }
+
+    Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
+    Actor* closestAct = nullptr;
+    float closestDist = -1.0f;
+
+    while (currAct != nullptr) {
+        if (currAct->id == actorId) {
+            float dx = currAct->world.pos.x - pos.x;
+            float dy = currAct->world.pos.y - pos.y;
+            float dz = currAct->world.pos.z - pos.z;
+            float distance = dx * dx + dy * dy + dz * dz;
+            if (closestDist < 0.0f || distance < closestDist) {
+                closestAct = currAct;
+                closestDist = distance;
+            }
+        }
+        currAct = currAct->next;
+    }
+
+    return closestAct;
+}
+
+void Anchor::ProcessActorBuffers() {
+    if (!IsSaveLoaded()) {
+        return;
+    }
+
+    while (!actorKillBuffer.empty()) {
+        Actor* actor = actorKillBuffer.front();
+        actorKillBuffer.erase(actorKillBuffer.begin());
+        if (actor != nullptr) {
+            Actor_Kill(actor);
+        }
+    }
+
+    while (!enemySpawnBuffer.empty()) {
+        auto& [actorId, params, pos] = enemySpawnBuffer.front();
+        Actor* spawned = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorId,
+                                      pos.x, pos.y, pos.z, 0, 0, 0, params);
+        enemySpawnBuffer.erase(enemySpawnBuffer.begin());
+    }
+}
+
+void Anchor::DetectEnemyDamage() {
+    if (!IsSaveLoaded()) {
+        return;
+    }
+
+    std::vector<Actor*> currentEnemies;
+
+    ActorCategory categories[] = { ACTORCAT_ENEMY, ACTORCAT_BOSS };
+    for (ActorCategory cat : categories) {
+        Actor* currAct = gPlayState->actorCtx.actorLists[cat].head;
+        while (currAct != nullptr) {
+            currentEnemies.push_back(currAct);
+            currAct = currAct->next;
+        }
+    }
+
+    std::unordered_map<Actor*, bool> stillAlive;
+    for (Actor* act : currentEnemies) {
+        stillAlive[act] = true;
+    }
+
+    for (auto it = enemyHealthTracker.begin(); it != enemyHealthTracker.end();) {
+        if (!stillAlive.contains(it->first)) {
+            it = enemyHealthTracker.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    for (Actor* act : currentEnemies) {
+        u8 currentHealth = act->colChkInfo.health;
+
+        if (enemyHealthTracker.contains(act)) {
+            u8 lastHealth = enemyHealthTracker[act];
+            if (currentHealth < lastHealth) {
+                SendPacket_DamageEnemy(act, currentHealth);
+            }
+        }
+
+        enemyHealthTracker[act] = currentHealth;
+    }
 }

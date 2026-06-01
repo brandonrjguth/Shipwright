@@ -65,7 +65,9 @@ void Anchor::RegisterHooks() {
         SendPacket_UpdateClientState();
 
         if (IsSaveLoaded()) {
+            enemyHealthTracker.clear();
             RefreshClientActors();
+            SendPacket_RequestRoomEnemies();
         }
     });
 
@@ -99,6 +101,8 @@ void Anchor::RegisterHooks() {
             RefreshClientActors();
         }
 
+        ProcessActorBuffers();
+        DetectEnemyDamage();
         SendPacket_PlayerUpdate();
     });
 
@@ -144,6 +148,26 @@ void Anchor::RegisterHooks() {
               [&](u16 entranceIndex, u8 isReversedEntrance) { SendPacket_EntranceDiscovered(entranceIndex); });
 
     COND_ID_HOOK(OnBossDefeat, ACTOR_BOSS_GANON2, isConnected, [&](void* refActor) { SendPacket_GameComplete(); });
+
+    // Enemy sync hooks
+    COND_HOOK(OnEnemyDefeat, isConnected, [&](void* refActor) {
+        Actor* actor = (Actor*)refActor;
+        SendPacket_KillEnemy(actor);
+
+        for (auto& [clientId, client] : clients) {
+            if (!client.online || client.self) {
+                continue;
+            }
+            if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num) {
+                SendPacket_SendRoomEnemies(clientId, (ActorCategory)actor->category);
+            }
+        }
+    });
+
+    COND_HOOK(OnBossDefeat, isConnected, [&](void* refActor) {
+        Actor* actor = (Actor*)refActor;
+        SendPacket_KillEnemy(actor);
+    });
 
     COND_HOOK(OnItemReceive, isConnected, [&](GetItemEntry itemEntry) {
         // Handle vanilla dungeon items a bit differently
