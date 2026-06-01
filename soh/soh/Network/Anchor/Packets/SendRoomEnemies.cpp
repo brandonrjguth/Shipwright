@@ -10,10 +10,11 @@ extern PlayState* gPlayState;
 }
 
 void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category) {
-    if (!IsSaveLoaded()) {
+    if (!IsSaveLoaded() || !HasEnemySyncAuthority()) {
         return;
     }
 
+    std::vector<uint64_t> enemiesNetworkId;
     std::vector<s16> enemiesId;
     std::vector<s16> enemiesParams;
     std::vector<float> enemiesX;
@@ -23,6 +24,7 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
 
     Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
     while (currAct != nullptr) {
+        enemiesNetworkId.push_back(GetEnemyNetworkId(currAct));
         enemiesId.push_back(currAct->id);
         enemiesParams.push_back(currAct->params);
         enemiesX.push_back(currAct->world.pos.x);
@@ -35,7 +37,10 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
     nlohmann::json payload;
     payload["type"] = SEND_ROOM_ENEMIES;
     payload["targetClientId"] = targetClientId;
+    payload["sceneNum"] = gPlayState->sceneNum;
+    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["category"] = category;
+    payload["enemiesNetworkId"] = enemiesNetworkId;
     payload["enemiesId"] = enemiesId;
     payload["enemiesParams"] = enemiesParams;
     payload["enemiesX"] = enemiesX;
@@ -62,13 +67,27 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         return;
     }
 
+    if (clientId != GetEnemySyncAuthorityClientId()) {
+        return;
+    }
+
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+        return;
+    }
+
     ActorCategory category = (ActorCategory)payload.at("category").get<s16>();
+    auto enemiesNetworkId = payload.value("enemiesNetworkId", std::vector<uint64_t>{});
     auto enemiesId = payload.at("enemiesId").get<std::vector<s16>>();
-    auto enemiesParams = payload.at("enemiesParams").get<std::vector<s16>>();
     auto enemiesX = payload.at("enemiesX").get<std::vector<float>>();
     auto enemiesY = payload.at("enemiesY").get<std::vector<float>>();
     auto enemiesZ = payload.at("enemiesZ").get<std::vector<float>>();
     auto enemiesHealth = payload.at("enemiesHealth").get<std::vector<u8>>();
+
+    if (!enemiesNetworkId.empty() && enemiesNetworkId.size() != enemiesId.size()) {
+        return;
+    }
 
     std::vector<bool> remoteMatched(enemiesId.size(), false);
     std::vector<Actor*> localActors;
@@ -78,8 +97,6 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         localActors.push_back(currAct);
         currAct = currAct->next;
     }
-
-    std::vector<bool> localMatched(localActors.size(), false);
 
     for (size_t li = 0; li < localActors.size(); li++) {
         float closestDist = -1.0f;
@@ -105,25 +122,15 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
 
         if (closestIdx >= 0) {
             remoteMatched[closestIdx] = true;
-            localMatched[li] = true;
+            if (!enemiesNetworkId.empty()) {
+                SetEnemyNetworkId(localActors[li], enemiesNetworkId[closestIdx]);
+            }
             if (enemiesHealth[closestIdx] > 0) {
                 localActors[li]->colChkInfo.health = enemiesHealth[closestIdx];
+                enemyHealthTracker[localActors[li]] = enemiesHealth[closestIdx];
             } else {
                 actorKillBuffer.push_back(localActors[li]);
             }
-        }
-    }
-
-    for (size_t li = 0; li < localActors.size(); li++) {
-        if (!localMatched[li] && category == ACTORCAT_ENEMY) {
-            actorKillBuffer.push_back(localActors[li]);
-        }
-    }
-
-    for (size_t ri = 0; ri < remoteMatched.size(); ri++) {
-        if (!remoteMatched[ri]) {
-            Vec3f pos = { enemiesX[ri], enemiesY[ri], enemiesZ[ri] };
-            enemySpawnBuffer.push_back(std::make_tuple(enemiesId[ri], enemiesParams[ri], pos));
         }
     }
 }

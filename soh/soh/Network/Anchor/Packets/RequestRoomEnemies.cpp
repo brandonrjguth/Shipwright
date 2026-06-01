@@ -24,7 +24,7 @@ void Anchor::SendPacket_RequestRoomEnemies() {
 }
 
 void Anchor::HandlePacket_RequestRoomEnemies(nlohmann::json payload) {
-    if (!IsSaveLoaded()) {
+    if (!IsSaveLoaded() || !HasEnemySyncAuthority()) {
         return;
     }
 
@@ -33,8 +33,9 @@ void Anchor::HandlePacket_RequestRoomEnemies(nlohmann::json payload) {
         return;
     }
 
-    AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum) {
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
