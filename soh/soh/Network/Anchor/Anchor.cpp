@@ -428,8 +428,6 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     actor->minVelocityY = state.minVelocityY;
     actor->freezeTimer = state.freezeTimer;
     actor->colorFilterTimer = state.colorFilterTimer;
-    actor->colChkInfo.health = state.health > 0 ? state.health : 1;
-    enemyHealthTracker[actor] = actor->colChkInfo.health;
 }
 
 void Anchor::ApplyEnemyAuthorityTargets() {
@@ -611,7 +609,6 @@ void Anchor::DetectEnemyDamage() {
     }
 
     AssignEnemyNetworkIds(currentEnemies);
-    ApplyEnemyAuthorityTargets();
 
     for (Actor* act : currentEnemies) {
         if (IsEnemyMarkedDead(GetEnemyNetworkId(act))) {
@@ -648,6 +645,8 @@ void Anchor::DetectEnemyDamage() {
 
         enemyHealthTracker[act] = currentHealth;
     }
+
+    ApplyEnemyAuthorityTargets();
 
     enemyTransformFrameCounter++;
     if (enemyTransformFrameCounter >= 2) {

@@ -172,6 +172,35 @@ void Anchor::RegisterHooks() {
         }
     });
 
+    COND_HOOK(ShouldActorUpdate, isConnected, [&](void* refActor, bool* should) {
+        Actor* actor = (Actor*)refActor;
+        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+            return;
+        }
+        if (!HasEnemySyncAuthority()) {
+            return;
+        }
+
+        for (auto& [clientId, client] : clients) {
+            if (!client.online || client.self || !client.isSaveLoaded || client.player == nullptr) {
+                continue;
+            }
+            if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+                continue;
+            }
+
+            f32 xzDist = Actor_WorldDistXZToActor(actor, &client.player->actor);
+            f32 yDist = Actor_HeightDiff(actor, &client.player->actor);
+            f32 xyzDistSq = SQ(xzDist) + SQ(yDist);
+            if (xyzDistSq < actor->xyzDistToPlayerSq) {
+                actor->xzDistToPlayer = xzDist;
+                actor->yDistToPlayer = yDist;
+                actor->xyzDistToPlayerSq = xyzDistSq;
+                actor->yawTowardsPlayer = Actor_WorldYawTowardActor(actor, &client.player->actor);
+            }
+        }
+    });
+
     COND_HOOK(OnBossDefeat, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
         if (HasEnemySyncAuthority()) {
