@@ -31,6 +31,17 @@ void EnDekubaba_ShrinkDie(EnDekubaba*, PlayState*);
 void EnDekubaba_DeadStickDrop(EnDekubaba*, PlayState*);
 }
 
+void EnSt_SetupAction(EnSt* thisx, EnStActionFunc actionFunc);
+void EnSt_StartOnCeilingOrGround(EnSt* thisx, PlayState* play);
+void EnSt_WaitOnCeiling(EnSt* thisx, PlayState* play);
+void EnSt_MoveToGround(EnSt* thisx, PlayState* play);
+void EnSt_LandOnGround(EnSt* thisx, PlayState* play);
+void EnSt_WaitOnGround(EnSt* thisx, PlayState* play);
+void EnSt_ReturnToCeiling(EnSt* thisx, PlayState* play);
+void EnSt_BounceAround(EnSt* thisx, PlayState* play);
+void EnSt_FinishBouncing(EnSt* thisx, PlayState* play);
+void EnSt_Die(EnSt* thisx, PlayState* play);
+
 enum DekubabaAction : s32 {
     DEKUBABA_ACTION_WAIT = 0,
     DEKUBABA_ACTION_GROW = 1,
@@ -82,6 +93,46 @@ static EnDekubabaActionFunc GetDekubabaActionFunc(s32 actionId) {
         case DEKUBABA_ACTION_PRUNED_SOMERSAULT: return EnDekubaba_PrunedSomersault;
         case DEKUBABA_ACTION_SHRINK_DIE: return EnDekubaba_ShrinkDie;
         case DEKUBABA_ACTION_DEAD_STICK_DROP: return EnDekubaba_DeadStickDrop;
+        default: return nullptr;
+    }
+}
+
+enum EnStAction : s32 {
+    ENST_ACTION_START_ON_CEILING_OR_GROUND = 0,
+    ENST_ACTION_WAIT_ON_CEILING = 1,
+    ENST_ACTION_MOVE_TO_GROUND = 2,
+    ENST_ACTION_LAND_ON_GROUND = 3,
+    ENST_ACTION_WAIT_ON_GROUND = 4,
+    ENST_ACTION_RETURN_TO_CEILING = 5,
+    ENST_ACTION_BOUNCE_AROUND = 6,
+    ENST_ACTION_FINISH_BOUNCING = 7,
+    ENST_ACTION_DIE = 8,
+};
+
+static s32 GetEnStActionId(EnStActionFunc actionFunc) {
+    if (actionFunc == EnSt_StartOnCeilingOrGround) return ENST_ACTION_START_ON_CEILING_OR_GROUND;
+    if (actionFunc == EnSt_WaitOnCeiling) return ENST_ACTION_WAIT_ON_CEILING;
+    if (actionFunc == EnSt_MoveToGround) return ENST_ACTION_MOVE_TO_GROUND;
+    if (actionFunc == EnSt_LandOnGround) return ENST_ACTION_LAND_ON_GROUND;
+    if (actionFunc == EnSt_WaitOnGround) return ENST_ACTION_WAIT_ON_GROUND;
+    if (actionFunc == EnSt_ReturnToCeiling) return ENST_ACTION_RETURN_TO_CEILING;
+    if (actionFunc == EnSt_BounceAround) return ENST_ACTION_BOUNCE_AROUND;
+    if (actionFunc == EnSt_FinishBouncing) return ENST_ACTION_FINISH_BOUNCING;
+    if (actionFunc == EnSt_Die) return ENST_ACTION_DIE;
+    return -1;
+}
+
+static EnStActionFunc GetEnStActionFunc(s32 actionId) {
+    switch (actionId) {
+        case ENST_ACTION_START_ON_CEILING_OR_GROUND: return EnSt_StartOnCeilingOrGround;
+        case ENST_ACTION_WAIT_ON_CEILING: return EnSt_WaitOnCeiling;
+        case ENST_ACTION_MOVE_TO_GROUND: return EnSt_MoveToGround;
+        case ENST_ACTION_LAND_ON_GROUND: return EnSt_LandOnGround;
+        case ENST_ACTION_WAIT_ON_GROUND: return EnSt_WaitOnGround;
+        case ENST_ACTION_RETURN_TO_CEILING: return EnSt_ReturnToCeiling;
+        case ENST_ACTION_BOUNCE_AROUND: return EnSt_BounceAround;
+        case ENST_ACTION_FINISH_BOUNCING: return EnSt_FinishBouncing;
+        case ENST_ACTION_DIE: return EnSt_Die;
         default: return nullptr;
     }
 }
@@ -156,6 +207,12 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         case ACTOR_EN_ST: {
             EnSt* st = (EnSt*)actor;
             extra["kind"] = "EnSt";
+            extra["action"] = GetEnStActionId(st->actionFunc);
+            extra["groundBounces"] = st->groundBounces;
+            extra["deathTimer"] = st->deathTimer;
+            extra["finishDeathTimer"] = st->finishDeathTimer;
+            extra["setTargetYawTimer"] = st->setTargetYawTimer;
+            extra["deathYawTarget"] = st->deathYawTarget;
             extra["rotAwayTimer"] = st->rotAwayTimer;
             extra["rotTowardsTimer"] = st->rotTowardsTimer;
             extra["takeDamageSpinTimer"] = st->takeDamageSpinTimer;
@@ -163,6 +220,9 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["swayTimer"] = st->swayTimer;
             extra["swayAngle"] = st->swayAngle;
             extra["animFrames"] = st->animFrames;
+            extra["sfxTimer"] = st->sfxTimer;
+            extra["gaveDamageSpinTimer"] = st->gaveDamageSpinTimer;
+            extra["shapeYOffset"] = st->actor.shape.yOffset;
             extra["floorHeightOffset"] = st->floorHeightOffset;
             extra["colliderScale"] = st->colliderScale;
             AddSkelAnimeState(extra, &st->skelAnime);
@@ -366,6 +426,19 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplySkelAnimeState(extra, &dekubaba->skelAnime);
     } else if (actor->id == ACTOR_EN_ST && kind == "EnSt") {
         EnSt* st = (EnSt*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetEnStActionId(st->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            EnStActionFunc remoteFunc = GetEnStActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                EnSt_SetupAction(st, remoteFunc);
+            }
+        }
+        st->groundBounces = extra.value("groundBounces", st->groundBounces);
+        st->deathTimer = extra.value("deathTimer", st->deathTimer);
+        st->finishDeathTimer = extra.value("finishDeathTimer", st->finishDeathTimer);
+        st->setTargetYawTimer = extra.value("setTargetYawTimer", st->setTargetYawTimer);
+        st->deathYawTarget = extra.value("deathYawTarget", st->deathYawTarget);
         st->rotAwayTimer = extra.value("rotAwayTimer", st->rotAwayTimer);
         st->rotTowardsTimer = extra.value("rotTowardsTimer", st->rotTowardsTimer);
         st->takeDamageSpinTimer = extra.value("takeDamageSpinTimer", st->takeDamageSpinTimer);
@@ -373,6 +446,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         st->swayTimer = extra.value("swayTimer", st->swayTimer);
         st->swayAngle = extra.value("swayAngle", st->swayAngle);
         st->animFrames = extra.value("animFrames", st->animFrames);
+        st->sfxTimer = extra.value("sfxTimer", st->sfxTimer);
+        st->gaveDamageSpinTimer = extra.value("gaveDamageSpinTimer", st->gaveDamageSpinTimer);
+        st->actor.shape.yOffset = extra.value("shapeYOffset", st->actor.shape.yOffset);
         st->floorHeightOffset = extra.value("floorHeightOffset", st->floorHeightOffset);
         st->colliderScale = extra.value("colliderScale", st->colliderScale);
         ApplySkelAnimeState(extra, &st->skelAnime);

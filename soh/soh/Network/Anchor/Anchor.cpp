@@ -480,6 +480,24 @@ static float AnchorVec3fDistSq(Vec3f a, Vec3f b) {
     return (dx * dx) + (dy * dy) + (dz * dz);
 }
 
+static bool AnchorIsActorInCurrentLists(Actor* actor) {
+    if (actor == nullptr || gPlayState == nullptr) {
+        return false;
+    }
+
+    for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
+        Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
+        while (currAct != nullptr) {
+            if (currAct == actor) {
+                return true;
+            }
+            currAct = currAct->next;
+        }
+    }
+
+    return false;
+}
+
 void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate) {
     if (actor == nullptr) {
         return;
@@ -702,6 +720,20 @@ void Anchor::ProcessActorBuffers() {
         enemyKillBuffer.erase(enemyKillBuffer.begin());
         Actor* actor = FindActorByEnemyNetworkId(networkId);
         if (actor != nullptr && actor->update != nullptr) {
+            Actor_Kill(actor);
+        }
+    }
+
+    while (!enemyPruneBuffer.empty()) {
+        auto [actor, sceneNum, roomNum] = enemyPruneBuffer.front();
+        enemyPruneBuffer.erase(enemyPruneBuffer.begin());
+        if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+            continue;
+        }
+        if (HasEnemySyncAuthority() || !AnchorIsActorInCurrentLists(actor) || actor->update == nullptr) {
+            continue;
+        }
+        if ((actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) && GetEnemyNetworkId(actor) == 0) {
             Actor_Kill(actor);
         }
     }

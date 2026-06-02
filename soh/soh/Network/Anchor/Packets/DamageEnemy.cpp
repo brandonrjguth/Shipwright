@@ -7,10 +7,17 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#define this thisx
+#include "src/overlays/actors/ovl_En_St/z_en_st.h"
+#undef this
 extern PlayState* gPlayState;
 
 void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
 void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
+void EnSt_SetupAction(EnSt* thisx, EnStActionFunc actionFunc);
+void EnSt_BounceAround(EnSt* thisx, PlayState* play);
+void EnSt_FinishBouncing(EnSt* thisx, PlayState* play);
+void EnSt_Die(EnSt* thisx, PlayState* play);
 }
 
 extern nlohmann::json GetEnemyExtraState(Actor* actor);
@@ -62,6 +69,47 @@ static void ApplyReportedEnemyDeathMotion(Actor* target, nlohmann::json payload)
     target->flags = (target->flags & ~deathMotionFlags) | (reportedFlags & deathMotionFlags);
 }
 
+enum ReportedEnStAction : s32 {
+    REPORTED_ENST_ACTION_BOUNCE_AROUND = 6,
+    REPORTED_ENST_ACTION_FINISH_BOUNCING = 7,
+    REPORTED_ENST_ACTION_DIE = 8,
+};
+
+static bool ApplyReportedEnStDeathState(Actor* target, nlohmann::json extraState) {
+    if (target->id != ACTOR_EN_ST || target->colChkInfo.health != 0) {
+        return false;
+    }
+
+    EnSt* st = (EnSt*)target;
+    target->flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
+
+    switch (extraState.value("action", (s32)-1)) {
+        case REPORTED_ENST_ACTION_DIE:
+            if (st->finishDeathTimer <= 0) {
+                st->finishDeathTimer = 8;
+            }
+            EnSt_SetupAction(st, EnSt_Die);
+            return true;
+        case REPORTED_ENST_ACTION_FINISH_BOUNCING:
+            EnSt_SetupAction(st, EnSt_FinishBouncing);
+            return true;
+        case REPORTED_ENST_ACTION_BOUNCE_AROUND:
+            if (st->groundBounces <= 0) {
+                st->groundBounces = 3;
+            }
+            if (st->deathTimer <= 0) {
+                st->deathTimer = 20;
+            }
+            if (target->gravity == 0.0f) {
+                target->gravity = -1.0f;
+            }
+            EnSt_SetupAction(st, EnSt_BounceAround);
+            return true;
+        default:
+            return false;
+    }
+}
+
 static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     nlohmann::json extraState = payload["extraState"];
 
@@ -81,6 +129,11 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
             EnDekubaba_SetupShrinkDie((EnDekubaba*)target);
             return;
         }
+    }
+
+    if (ApplyReportedEnStDeathState(target, extraState)) {
+        ApplyReportedEnemyDeathMotion(target, payload);
+        return;
     }
 
     if (target->colChkInfo.health == 0) {

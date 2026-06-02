@@ -105,6 +105,7 @@ class Anchor : public Network {
     std::queue<nlohmann::json> outgoingPacketQueue;
     std::mutex outgoingPacketQueueMutex;
     std::vector<uint64_t> enemyKillBuffer;
+    std::vector<std::tuple<Actor*, s16, s8>> enemyPruneBuffer;
     std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
     std::unordered_map<Actor*, u8> enemyHealthTracker;
     std::unordered_map<uint64_t, EnemyAuthorityState> enemyAuthorityTargets;

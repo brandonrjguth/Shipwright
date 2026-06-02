@@ -71,6 +71,7 @@ void Anchor::RegisterHooks() {
             enemyHealthTracker.clear();
             enemyAuthorityTargets.clear();
             enemyExtraStates.clear();
+            enemyPruneBuffer.clear();
             enemyTransformFrameCounter = 0;
             RefreshClientActors();
             SendPacket_RequestRoomEnemies();

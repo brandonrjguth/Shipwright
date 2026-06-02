@@ -151,7 +151,16 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
                 continue;
             }
 
-            Actor_Kill(local);
+            bool alreadyBuffered = false;
+            for (auto& [buffered, sceneNum, roomNum] : enemyPruneBuffer) {
+                if (buffered == local && sceneNum == gPlayState->sceneNum && roomNum == gPlayState->roomCtx.curRoom.num) {
+                    alreadyBuffered = true;
+                    break;
+                }
+            }
+            if (!alreadyBuffered) {
+                enemyPruneBuffer.push_back({ local, gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num });
+            }
         }
     }
 }
