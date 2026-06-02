@@ -505,10 +505,18 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     actor->speedXZ = AnchorLerpFloat(actor->speedXZ, state.speedXZ, correction);
     actor->gravity = state.gravity;
     actor->minVelocityY = state.minVelocityY;
-    actor->yawTowardsPlayer = state.yawTowardsPlayer;
-    actor->xzDistToPlayer = state.xzDistToPlayer;
-    actor->yDistToPlayer = state.yDistToPlayer;
-    actor->xyzDistToPlayerSq = state.xyzDistToPlayerSq;
+    if (actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) {
+        actor->yawTowardsPlayer = state.yawTowardsPlayer;
+        actor->xzDistToPlayer = state.xzDistToPlayer;
+        actor->yDistToPlayer = state.yDistToPlayer;
+        actor->xyzDistToPlayerSq = state.xyzDistToPlayerSq;
+    } else {
+        Player* player = GET_PLAYER(gPlayState);
+        actor->xzDistToPlayer = Actor_WorldDistXZToActor(actor, &player->actor);
+        actor->yDistToPlayer = Actor_HeightDiff(actor, &player->actor);
+        actor->xyzDistToPlayerSq = SQ(actor->xzDistToPlayer) + SQ(actor->yDistToPlayer);
+        actor->yawTowardsPlayer = Actor_WorldYawTowardActor(actor, &player->actor);
+    }
     actor->freezeTimer = state.freezeTimer;
     actor->colorFilterTimer = state.colorFilterTimer;
     if (state.colorFilterParams != 0) {
