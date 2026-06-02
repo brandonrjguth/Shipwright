@@ -12,6 +12,8 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
+extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
+
 // MARK: - Overrides
 
 void Anchor::Enable() {
@@ -452,6 +454,22 @@ void Anchor::ApplyEnemyAuthorityTargets() {
     }
 }
 
+void Anchor::ApplyEnemyExtraStates() {
+    if (!IsSaveLoaded() || HasEnemySyncAuthority()) {
+        return;
+    }
+
+    for (auto it = enemyExtraStates.begin(); it != enemyExtraStates.end();) {
+        Actor* actor = FindActorByEnemyNetworkId(it->first);
+        if (actor == nullptr) {
+            it = enemyExtraStates.erase(it);
+            continue;
+        }
+        ApplyEnemyExtraState(actor, it->second);
+        ++it;
+    }
+}
+
 uint32_t Anchor::GetEnemyRoomKey(s16 sceneNum, s8 roomNum) {
     return ((uint32_t)(uint16_t)sceneNum << 8) | (uint8_t)roomNum;
 }
@@ -648,10 +666,8 @@ void Anchor::DetectEnemyDamage() {
         enemyHealthTracker[act] = currentHealth;
     }
 
-    ApplyEnemyAuthorityTargets();
-
     enemyTransformFrameCounter++;
-    if (enemyTransformFrameCounter >= 2) {
+    if (enemyTransformFrameCounter >= 1) {
         enemyTransformFrameCounter = 0;
         SendPacket_EnemyUpdate(currentEnemies);
     }

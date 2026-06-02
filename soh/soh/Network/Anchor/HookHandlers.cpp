@@ -1,4 +1,5 @@
 #include "Anchor.h"
+#include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
@@ -57,6 +58,8 @@ float OTRGetDimensionFromLeftEdge(float v);
 float OTRGetDimensionFromRightEdge(float v);
 }
 
+extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
+
 void Anchor::RegisterHooks() {
 
     // #region Hooks that are required for basic Anchor functionality
@@ -67,6 +70,7 @@ void Anchor::RegisterHooks() {
         if (IsSaveLoaded()) {
             enemyHealthTracker.clear();
             enemyAuthorityTargets.clear();
+            enemyExtraStates.clear();
             enemyTransformFrameCounter = 0;
             RefreshClientActors();
             SendPacket_RequestRoomEnemies();
@@ -109,6 +113,27 @@ void Anchor::RegisterHooks() {
     });
 
     COND_HOOK(OnGameFrameUpdate, isConnected, [&]() { ProcessIncomingPacketQueue(); });
+
+    COND_HOOK(OnActorUpdate, isConnected, [&](void* refActor) {
+        Actor* actor = (Actor*)refActor;
+        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+            return;
+        }
+        if (HasEnemySyncAuthority()) {
+            return;
+        }
+        if (IsEnemyMarkedDead(GetEnemyNetworkId(actor))) {
+            return;
+        }
+
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        if (enemyAuthorityTargets.contains(networkId)) {
+            ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
+        }
+        if (enemyExtraStates.contains(networkId)) {
+            ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
+        }
+    });
 
     COND_HOOK(OnPlayerSfx, isConnected, [&](u16 sfxId) { SendPacket_PlayerSfx(sfxId); });
     COND_HOOK(OnOcarinaNote, isConnected,
@@ -179,6 +204,11 @@ void Anchor::RegisterHooks() {
         if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
             return;
         }
+
+        if (IsEnemyMarkedDead(GetEnemyNetworkId(actor))) {
+            return;
+        }
+
         if (!HasEnemySyncAuthority()) {
             return;
         }

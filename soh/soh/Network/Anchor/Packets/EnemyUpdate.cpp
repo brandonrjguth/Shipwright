@@ -323,7 +323,7 @@ static nlohmann::json GetEnemyExtraState(Actor* actor) {
     return extra;
 }
 
-static void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
+void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     std::string kind = extra.value("kind", "");
 
     if (actor->id == ACTOR_EN_DEKUNUTS && kind == "EnDekunuts") {
@@ -725,6 +725,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         enemyAuthorityTargets[networkIds[i]] = state;
         ApplyEnemyAuthorityState(target, state, false);
         if (!extraStates.empty()) {
+            enemyExtraStates[networkIds[i]] = extraStates[i];
             ApplyEnemyExtraState(target, extraStates[i]);
         }
     }
