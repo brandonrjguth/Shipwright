@@ -514,8 +514,14 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     if (state.colorFilterParams != 0) {
         actor->colorFilterParams = state.colorFilterParams;
     }
-    actor->colChkInfo.health = state.health;
-    enemyHealthTracker[actor] = state.health;
+    if (!HasEnemySyncAuthority() && actor->colChkInfo.health < state.health) {
+        // The local player may have damaged this replica during its update. Keep that lower health long enough for
+        // DetectEnemyDamage to report it to the room authority instead of immediately rolling it back.
+        enemyHealthTracker[actor] = state.health;
+    } else {
+        actor->colChkInfo.health = state.health;
+        enemyHealthTracker[actor] = state.health;
+    }
 }
 
 void Anchor::ApplyEnemyAuthorityTargets() {
