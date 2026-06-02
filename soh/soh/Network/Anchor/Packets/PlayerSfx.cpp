@@ -17,7 +17,7 @@ extern PlayState* gPlayState;
  */
 
 void Anchor::SendPacket_PlayerSfx(u16 sfxId) {
-    if (!IsSaveLoaded()) {
+    if (!IsRoomStable()) {
         return;
     }
 
@@ -28,7 +28,8 @@ void Anchor::SendPacket_PlayerSfx(u16 sfxId) {
     payload["quiet"] = true;
 
     for (auto& [clientId, client] : clients) {
-        if (client.sceneNum == gPlayState->sceneNum && client.online && client.isSaveLoaded && !client.self) {
+        if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
+            client.online && client.isSaveLoaded && client.roomStable && !client.self) {
             payload["targetClientId"] = clientId;
             SendJsonToRemote(payload);
         }
@@ -39,9 +40,15 @@ void Anchor::HandlePacket_PlayerSfx(nlohmann::json payload) {
     uint32_t clientId = payload.at("clientId").get<uint32_t>();
     u16 sfxId = payload.at("sfxId").get<u16>();
 
-    if (!clients.contains(clientId) || !clients[clientId].player) {
+    if (!IsRoomStable() || !clients.contains(clientId) || !clients[clientId].player) {
         return;
     }
 
-    Player_PlaySfx((Actor*)clients[clientId].player, sfxId);
+    AnchorClient& client = clients[clientId];
+    if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num ||
+        !client.roomStable) {
+        return;
+    }
+
+    Player_PlaySfx((Actor*)client.player, sfxId);
 }

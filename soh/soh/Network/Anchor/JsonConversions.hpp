@@ -66,6 +66,7 @@ inline void from_json(const json& j, AnchorClient& client) {
     client.curRoomNum = j.value("curRoomNum", (s8)-1);
     client.entranceIndex = j.value("entranceIndex", (s32)0);
     client.self = j.value("self", false);
+    client.stableRoomFrames = 0;
 }
 
 inline void to_json(json& j, const Inventory& inventory) {

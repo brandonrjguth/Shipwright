@@ -17,7 +17,7 @@ extern f32 D_80130F28;
  */
 
 void Anchor::SendPacket_OcarinaSfx(uint8_t note, float modulator, int8_t bend) {
-    if (!IsSaveLoaded()) {
+    if (!IsRoomStable()) {
         return;
     }
 
@@ -30,7 +30,8 @@ void Anchor::SendPacket_OcarinaSfx(uint8_t note, float modulator, int8_t bend) {
     payload["quiet"] = true;
 
     for (auto& [clientId, client] : clients) {
-        if (client.sceneNum == gPlayState->sceneNum && client.online && client.isSaveLoaded && !client.self) {
+        if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
+            client.online && client.isSaveLoaded && client.roomStable && !client.self) {
             payload["targetClientId"] = clientId;
             SendJsonToRemote(payload);
         }
@@ -43,11 +44,16 @@ void Anchor::HandlePacket_OcarinaSfx(nlohmann::json payload) {
     float modulator = payload.at("modulator").get<float>();
     int8_t bend = payload.at("bend").get<int8_t>();
 
-    if (!clients.contains(clientId) || !clients[clientId].player) {
+    if (!IsRoomStable() || !clients.contains(clientId) || !clients[clientId].player) {
         return;
     }
 
     auto& client = clients[clientId];
+    if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num ||
+        !client.roomStable) {
+        return;
+    }
+
     client.ocarinaModulator = modulator;
     client.ocarinaBend = bend;
 

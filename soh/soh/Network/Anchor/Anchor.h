@@ -60,6 +60,7 @@ typedef struct {
     u8 ocarinaNote;
     f32 ocarinaModulator;
     s8 ocarinaBend;
+    u8 stableRoomFrames;
 
     // Ptr to the dummy player
     Player* player;

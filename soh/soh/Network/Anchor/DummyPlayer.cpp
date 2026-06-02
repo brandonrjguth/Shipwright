@@ -104,6 +104,10 @@ static bool DummyPlayer_ShouldShow(AnchorClient& client) {
            client.online && client.isSaveLoaded && client.roomStable;
 }
 
+static bool DummyPlayer_IsSettled(AnchorClient& client) {
+    return client.stableRoomFrames >= 5;
+}
+
 // Update the actor with new data from the client
 void DummyPlayer_Update(Actor* actor, PlayState* play) {
     Player* player = (Player*)actor;
@@ -118,11 +122,16 @@ void DummyPlayer_Update(Actor* actor, PlayState* play) {
     AnchorClient& client = Anchor::Instance->clients[clientId];
 
     if (!DummyPlayer_ShouldShow(client)) {
+        client.stableRoomFrames = 0;
         actor->world.pos.x = -9999.0f;
         actor->world.pos.y = -9999.0f;
         actor->world.pos.z = -9999.0f;
         actor->shape.shadowAlpha = 0;
         return;
+    }
+
+    if (client.stableRoomFrames < 255) {
+        client.stableRoomFrames++;
     }
 
     actor->shape.shadowAlpha = 255;
@@ -235,7 +244,10 @@ void DummyPlayer_Draw(Actor* actor, PlayState* play) {
 
     AnchorClient& client = Anchor::Instance->clients[clientId];
 
-    if (!DummyPlayer_ShouldShow(client)) {
+    if (!DummyPlayer_ShouldShow(client) || !DummyPlayer_IsSettled(client)) {
+        return;
+    }
+    if (client.stateFlags2 & PLAYER_STATE2_DISABLE_DRAW) {
         return;
     }
 

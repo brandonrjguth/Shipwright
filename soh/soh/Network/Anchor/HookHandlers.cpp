@@ -579,7 +579,8 @@ void Anchor::RegisterHooks() {
             // Show compass icons for other players in the current scene. Also require them to be in the current room
             // within dungeons. If showLocationsMode isn't all players (2), only show compass icons for players of the
             // same team
-            if (!client.self && client.online && client.player && client.sceneNum == gPlayState->sceneNum &&
+            if (!client.self && client.online && client.isSaveLoaded && client.roomStable && client.stableRoomFrames >= 5 &&
+                client.player && client.sceneNum == gPlayState->sceneNum &&
                 (!isInDungeon || client.curRoomNum == displayedRoomNum) &&
                 (Anchor::Instance->roomState.showLocationsMode == 2 || client.teamId == teamId)) {
                 compassIcons.push_back(
