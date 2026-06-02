@@ -130,7 +130,9 @@ void Anchor::RegisterHooks() {
         if (enemyAuthorityTargets.contains(networkId)) {
             ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
         }
-        if (enemyExtraStates.contains(networkId)) {
+        bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
+                                     actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
+        if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage) {
             ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
         }
     });
@@ -213,7 +215,9 @@ void Anchor::RegisterHooks() {
             if (enemyAuthorityTargets.contains(networkId)) {
                 ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
             }
-            if (enemyExtraStates.contains(networkId)) {
+            bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
+                                         actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
+            if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }
             return;

@@ -551,6 +551,10 @@ void Anchor::ApplyEnemyExtraStates() {
             it = enemyExtraStates.erase(it);
             continue;
         }
+        if (enemyAuthorityTargets.contains(it->first) && actor->colChkInfo.health < enemyAuthorityTargets[it->first].health) {
+            ++it;
+            continue;
+        }
         ApplyEnemyExtraState(actor, it->second);
         ++it;
     }
