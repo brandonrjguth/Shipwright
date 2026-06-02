@@ -178,29 +178,19 @@ void Anchor::RegisterHooks() {
 
     // Enemy sync hooks
     COND_HOOK(OnEnemyDefeat, isConnected, [&](void* refActor) {
-        Actor* actor = (Actor*)refActor;
-
-        if (HasEnemySyncAuthority()) {
-            SendPacket_KillEnemy(actor);
-
-            for (auto& [clientId, client] : clients) {
-                if (!client.online || client.self) {
-                    continue;
-                }
-                if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num) {
-                    SendPacket_SendRoomEnemies(clientId, (ActorCategory)actor->category);
-                }
-            }
-        } else {
-            SendPacket_ReportEnemyDamage(actor, 0);
-        }
+        // Many enemies call this when entering a death transition, not when the actor is actually removed.
+        // Final removal is synchronized from OnActorKill so remote clients can play native death animations.
     });
 
-    COND_ID_HOOK(OnActorKill, ACTOR_EN_DEKUNUTS, isConnected, [&](void* refActor) {
+    COND_HOOK(OnActorKill, isConnected, [&](void* refActor) {
         if (isProcessingIncomingPacket) {
             return;
         }
         Actor* actor = (Actor*)refActor;
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        if (networkId == 0 || IsEnemyMarkedDead(networkId)) {
+            return;
+        }
         if (HasEnemySyncAuthority()) {
             SendPacket_KillEnemy(actor);
         } else {
@@ -219,6 +209,13 @@ void Anchor::RegisterHooks() {
         }
 
         if (!HasEnemySyncAuthority()) {
+            uint64_t networkId = GetEnemyNetworkId(actor);
+            if (enemyAuthorityTargets.contains(networkId)) {
+                ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
+            }
+            if (enemyExtraStates.contains(networkId)) {
+                ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
+            }
             return;
         }
 
@@ -245,12 +242,7 @@ void Anchor::RegisterHooks() {
     });
 
     COND_HOOK(OnBossDefeat, isConnected, [&](void* refActor) {
-        Actor* actor = (Actor*)refActor;
-        if (HasEnemySyncAuthority()) {
-            SendPacket_KillEnemy(actor);
-        } else {
-            SendPacket_ReportEnemyDamage(actor, 0);
-        }
+        // See OnEnemyDefeat: boss defeat can be a transition; final removal is handled by OnActorKill.
     });
 
     COND_HOOK(OnItemReceive, isConnected, [&](GetItemEntry itemEntry) {

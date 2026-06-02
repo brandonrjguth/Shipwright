@@ -395,8 +395,7 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
         return nullptr;
     }
 
-    ActorCategory categories[] = { ACTORCAT_ENEMY, ACTORCAT_BOSS };
-    for (ActorCategory category : categories) {
+    for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
         Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
         while (currAct != nullptr) {
             if (GetEnemyNetworkId(currAct) == networkId) {
@@ -663,6 +662,7 @@ void Anchor::MarkEnemyDead(uint64_t networkId) {
 
     deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].insert(networkId);
     enemyAuthorityTargets.erase(networkId);
+    enemyExtraStates.erase(networkId);
 }
 
 bool Anchor::IsEnemyMarkedDead(uint64_t networkId) {

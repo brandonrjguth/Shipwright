@@ -14,7 +14,7 @@ void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
         return;
     }
 
-    if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+    if (GetEnemyNetworkId(actor) == 0) {
         return;
     }
 
@@ -60,8 +60,8 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
 
     if (health < target->colChkInfo.health) {
         if (health == 0) {
-            MarkEnemyDead(networkId);
-            actorKillBuffer.push_back(target);
+            target->colChkInfo.health = 0;
+            enemyHealthTracker[target] = 0;
             return;
         }
 
@@ -80,7 +80,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
         return;
     }
 
-    if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+    if (GetEnemyNetworkId(actor) == 0) {
         return;
     }
 
@@ -141,7 +141,6 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     if (health < target->colChkInfo.health) {
         if (health == 0) {
-            MarkEnemyDead(networkId);
             actorKillBuffer.push_back(target);
             return;
         }

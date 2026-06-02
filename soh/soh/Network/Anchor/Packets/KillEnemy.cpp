@@ -14,11 +14,12 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
         return;
     }
 
-    if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+    uint64_t networkId = GetEnemyNetworkId(actor);
+    if (networkId == 0) {
         return;
     }
 
-    MarkEnemyDead(GetEnemyNetworkId(actor));
+    MarkEnemyDead(networkId);
 
     nlohmann::json payload;
     payload["type"] = KILL_ENEMY;
@@ -26,7 +27,7 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = ownClientId;
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
-    payload["networkId"] = GetEnemyNetworkId(actor);
+    payload["networkId"] = networkId;
     payload["actorId"] = actor->id;
     payload["posX"] = actor->world.pos.x;
     payload["posY"] = actor->world.pos.y;
