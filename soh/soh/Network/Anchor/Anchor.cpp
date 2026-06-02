@@ -408,6 +408,14 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
     return nullptr;
 }
 
+bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
+    return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_SW;
+}
+
+bool Anchor::IsEnemySyncActor(Actor* actor) {
+    return actor != nullptr && IsEnemySyncActor((ActorCategory)actor->category, actor->id);
+}
+
 Actor* Anchor::FindNearbyDeadEnemyDropSource(Actor* dropActor) {
     if (dropActor == nullptr || gPlayState == nullptr) {
         return nullptr;
@@ -415,10 +423,11 @@ Actor* Anchor::FindNearbyDeadEnemyDropSource(Actor* dropActor) {
 
     Actor* closest = nullptr;
     float closestDistSq = 22500.0f;
-    for (s32 category : { ACTORCAT_ENEMY, ACTORCAT_BOSS }) {
+    for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
         Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
         while (currAct != nullptr) {
-            if (GetEnemyNetworkId(currAct) != 0 && currAct->colChkInfo.health == 0 && currAct->update != nullptr) {
+            if (IsEnemySyncActor(currAct) && GetEnemyNetworkId(currAct) != 0 && currAct->colChkInfo.health == 0 &&
+                currAct->update != nullptr) {
                 float dx = currAct->world.pos.x - dropActor->world.pos.x;
                 float dy = currAct->world.pos.y - dropActor->world.pos.y;
                 float dz = currAct->world.pos.z - dropActor->world.pos.z;
@@ -822,7 +831,7 @@ void Anchor::ProcessActorBuffers() {
         if (HasEnemySyncAuthority() || !AnchorIsActorInCurrentLists(actor) || actor->update == nullptr) {
             continue;
         }
-        if ((actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) && GetEnemyNetworkId(actor) == 0) {
+        if (IsEnemySyncActor(actor) && GetEnemyNetworkId(actor) == 0) {
             Actor_Kill(actor);
         }
     }
@@ -845,8 +854,7 @@ void Anchor::DetectEnemyDamage() {
     for (s32 cat = ACTORCAT_SWITCH; cat < ACTORCAT_MAX; cat++) {
         Actor* currAct = gPlayState->actorCtx.actorLists[cat].head;
         while (currAct != nullptr) {
-            if (currAct->category == ACTORCAT_ENEMY || currAct->category == ACTORCAT_BOSS ||
-                GetEnemyNetworkId(currAct) != 0) {
+            if (IsEnemySyncActor(currAct) || GetEnemyNetworkId(currAct) != 0) {
                 currentEnemies.push_back(currAct);
             }
             currAct = currAct->next;
@@ -855,7 +863,7 @@ void Anchor::DetectEnemyDamage() {
 
     std::vector<Actor*> assignableEnemies;
     for (Actor* act : currentEnemies) {
-        if (act->category == ACTORCAT_ENEMY || act->category == ACTORCAT_BOSS) {
+        if (IsEnemySyncActor(act)) {
             assignableEnemies.push_back(act);
         }
     }

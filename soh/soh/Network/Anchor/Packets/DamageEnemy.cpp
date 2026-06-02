@@ -272,7 +272,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
-    if (health == 0 && target->category != ACTORCAT_ENEMY && target->category != ACTORCAT_BOSS) {
+    if (health == 0 && !IsEnemySyncActor(target)) {
         SendPacket_KillEnemy(target);
         enemyKillBuffer.push_back(networkId);
         return;

@@ -24,11 +24,13 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
 
     Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
     while (currAct != nullptr) {
-        actors.push_back(currAct);
+        if (IsEnemySyncActor(currAct)) {
+            actors.push_back(currAct);
+        }
         currAct = currAct->next;
     }
 
-    if (category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS) {
+    if (!actors.empty()) {
         AssignEnemyNetworkIds(actors);
     }
 
@@ -145,9 +147,9 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         }
     }
 
-    if ((category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS) && !HasEnemySyncAuthority()) {
+    if (!HasEnemySyncAuthority()) {
         for (Actor* local : localActors) {
-            if (local == nullptr || local->update == nullptr || GetEnemyNetworkId(local) != 0) {
+            if (local == nullptr || local->update == nullptr || !IsEnemySyncActor(local) || GetEnemyNetworkId(local) != 0) {
                 continue;
             }
 

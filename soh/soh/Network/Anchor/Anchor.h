@@ -131,6 +131,8 @@ class Anchor : public Network {
     Actor* FindClosestUnassignedActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos, float maxDistSq);
     Actor* FindActorByEnemyNetworkId(uint64_t networkId);
     Actor* FindNearbyDeadEnemyDropSource(Actor* dropActor);
+    bool IsEnemySyncActor(Actor* actor);
+    bool IsEnemySyncActor(ActorCategory category, s16 actorId);
     uint64_t GetEnemyNetworkId(Actor* actor);
     uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);

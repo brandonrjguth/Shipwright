@@ -42,6 +42,16 @@ void EnSt_ReturnToCeiling(EnSt* thisx, PlayState* play);
 void EnSt_BounceAround(EnSt* thisx, PlayState* play);
 void EnSt_FinishBouncing(EnSt* thisx, PlayState* play);
 void EnSt_Die(EnSt* thisx, PlayState* play);
+void func_80B0D364(EnSw* thisx, PlayState* play);
+void func_80B0D3AC(EnSw* thisx, PlayState* play);
+void func_80B0D590(EnSw* thisx, PlayState* play);
+void func_80B0D878(EnSw* thisx, PlayState* play);
+void func_80B0DB00(EnSw* thisx, PlayState* play);
+void func_80B0DC7C(EnSw* thisx, PlayState* play);
+void func_80B0E5E0(EnSw* thisx, PlayState* play);
+void func_80B0E728(EnSw* thisx, PlayState* play);
+void func_80B0E90C(EnSw* thisx, PlayState* play);
+void func_80B0E9BC(EnSw* thisx, PlayState* play);
 
 enum DekubabaAction : s32 {
     DEKUBABA_ACTION_WAIT = 0,
@@ -137,6 +147,49 @@ static EnStActionFunc GetEnStActionFunc(s32 actionId) {
         default: return nullptr;
     }
 }
+
+enum EnSwAction : s32 {
+    ENSW_ACTION_SPAWN_START = 0,
+    ENSW_ACTION_SPAWN_RISE = 1,
+    ENSW_ACTION_IDLE_GOLD = 2,
+    ENSW_ACTION_DIE_GOLD = 3,
+    ENSW_ACTION_FALL = 4,
+    ENSW_ACTION_DIE_WALL = 5,
+    ENSW_ACTION_IDLE_WALL = 6,
+    ENSW_ACTION_ATTACK = 7,
+    ENSW_ACTION_STOP_ATTACK = 8,
+    ENSW_ACTION_RETURN_HOME = 9,
+};
+
+static s32 GetEnSwActionId(EnSwActionFunc actionFunc) {
+    if (actionFunc == func_80B0D364) return ENSW_ACTION_SPAWN_START;
+    if (actionFunc == func_80B0D3AC) return ENSW_ACTION_SPAWN_RISE;
+    if (actionFunc == func_80B0D590) return ENSW_ACTION_IDLE_GOLD;
+    if (actionFunc == func_80B0D878) return ENSW_ACTION_DIE_GOLD;
+    if (actionFunc == func_80B0DB00) return ENSW_ACTION_FALL;
+    if (actionFunc == func_80B0DC7C) return ENSW_ACTION_DIE_WALL;
+    if (actionFunc == func_80B0E5E0) return ENSW_ACTION_IDLE_WALL;
+    if (actionFunc == func_80B0E728) return ENSW_ACTION_ATTACK;
+    if (actionFunc == func_80B0E90C) return ENSW_ACTION_STOP_ATTACK;
+    if (actionFunc == func_80B0E9BC) return ENSW_ACTION_RETURN_HOME;
+    return -1;
+}
+
+static EnSwActionFunc GetEnSwActionFunc(s32 actionId) {
+    switch (actionId) {
+        case ENSW_ACTION_SPAWN_START: return func_80B0D364;
+        case ENSW_ACTION_SPAWN_RISE: return func_80B0D3AC;
+        case ENSW_ACTION_IDLE_GOLD: return func_80B0D590;
+        case ENSW_ACTION_DIE_GOLD: return func_80B0D878;
+        case ENSW_ACTION_FALL: return func_80B0DB00;
+        case ENSW_ACTION_DIE_WALL: return func_80B0DC7C;
+        case ENSW_ACTION_IDLE_WALL: return func_80B0E5E0;
+        case ENSW_ACTION_ATTACK: return func_80B0E728;
+        case ENSW_ACTION_STOP_ATTACK: return func_80B0E90C;
+        case ENSW_ACTION_RETURN_HOME: return func_80B0E9BC;
+        default: return nullptr;
+    }
+}
 #include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 #include "src/overlays/actors/ovl_En_Okuta/z_en_okuta.h"
@@ -174,6 +227,87 @@ static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
     skelAnime->endFrame = extra.value("skelEndFrame", skelAnime->endFrame);
     skelAnime->morphWeight = extra.value("skelMorphWeight", skelAnime->morphWeight);
     skelAnime->morphRate = extra.value("skelMorphRate", skelAnime->morphRate);
+}
+
+static void EnsureEnStDeathState(EnSt* st) {
+    if (st == nullptr || st->actor.colChkInfo.health != 0) {
+        return;
+    }
+
+    st->actor.flags &= ~(ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_ATTACHED_TO_ARROW);
+    s32 action = GetEnStActionId(st->actionFunc);
+    if (action == ENST_ACTION_BOUNCE_AROUND) {
+        if (st->groundBounces <= 0) {
+            st->groundBounces = 3;
+        }
+        if (st->deathTimer <= 0) {
+            st->deathTimer = 20;
+        }
+        if (st->actor.gravity == 0.0f) {
+            st->actor.gravity = -1.0f;
+        }
+        return;
+    }
+    if (action == ENST_ACTION_FINISH_BOUNCING) {
+        if (st->deathTimer <= 0 && st->finishDeathTimer <= 0) {
+            st->deathTimer = 20;
+        }
+        return;
+    }
+    if (action == ENST_ACTION_DIE) {
+        if (st->finishDeathTimer <= 0) {
+            st->finishDeathTimer = 8;
+        }
+        return;
+    }
+
+    st->swayTimer = 0;
+    st->stunTimer = 0;
+    st->takeDamageSpinTimer = 0;
+    st->gaveDamageSpinTimer = 0;
+    st->groundBounces = 3;
+    st->deathTimer = 20;
+    st->actor.gravity = -1.0f;
+    EnSt_SetupAction(st, EnSt_BounceAround);
+}
+
+static void EnsureEnSwDeathState(EnSw* sw) {
+    if (sw == nullptr || sw->actor.colChkInfo.health != 0) {
+        return;
+    }
+
+    sw->actor.flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
+    s32 skulltulaType = (sw->actor.params & 0xE000) >> 0xD;
+    s32 action = GetEnSwActionId(sw->actionFunc);
+    if (skulltulaType != 0) {
+        if (action == ENSW_ACTION_DIE_GOLD) {
+            return;
+        }
+
+        sw->skelAnime.playSpeed = 8.0f;
+        if (sw->unk_394 <= 0) {
+            sw->unk_394 = 10;
+        }
+        if (sw->unk_38A <= 0) {
+            sw->unk_38A = 1;
+        }
+        if (sw->unk_420 == 0.0f) {
+            sw->unk_420 = 0.4f;
+        }
+        sw->actionFunc = func_80B0D878;
+        return;
+    }
+
+    if (action == ENSW_ACTION_FALL || action == ENSW_ACTION_DIE_WALL) {
+        return;
+    }
+
+    sw->actor.shape.shadowDraw = ActorShadow_DrawCircle;
+    sw->actor.shape.shadowAlpha = 0xFF;
+    sw->actor.shape.shadowScale = 16.0f;
+    sw->actor.gravity = -1.0f;
+    sw->unk_38A = 2;
+    sw->actionFunc = func_80B0DB00;
 }
 
 nlohmann::json GetEnemyExtraState(Actor* actor) {
@@ -248,6 +382,7 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         case ACTOR_EN_SW: {
             EnSw* sw = (EnSw*)actor;
             extra["kind"] = "EnSw";
+            extra["action"] = GetEnSwActionId(sw->actionFunc);
             extra["unk_388"] = sw->unk_388;
             extra["unk_38A"] = sw->unk_38A;
             extra["unk_38C"] = sw->unk_38C;
@@ -457,6 +592,7 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         st->floorHeightOffset = extra.value("floorHeightOffset", st->floorHeightOffset);
         st->colliderScale = extra.value("colliderScale", st->colliderScale);
         ApplySkelAnimeState(extra, &st->skelAnime);
+        EnsureEnStDeathState(st);
     } else if (actor->id == ACTOR_EN_SSH && kind == "EnSsh") {
         EnSsh* ssh = (EnSsh*)actor;
         ssh->spinTimer = extra.value("spinTimer", ssh->spinTimer);
@@ -472,6 +608,14 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplySkelAnimeState(extra, &ssh->skelAnime);
     } else if (actor->id == ACTOR_EN_SW && kind == "EnSw") {
         EnSw* sw = (EnSw*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetEnSwActionId(sw->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            EnSwActionFunc remoteFunc = GetEnSwActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                sw->actionFunc = remoteFunc;
+            }
+        }
         sw->unk_388 = extra.value("unk_388", sw->unk_388);
         sw->unk_38A = extra.value("unk_38A", sw->unk_38A);
         sw->unk_38C = extra.value("unk_38C", sw->unk_38C);
@@ -486,6 +630,7 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         sw->unk_444 = extra.value("unk_444", sw->unk_444);
         sw->unk_446 = extra.value("unk_446", sw->unk_446);
         ApplySkelAnimeState(extra, &sw->skelAnime);
+        EnsureEnSwDeathState(sw);
     } else if (actor->id == ACTOR_EN_WF && kind == "EnWf") {
         EnWf* wf = (EnWf*)actor;
         wf->action = extra.value("action", wf->action);
@@ -633,8 +778,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     std::vector<nlohmann::json> extraStates;
 
     for (Actor* actor : actors) {
-        if (actor == nullptr ||
-            (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && GetEnemyNetworkId(actor) == 0)) {
+        if (actor == nullptr || (!IsEnemySyncActor(actor) && GetEnemyNetworkId(actor) == 0)) {
             continue;
         }
 
@@ -789,7 +933,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
 
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
-        if (target == nullptr && (category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS)) {
+        if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
             target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f);
             SetEnemyNetworkId(target, networkIds[i]);
         } else if (target == nullptr && (actorIds[i] == ACTOR_EN_ITEM00 || actorIds[i] == ACTOR_EN_ELF) &&

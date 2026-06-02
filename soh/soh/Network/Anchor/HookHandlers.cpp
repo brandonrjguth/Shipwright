@@ -150,7 +150,7 @@ void Anchor::RegisterHooks() {
 
         Actor* actor = (Actor*)refActor;
         uint64_t networkId = GetEnemyNetworkId(actor);
-        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && networkId == 0) {
+        if (!IsEnemySyncActor(actor) && networkId == 0) {
             return;
         }
         if (HasEnemySyncAuthority()) {
@@ -240,7 +240,7 @@ void Anchor::RegisterHooks() {
 
         Actor* actor = (Actor*)refActor;
         uint64_t networkId = GetEnemyNetworkId(actor);
-        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && networkId == 0) {
+        if (!IsEnemySyncActor(actor) && networkId == 0) {
             return;
         }
 
@@ -260,7 +260,7 @@ void Anchor::RegisterHooks() {
             return;
         }
 
-        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+        if (!IsEnemySyncActor(actor)) {
             return;
         }
 
