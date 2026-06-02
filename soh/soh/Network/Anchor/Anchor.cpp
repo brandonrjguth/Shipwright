@@ -408,6 +408,58 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
     return nullptr;
 }
 
+Actor* Anchor::FindNearbyDeadEnemyDropSource(Actor* dropActor) {
+    if (dropActor == nullptr || gPlayState == nullptr) {
+        return nullptr;
+    }
+
+    Actor* closest = nullptr;
+    float closestDistSq = 22500.0f;
+    for (s32 category : { ACTORCAT_ENEMY, ACTORCAT_BOSS }) {
+        Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
+        while (currAct != nullptr) {
+            if (GetEnemyNetworkId(currAct) != 0 && currAct->colChkInfo.health == 0 && currAct->update != nullptr) {
+                float dx = currAct->world.pos.x - dropActor->world.pos.x;
+                float dy = currAct->world.pos.y - dropActor->world.pos.y;
+                float dz = currAct->world.pos.z - dropActor->world.pos.z;
+                float distSq = (dx * dx) + (dy * dy) + (dz * dz);
+                if (distSq < closestDistSq) {
+                    closest = currAct;
+                    closestDistSq = distSq;
+                }
+            }
+            currAct = currAct->next;
+        }
+    }
+
+    return closest;
+}
+
+uint64_t Anchor::CreateEnemyDropNetworkId(Actor* source, Actor* dropActor) {
+    uint64_t sourceNetworkId = GetEnemyNetworkId(source);
+    if (sourceNetworkId == 0 || dropActor == nullptr) {
+        return 0;
+    }
+
+    uint16_t occurrence = enemyDropCounters[sourceNetworkId]++;
+    uint64_t networkId = 0;
+    do {
+        uint64_t hash = 1469598103934665603ULL;
+        auto hashValue = [&](uint64_t value) {
+            hash ^= value;
+            hash *= 1099511628211ULL;
+        };
+        hashValue(sourceNetworkId);
+        hashValue((uint16_t)dropActor->id);
+        hashValue((uint16_t)dropActor->params);
+        hashValue(occurrence++);
+        networkId = hash;
+    } while (FindActorByEnemyNetworkId(networkId) != nullptr);
+
+    enemyDropCounters[sourceNetworkId] = occurrence;
+    return networkId;
+}
+
 void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
     if (!IsSaveLoaded()) {
         return;
@@ -457,6 +509,33 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
         usedNetworkIds.insert(networkId);
         ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
     }
+}
+
+void Anchor::ResetEnemyRoomTransientState() {
+    enemyKillBuffer.clear();
+    enemyPruneBuffer.clear();
+    enemySpawnBuffer.clear();
+    enemyHealthTracker.clear();
+    enemyAuthorityTargets.clear();
+    enemyExtraStates.clear();
+    enemyDropCounters.clear();
+    enemyTransformFrameCounter = 0;
+}
+
+void Anchor::DetectEnemyRoomChange() {
+    if (!IsSaveLoaded()) {
+        return;
+    }
+
+    if (enemySyncSceneNum == gPlayState->sceneNum && enemySyncRoomNum == gPlayState->roomCtx.curRoom.num) {
+        return;
+    }
+
+    enemySyncSceneNum = gPlayState->sceneNum;
+    enemySyncRoomNum = gPlayState->roomCtx.curRoom.num;
+    ResetEnemyRoomTransientState();
+    SendPacket_UpdateClientState();
+    SendPacket_RequestRoomEnemies();
 }
 
 static float AnchorLerpFloat(float from, float to, float amount) {

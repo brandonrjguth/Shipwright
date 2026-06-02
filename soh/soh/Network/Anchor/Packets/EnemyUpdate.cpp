@@ -4,6 +4,7 @@
 
 extern "C" {
 #include "variables.h"
+#include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #define this thisx
@@ -597,6 +598,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
 
     std::vector<uint64_t> networkIds;
     std::vector<s16> actorIds;
+    std::vector<s16> actorParams;
     std::vector<s16> categories;
     std::vector<float> posX;
     std::vector<float> posY;
@@ -633,6 +635,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         }
 
         actorIds.push_back(actor->id);
+        actorParams.push_back(actor->params);
         networkIds.push_back(GetEnemyNetworkId(actor));
         categories.push_back(actor->category);
         posX.push_back(actor->world.pos.x);
@@ -676,6 +679,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
     payload["networkIds"] = networkIds;
     payload["actorIds"] = actorIds;
+    payload["actorParams"] = actorParams;
     payload["categories"] = categories;
     payload["posX"] = posX;
     payload["posY"] = posY;
@@ -726,6 +730,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
 
     auto networkIds = payload.at("networkIds").get<std::vector<uint64_t>>();
     auto actorIds = payload.at("actorIds").get<std::vector<s16>>();
+    auto actorParams = payload.value("actorParams", std::vector<s16>{});
     auto categories = payload.at("categories").get<std::vector<s16>>();
     auto posX = payload.at("posX").get<std::vector<float>>();
     auto posY = payload.at("posY").get<std::vector<float>>();
@@ -756,7 +761,8 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     auto extraStates = payload.value("extraStates", std::vector<nlohmann::json>{});
 
     size_t enemyCount = actorIds.size();
-    if (networkIds.size() != enemyCount || categories.size() != enemyCount || posX.size() != enemyCount ||
+    if (networkIds.size() != enemyCount || (!actorParams.empty() && actorParams.size() != enemyCount) ||
+        categories.size() != enemyCount || posX.size() != enemyCount ||
         posY.size() != enemyCount || posZ.size() != enemyCount || worldRotX.size() != enemyCount ||
         worldRotY.size() != enemyCount || worldRotZ.size() != enemyCount || shapeRotX.size() != enemyCount ||
         shapeRotY.size() != enemyCount || shapeRotZ.size() != enemyCount ||
@@ -781,6 +787,13 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
         if (target == nullptr && (category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS)) {
             target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f);
+            SetEnemyNetworkId(target, networkIds[i]);
+        } else if (target == nullptr && (actorIds[i] == ACTOR_EN_ITEM00 || actorIds[i] == ACTOR_EN_ELF) &&
+                   !actorParams.empty()) {
+            spawningNetworkedEnemyDropId = networkIds[i];
+            target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],
+                                 worldRotY[i], worldRotZ[i], actorParams[i]);
+            spawningNetworkedEnemyDropId = 0;
             SetEnemyNetworkId(target, networkIds[i]);
         }
         if (target == nullptr) {

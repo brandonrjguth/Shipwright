@@ -68,11 +68,9 @@ void Anchor::RegisterHooks() {
         SendPacket_UpdateClientState();
 
         if (IsSaveLoaded()) {
-            enemyHealthTracker.clear();
-            enemyAuthorityTargets.clear();
-            enemyExtraStates.clear();
-            enemyPruneBuffer.clear();
-            enemyTransformFrameCounter = 0;
+            enemySyncSceneNum = gPlayState->sceneNum;
+            enemySyncRoomNum = gPlayState->roomCtx.curRoom.num;
+            ResetEnemyRoomTransientState();
             RefreshClientActors();
             SendPacket_RequestRoomEnemies();
         }
@@ -97,6 +95,34 @@ void Anchor::RegisterHooks() {
         }
     });
 
+    auto suppressReplicaEnemyDrop = [&](void* actorRef, bool* should) {
+        Actor* actor = (Actor*)actorRef;
+        if (!IsSaveLoaded() || spawningNetworkedEnemyDropId != 0 || HasEnemySyncAuthority()) {
+            return;
+        }
+
+        if (FindNearbyDeadEnemyDropSource(actor) != nullptr) {
+            *should = false;
+        }
+    };
+
+    auto markAuthorityEnemyDrop = [&](void* actorRef) {
+        Actor* actor = (Actor*)actorRef;
+        if (!IsSaveLoaded() || spawningNetworkedEnemyDropId != 0 || !HasEnemySyncAuthority()) {
+            return;
+        }
+
+        Actor* source = FindNearbyDeadEnemyDropSource(actor);
+        if (source != nullptr) {
+            SetEnemyNetworkId(actor, CreateEnemyDropNetworkId(source, actor));
+        }
+    };
+
+    COND_ID_HOOK(ShouldActorInit, ACTOR_EN_ITEM00, isConnected, suppressReplicaEnemyDrop);
+    COND_ID_HOOK(ShouldActorInit, ACTOR_EN_ELF, isConnected, suppressReplicaEnemyDrop);
+    COND_ID_HOOK(OnActorInit, ACTOR_EN_ITEM00, isConnected, markAuthorityEnemyDrop);
+    COND_ID_HOOK(OnActorInit, ACTOR_EN_ELF, isConnected, markAuthorityEnemyDrop);
+
     COND_HOOK(OnPlayerUpdate, isConnected, [&]() {
         if (justLoadedSave) {
             justLoadedSave = false;
@@ -108,6 +134,7 @@ void Anchor::RegisterHooks() {
             RefreshClientActors();
         }
 
+        DetectEnemyRoomChange();
         ProcessActorBuffers();
         DetectEnemyDamage();
         SendPacket_PlayerUpdate();

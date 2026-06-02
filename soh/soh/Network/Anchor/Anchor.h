@@ -104,6 +104,7 @@ class Anchor : public Network {
     std::mutex incomingPacketQueueMutex;
     std::queue<nlohmann::json> outgoingPacketQueue;
     std::mutex outgoingPacketQueueMutex;
+    uint64_t spawningNetworkedEnemyDropId = 0;
     std::vector<uint64_t> enemyKillBuffer;
     std::vector<std::tuple<Actor*, s16, s8>> enemyPruneBuffer;
     std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
@@ -113,6 +114,9 @@ class Anchor : public Network {
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorities;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
+    std::unordered_map<uint64_t, uint16_t> enemyDropCounters;
+    s16 enemySyncSceneNum = SCENE_ID_MAX;
+    s8 enemySyncRoomNum = -1;
     u8 enemyTransformFrameCounter = 0;
 
     nlohmann::json PrepClientState();
@@ -123,9 +127,13 @@ class Anchor : public Network {
     Actor* FindClosestActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos);
     Actor* FindClosestUnassignedActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos, float maxDistSq);
     Actor* FindActorByEnemyNetworkId(uint64_t networkId);
+    Actor* FindNearbyDeadEnemyDropSource(Actor* dropActor);
     uint64_t GetEnemyNetworkId(Actor* actor);
+    uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);
     void AssignEnemyNetworkIds(std::vector<Actor*> actors);
+    void ResetEnemyRoomTransientState();
+    void DetectEnemyRoomChange();
     void ProcessActorBuffers();
     void DetectEnemyDamage();
     void ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate);
