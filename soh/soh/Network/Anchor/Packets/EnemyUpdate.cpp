@@ -16,6 +16,17 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 
 extern "C" {
+void EnDekunuts_Wait(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_LookAround(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_Stand(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_ThrowNut(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_Burrow(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_BeginRun(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_Run(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_Gasp(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_BeDamaged(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_BeStunned(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_Die(EnDekunuts* thisx, PlayState* play);
 void EnDekubaba_Wait(EnDekubaba*, PlayState*);
 void EnDekubaba_Grow(EnDekubaba*, PlayState*);
 void EnDekubaba_Retract(EnDekubaba*, PlayState*);
@@ -52,6 +63,56 @@ void func_80B0E5E0(EnSw* thisx, PlayState* play);
 void func_80B0E728(EnSw* thisx, PlayState* play);
 void func_80B0E90C(EnSw* thisx, PlayState* play);
 void func_80B0E9BC(EnSw* thisx, PlayState* play);
+
+enum DekunutsAction : s32 {
+    DEKUNUTS_ACTION_WAIT = 0,
+    DEKUNUTS_ACTION_LOOK_AROUND = 1,
+    DEKUNUTS_ACTION_STAND = 2,
+    DEKUNUTS_ACTION_THROW_NUT = 3,
+    DEKUNUTS_ACTION_BURROW = 4,
+    DEKUNUTS_ACTION_BEGIN_RUN = 5,
+    DEKUNUTS_ACTION_RUN = 6,
+    DEKUNUTS_ACTION_GASP = 7,
+    DEKUNUTS_ACTION_BE_DAMAGED = 8,
+    DEKUNUTS_ACTION_BE_STUNNED = 9,
+    DEKUNUTS_ACTION_DIE = 10,
+};
+
+static s32 GetDekunutsActionId(EnDekunutsActionFunc actionFunc) {
+    if (actionFunc == EnDekunuts_Wait) return DEKUNUTS_ACTION_WAIT;
+    if (actionFunc == EnDekunuts_LookAround) return DEKUNUTS_ACTION_LOOK_AROUND;
+    if (actionFunc == EnDekunuts_Stand) return DEKUNUTS_ACTION_STAND;
+    if (actionFunc == EnDekunuts_ThrowNut) return DEKUNUTS_ACTION_THROW_NUT;
+    if (actionFunc == EnDekunuts_Burrow) return DEKUNUTS_ACTION_BURROW;
+    if (actionFunc == EnDekunuts_BeginRun) return DEKUNUTS_ACTION_BEGIN_RUN;
+    if (actionFunc == EnDekunuts_Run) return DEKUNUTS_ACTION_RUN;
+    if (actionFunc == EnDekunuts_Gasp) return DEKUNUTS_ACTION_GASP;
+    if (actionFunc == EnDekunuts_BeDamaged) return DEKUNUTS_ACTION_BE_DAMAGED;
+    if (actionFunc == EnDekunuts_BeStunned) return DEKUNUTS_ACTION_BE_STUNNED;
+    if (actionFunc == EnDekunuts_Die) return DEKUNUTS_ACTION_DIE;
+    return -1;
+}
+
+static EnDekunutsActionFunc GetDekunutsActionFunc(s32 actionId) {
+    switch (actionId) {
+        case DEKUNUTS_ACTION_WAIT: return EnDekunuts_Wait;
+        case DEKUNUTS_ACTION_LOOK_AROUND: return EnDekunuts_LookAround;
+        case DEKUNUTS_ACTION_STAND: return EnDekunuts_Stand;
+        case DEKUNUTS_ACTION_THROW_NUT: return EnDekunuts_ThrowNut;
+        case DEKUNUTS_ACTION_BURROW: return EnDekunuts_Burrow;
+        case DEKUNUTS_ACTION_BEGIN_RUN: return EnDekunuts_BeginRun;
+        case DEKUNUTS_ACTION_RUN: return EnDekunuts_Run;
+        case DEKUNUTS_ACTION_GASP: return EnDekunuts_Gasp;
+        case DEKUNUTS_ACTION_BE_DAMAGED: return EnDekunuts_BeDamaged;
+        case DEKUNUTS_ACTION_BE_STUNNED: return EnDekunuts_BeStunned;
+        case DEKUNUTS_ACTION_DIE: return EnDekunuts_Die;
+        default: return nullptr;
+    }
+}
+
+static bool IsDekunutsFleeAction(s32 action) {
+    return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
+}
 
 enum DekubabaAction : s32 {
     DEKUBABA_ACTION_WAIT = 0,
@@ -310,6 +371,15 @@ static void EnsureEnSwDeathState(EnSw* sw) {
     sw->actionFunc = func_80B0DB00;
 }
 
+bool ShouldReportEnemyExtraState(Actor* actor) {
+    if (actor == nullptr || actor->id != ACTOR_EN_DEKUNUTS) {
+        return false;
+    }
+
+    EnDekunuts* dekunuts = (EnDekunuts*)actor;
+    return IsDekunutsFleeAction(GetDekunutsActionId(dekunuts->actionFunc));
+}
+
 nlohmann::json GetEnemyExtraState(Actor* actor) {
     nlohmann::json extra = nlohmann::json::object();
 
@@ -317,11 +387,15 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         case ACTOR_EN_DEKUNUTS: {
             EnDekunuts* dekunuts = (EnDekunuts*)actor;
             extra["kind"] = "EnDekunuts";
+            extra["action"] = GetDekunutsActionId(dekunuts->actionFunc);
             extra["playWalkSound"] = dekunuts->playWalkSound;
             extra["runAwayCount"] = dekunuts->runAwayCount;
             extra["animFlagAndTimer"] = dekunuts->animFlagAndTimer;
             extra["runDirection"] = dekunuts->runDirection;
             extra["shotsPerRound"] = dekunuts->shotsPerRound;
+            extra["colliderAcOn"] = (dekunuts->collider.base.acFlags & AC_ON) != 0;
+            extra["colliderHeight"] = dekunuts->collider.dim.height;
+            extra["mass"] = dekunuts->actor.colChkInfo.mass;
             AddSkelAnimeState(extra, &dekunuts->skelAnime);
             break;
         }
@@ -530,11 +604,28 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
 
     if (actor->id == ACTOR_EN_DEKUNUTS && kind == "EnDekunuts") {
         EnDekunuts* dekunuts = (EnDekunuts*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetDekunutsActionId(dekunuts->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            EnDekunutsActionFunc remoteFunc = GetDekunutsActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                dekunuts->actionFunc = remoteFunc;
+            }
+        }
         dekunuts->playWalkSound = extra.value("playWalkSound", dekunuts->playWalkSound);
         dekunuts->runAwayCount = extra.value("runAwayCount", dekunuts->runAwayCount);
         dekunuts->animFlagAndTimer = extra.value("animFlagAndTimer", dekunuts->animFlagAndTimer);
         dekunuts->runDirection = extra.value("runDirection", dekunuts->runDirection);
         dekunuts->shotsPerRound = extra.value("shotsPerRound", dekunuts->shotsPerRound);
+        dekunuts->collider.dim.height = extra.value("colliderHeight", dekunuts->collider.dim.height);
+        dekunuts->actor.colChkInfo.mass = extra.value("mass", dekunuts->actor.colChkInfo.mass);
+        if (extra.contains("colliderAcOn")) {
+            if (extra.value("colliderAcOn", false)) {
+                dekunuts->collider.base.acFlags |= AC_ON;
+            } else {
+                dekunuts->collider.base.acFlags &= ~AC_ON;
+            }
+        }
         ApplySkelAnimeState(extra, &dekunuts->skelAnime);
     } else if (actor->id == ACTOR_EN_DEKUBABA && kind == "EnDekubaba") {
         EnDekubaba* dekubaba = (EnDekubaba*)actor;

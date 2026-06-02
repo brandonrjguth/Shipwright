@@ -28,6 +28,23 @@ static bool HasReportedEnemyState(nlohmann::json payload) {
            !payload["extraState"].value("kind", std::string("")).empty();
 }
 
+static bool IsReportedDekunutsFleeState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_EN_DEKUNUTS || !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    nlohmann::json extraState = payload["extraState"];
+    if (extraState.value("kind", std::string("")) != "EnDekunuts") {
+        return false;
+    }
+
+    constexpr s32 DEKUNUTS_ACTION_BEGIN_RUN = 5;
+    constexpr s32 DEKUNUTS_ACTION_RUN = 6;
+    constexpr s32 DEKUNUTS_ACTION_GASP = 7;
+    s32 action = extraState.value("action", (s32)-1);
+    return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
+}
+
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
     nlohmann::json extraState = GetEnemyExtraState(actor);
     if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
@@ -114,6 +131,11 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     nlohmann::json extraState = payload["extraState"];
 
     ApplyEnemyExtraState(target, extraState);
+
+    if (target->id == ACTOR_EN_DEKUNUTS) {
+        ApplyReportedEnemyDeathMotion(target, payload);
+        return;
+    }
 
     if (target->id == ACTOR_EN_DEKUBABA && target->colChkInfo.health == 0) {
         constexpr s32 DEKUBABA_ACTION_PRUNED_SOMERSAULT = 11;
@@ -278,9 +300,16 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
-    if (health < target->colChkInfo.health) {
-        bool hasReportedState = HasReportedEnemyState(payload);
+    bool hasReportedState = HasReportedEnemyState(payload);
+    bool hasReportedNonDamageState = health == target->colChkInfo.health && IsReportedDekunutsFleeState(target, payload);
 
+    if (hasReportedNonDamageState) {
+        ApplyReportedEnemyState(target, payload);
+        enemyHealthTracker[target] = target->colChkInfo.health;
+        return;
+    }
+
+    if (health < target->colChkInfo.health) {
         if (health == 0 && !hasReportedState) {
             enemyKillBuffer.push_back(networkId);
             return;

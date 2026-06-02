@@ -59,6 +59,7 @@ float OTRGetDimensionFromRightEdge(float v);
 }
 
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
+extern bool ShouldReportEnemyExtraState(Actor* actor);
 
 void Anchor::RegisterHooks() {
 
@@ -165,7 +166,8 @@ void Anchor::RegisterHooks() {
         }
         bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
                                      actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
-        if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage) {
+        bool hasPendingLocalExtraState = ShouldReportEnemyExtraState(actor);
+        if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
             ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
         }
     });
@@ -254,7 +256,8 @@ void Anchor::RegisterHooks() {
             }
             bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
                                          actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
-            if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage) {
+            bool hasPendingLocalExtraState = ShouldReportEnemyExtraState(actor);
+            if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }
             return;
