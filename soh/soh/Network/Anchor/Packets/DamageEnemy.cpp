@@ -12,32 +12,6 @@ extern PlayState* gPlayState;
 extern nlohmann::json GetEnemyExtraState(Actor* actor);
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 
-static EnemyAuthorityState BuildEnemyAuthorityStateFromDamagePayload(Actor* target, nlohmann::json payload, u8 health) {
-    return { target->id,
-             (ActorCategory)target->category,
-             { payload.value("posX", target->world.pos.x), payload.value("posY", target->world.pos.y),
-               payload.value("posZ", target->world.pos.z) },
-             { payload.value("worldRotX", target->world.rot.x), payload.value("worldRotY", target->world.rot.y),
-               payload.value("worldRotZ", target->world.rot.z) },
-             { payload.value("shapeRotX", target->shape.rot.x), payload.value("shapeRotY", target->shape.rot.y),
-               payload.value("shapeRotZ", target->shape.rot.z) },
-             { payload.value("scaleX", target->scale.x), payload.value("scaleY", target->scale.y),
-               payload.value("scaleZ", target->scale.z) },
-             { payload.value("velocityX", target->velocity.x), payload.value("velocityY", target->velocity.y),
-               payload.value("velocityZ", target->velocity.z) },
-             payload.value("speedXZ", target->speedXZ),
-             payload.value("gravity", target->gravity),
-             payload.value("minVelocityY", target->minVelocityY),
-             payload.value("yawTowardsPlayer", target->yawTowardsPlayer),
-             payload.value("xzDistToPlayer", target->xzDistToPlayer),
-             payload.value("yDistToPlayer", target->yDistToPlayer),
-             payload.value("xyzDistToPlayerSq", target->xyzDistToPlayerSq),
-             payload.value("freezeTimer", target->freezeTimer),
-             payload.value("colorFilterTimer", target->colorFilterTimer),
-             payload.value("colorFilterParams", target->colorFilterParams),
-             health };
-}
-
 void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     if (!IsSaveLoaded()) {
         return;
@@ -111,11 +85,9 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
     }
 
     if (health < target->colChkInfo.health) {
-        if (payload.contains("extraState")) {
-            ApplyEnemyAuthorityState(target, BuildEnemyAuthorityStateFromDamagePayload(target, payload, health), true);
+        target->colChkInfo.health = health;
+        if (health == 0 && payload.contains("extraState")) {
             ApplyEnemyExtraState(target, payload["extraState"]);
-        } else {
-            target->colChkInfo.health = health;
         }
         enemyHealthTracker[target] = target->colChkInfo.health;
     }
@@ -214,8 +186,8 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     if (health < target->colChkInfo.health) {
-        ApplyEnemyAuthorityState(target, BuildEnemyAuthorityStateFromDamagePayload(target, payload, health), true);
-        if (payload.contains("extraState")) {
+        target->colChkInfo.health = health;
+        if (health == 0 && payload.contains("extraState")) {
             ApplyEnemyExtraState(target, payload["extraState"]);
         }
         enemyHealthTracker[target] = target->colChkInfo.health;
