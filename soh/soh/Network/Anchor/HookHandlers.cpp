@@ -223,21 +223,23 @@ void Anchor::RegisterHooks() {
         }
 
         for (auto& [clientId, client] : clients) {
-            if (!client.online || client.self || !client.isSaveLoaded || client.player == nullptr) {
+            if (!client.online || client.self || !client.isSaveLoaded) {
                 continue;
             }
             if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
                 continue;
             }
 
-            f32 xzDist = Actor_WorldDistXZToActor(actor, &client.player->actor);
-            f32 yDist = Actor_HeightDiff(actor, &client.player->actor);
+            f32 dx = client.posRot.pos.x - actor->world.pos.x;
+            f32 dz = client.posRot.pos.z - actor->world.pos.z;
+            f32 xzDist = sqrtf(SQ(dx) + SQ(dz));
+            f32 yDist = client.posRot.pos.y - actor->world.pos.y;
             f32 xyzDistSq = SQ(xzDist) + SQ(yDist);
             if (xyzDistSq < actor->xyzDistToPlayerSq) {
                 actor->xzDistToPlayer = xzDist;
                 actor->yDistToPlayer = yDist;
                 actor->xyzDistToPlayerSq = xyzDistSq;
-                actor->yawTowardsPlayer = Actor_WorldYawTowardActor(actor, &client.player->actor);
+                actor->yawTowardsPlayer = Math_Vec3f_Yaw(&actor->world.pos, &client.posRot.pos);
             }
         }
     });

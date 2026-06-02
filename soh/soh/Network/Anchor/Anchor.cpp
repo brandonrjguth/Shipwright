@@ -14,6 +14,44 @@ extern PlayState* gPlayState;
 
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 
+extern "C" bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos) {
+    if (Anchor::Instance == nullptr || actor == nullptr || outPos == nullptr || !Anchor::Instance->IsSaveLoaded()) {
+        return false;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    if (player == nullptr) {
+        return false;
+    }
+
+    Vec3f bestPos = player->actor.world.pos;
+    f32 dx = actor->world.pos.x - bestPos.x;
+    f32 dy = actor->world.pos.y - bestPos.y;
+    f32 dz = actor->world.pos.z - bestPos.z;
+    f32 bestDistSq = SQ(dx) + SQ(dy) + SQ(dz);
+
+    for (auto& [clientId, client] : Anchor::Instance->clients) {
+        if (!client.online || client.self || !client.isSaveLoaded) {
+            continue;
+        }
+        if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+            continue;
+        }
+
+        dx = actor->world.pos.x - client.posRot.pos.x;
+        dy = actor->world.pos.y - client.posRot.pos.y;
+        dz = actor->world.pos.z - client.posRot.pos.z;
+        f32 distSq = SQ(dx) + SQ(dy) + SQ(dz);
+        if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            bestPos = client.posRot.pos;
+        }
+    }
+
+    *outPos = bestPos;
+    return true;
+}
+
 // MARK: - Overrides
 
 void Anchor::Enable() {

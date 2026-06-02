@@ -29,6 +29,7 @@ void EnDekubaba_Sway(EnDekubaba* this, PlayState* play);
 void EnDekubaba_PrunedSomersault(EnDekubaba* this, PlayState* play);
 void EnDekubaba_ShrinkDie(EnDekubaba* this, PlayState* play);
 void EnDekubaba_DeadStickDrop(EnDekubaba* this, PlayState* play);
+bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos);
 
 static Vec3f sZeroVec = { 0.0f, 0.0f, 0.0f };
 
@@ -489,10 +490,13 @@ void EnDekubaba_Wait(EnDekubaba* this, PlayState* play) {
 
 void EnDekubaba_Grow(EnDekubaba* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
+    Vec3f targetPos = player->actor.world.pos;
     f32 headDistHorizontal;
     f32 headDistVertical;
     f32 headShiftX;
     f32 headShiftZ;
+
+    Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
 
     if (this->timer != 0) {
         this->timer--;
@@ -532,8 +536,7 @@ void EnDekubaba_Grow(EnDekubaba* this, PlayState* play) {
     }
 
     if (this->timer < 10) {
-        Math_ApproachS(&this->actor.shape.rot.y, Math_Vec3f_Yaw(&this->actor.home.pos, &player->actor.world.pos), 2,
-                       0xE38);
+        Math_ApproachS(&this->actor.shape.rot.y, Math_Vec3f_Yaw(&this->actor.home.pos, &targetPos), 2, 0xE38);
         if (headShiftZ) {} // One way of fake-matching
     }
 
@@ -547,7 +550,7 @@ void EnDekubaba_Grow(EnDekubaba* this, PlayState* play) {
                              1, HAHEN_OBJECT_DEFAULT, 10, NULL);
 
     if (this->timer == 0) {
-        if (Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) < 240.0f * this->size) {
+        if (Math_Vec3f_DistXZ(&this->actor.home.pos, &targetPos) < 240.0f * this->size) {
             EnDekubaba_SetupPrepareLunge(this);
         } else {
             EnDekubaba_SetupRetract(this);
@@ -629,6 +632,9 @@ void EnDekubaba_UpdateHeadPosition(EnDekubaba* this) {
 
 void EnDekubaba_DecideLunge(EnDekubaba* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
+    Vec3f targetPos = player->actor.world.pos;
+
+    Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
 
     SkelAnime_Update(&this->skelAnime);
     if (Animation_OnFrame(&this->skelAnime, 0.0f) || Animation_OnFrame(&this->skelAnime, 12.0f)) {
@@ -643,7 +649,7 @@ void EnDekubaba_DecideLunge(EnDekubaba* this, PlayState* play) {
         this->timer--;
     }
 
-    Math_ApproachS(&this->actor.shape.rot.y, Math_Vec3f_Yaw(&this->actor.home.pos, &player->actor.world.pos), 2,
+    Math_ApproachS(&this->actor.shape.rot.y, Math_Vec3f_Yaw(&this->actor.home.pos, &targetPos), 2,
                    (this->timer % 5) * 0x222);
 
     if (this->timer < 10) {
@@ -666,7 +672,7 @@ void EnDekubaba_DecideLunge(EnDekubaba* this, PlayState* play) {
 
     EnDekubaba_UpdateHeadPosition(this);
 
-    if (240.0f * this->size < Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos)) {
+    if (240.0f * this->size < Math_Vec3f_DistXZ(&this->actor.home.pos, &targetPos)) {
         EnDekubaba_SetupRetract(this);
     } else if ((this->timer == 0) || (this->actor.xzDistToPlayer < 80.0f * this->size)) {
         EnDekubaba_SetupPrepareLunge(this);
@@ -734,13 +740,16 @@ void EnDekubaba_Lunge(EnDekubaba* this, PlayState* play) {
 
 void EnDekubaba_PrepareLunge(EnDekubaba* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
+    Vec3f targetPos = player->actor.world.pos;
+
+    Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
 
     if (this->timer != 0) {
         this->timer--;
     }
 
     Math_SmoothStepToS(&this->actor.shape.rot.x, 0x1800, 2, 0xE38, 0x71C);
-    Math_ApproachS(&this->actor.shape.rot.y, Math_Vec3f_Yaw(&this->actor.home.pos, &player->actor.world.pos), 2, 0xE38);
+    Math_ApproachS(&this->actor.shape.rot.y, Math_Vec3f_Yaw(&this->actor.home.pos, &targetPos), 2, 0xE38);
     Math_ScaledStepToS(&this->stemSectionAngle[0], 0xAAA, 0x444);
     Math_ScaledStepToS(&this->stemSectionAngle[1], -0x4718, 0x888);
     Math_ScaledStepToS(&this->stemSectionAngle[2], -0x6AA4, 0x888);
