@@ -116,17 +116,17 @@ void Anchor::RegisterHooks() {
 
     COND_HOOK(OnActorUpdate, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
-        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && networkId == 0) {
             return;
         }
         if (HasEnemySyncAuthority()) {
             return;
         }
-        if (IsEnemyMarkedDead(GetEnemyNetworkId(actor))) {
+        if (IsEnemyMarkedDead(networkId)) {
             return;
         }
 
-        uint64_t networkId = GetEnemyNetworkId(actor);
         if (enemyAuthorityTargets.contains(networkId)) {
             ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
         }
@@ -200,22 +200,26 @@ void Anchor::RegisterHooks() {
 
     COND_HOOK(ShouldActorUpdate, isConnected, [&](void* refActor, bool* should) {
         Actor* actor = (Actor*)refActor;
-        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && networkId == 0) {
             return;
         }
 
-        if (IsEnemyMarkedDead(GetEnemyNetworkId(actor))) {
+        if (IsEnemyMarkedDead(networkId)) {
             return;
         }
 
         if (!HasEnemySyncAuthority()) {
-            uint64_t networkId = GetEnemyNetworkId(actor);
             if (enemyAuthorityTargets.contains(networkId)) {
                 ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
             }
             if (enemyExtraStates.contains(networkId)) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }
+            return;
+        }
+
+        if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
             return;
         }
 

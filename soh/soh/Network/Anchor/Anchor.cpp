@@ -702,16 +702,24 @@ void Anchor::DetectEnemyDamage() {
 
     std::vector<Actor*> currentEnemies;
 
-    ActorCategory categories[] = { ACTORCAT_ENEMY, ACTORCAT_BOSS };
-    for (ActorCategory cat : categories) {
+    for (s32 cat = ACTORCAT_SWITCH; cat < ACTORCAT_MAX; cat++) {
         Actor* currAct = gPlayState->actorCtx.actorLists[cat].head;
         while (currAct != nullptr) {
-            currentEnemies.push_back(currAct);
+            if (currAct->category == ACTORCAT_ENEMY || currAct->category == ACTORCAT_BOSS ||
+                GetEnemyNetworkId(currAct) != 0) {
+                currentEnemies.push_back(currAct);
+            }
             currAct = currAct->next;
         }
     }
 
-    AssignEnemyNetworkIds(currentEnemies);
+    std::vector<Actor*> assignableEnemies;
+    for (Actor* act : currentEnemies) {
+        if (act->category == ACTORCAT_ENEMY || act->category == ACTORCAT_BOSS) {
+            assignableEnemies.push_back(act);
+        }
+    }
+    AssignEnemyNetworkIds(assignableEnemies);
 
     for (Actor* act : currentEnemies) {
         if (IsEnemyMarkedDead(GetEnemyNetworkId(act))) {

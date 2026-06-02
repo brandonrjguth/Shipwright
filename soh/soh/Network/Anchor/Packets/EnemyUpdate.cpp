@@ -541,7 +541,8 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     std::vector<nlohmann::json> extraStates;
 
     for (Actor* actor : actors) {
-        if (actor == nullptr || (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS)) {
+        if (actor == nullptr ||
+            (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && GetEnemyNetworkId(actor) == 0)) {
             continue;
         }
 
@@ -689,13 +690,10 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
 
     for (size_t i = 0; i < enemyCount; i++) {
         ActorCategory category = (ActorCategory)categories[i];
-        if (category != ACTORCAT_ENEMY && category != ACTORCAT_BOSS) {
-            continue;
-        }
 
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
-        if (target == nullptr) {
+        if (target == nullptr && (category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS)) {
             target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f);
             SetEnemyNetworkId(target, networkIds[i]);
         }
