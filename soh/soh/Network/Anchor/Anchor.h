@@ -104,7 +104,7 @@ class Anchor : public Network {
     std::mutex incomingPacketQueueMutex;
     std::queue<nlohmann::json> outgoingPacketQueue;
     std::mutex outgoingPacketQueueMutex;
-    std::vector<Actor*> actorKillBuffer;
+    std::vector<uint64_t> enemyKillBuffer;
     std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
     std::unordered_map<Actor*, u8> enemyHealthTracker;
     std::unordered_map<uint64_t, EnemyAuthorityState> enemyAuthorityTargets;
@@ -138,7 +138,9 @@ class Anchor : public Network {
     bool HasEnemySyncAuthority(s16 sceneNum, s8 roomNum);
     bool IsValidEnemyAuthorityPacket(nlohmann::json payload);
     void MarkEnemyDead(uint64_t networkId);
+    void MarkEnemyDead(s16 sceneNum, s8 roomNum, uint64_t networkId);
     bool IsEnemyMarkedDead(uint64_t networkId);
+    bool IsEnemyMarkedDead(s16 sceneNum, s8 roomNum, uint64_t networkId);
 
     void HandlePacket_AllClientState(nlohmann::json payload);
     void HandlePacket_ConsumeAdultTradeItem(nlohmann::json payload);

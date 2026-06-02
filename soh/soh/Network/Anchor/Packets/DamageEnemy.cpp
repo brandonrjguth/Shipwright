@@ -141,7 +141,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     if (health < target->colChkInfo.health) {
         if (health == 0) {
-            actorKillBuffer.push_back(target);
+            enemyKillBuffer.push_back(networkId);
             return;
         }
 

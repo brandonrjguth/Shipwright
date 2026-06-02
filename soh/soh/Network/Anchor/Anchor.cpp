@@ -514,6 +514,8 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     if (state.colorFilterParams != 0) {
         actor->colorFilterParams = state.colorFilterParams;
     }
+    actor->colChkInfo.health = state.health;
+    enemyHealthTracker[actor] = state.health;
 }
 
 void Anchor::ApplyEnemyAuthorityTargets() {
@@ -574,20 +576,6 @@ uint32_t Anchor::GetEnemySyncAuthorityClientId(s16 sceneNum, s8 roomNum) {
     }
 
     uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
-    uint32_t currentAuthority = enemyRoomAuthorities.contains(roomKey) ? enemyRoomAuthorities[roomKey] : 0;
-    if (currentAuthority == ownClientId) {
-        enemyRoomAuthorities[roomKey] = ownClientId;
-        return ownClientId;
-    }
-
-    if (currentAuthority != 0 && clients.contains(currentAuthority)) {
-        AnchorClient& currentClient = clients[currentAuthority];
-        if (currentClient.online && currentClient.isSaveLoaded && currentClient.sceneNum == sceneNum &&
-            currentClient.curRoomNum == roomNum) {
-            return currentAuthority;
-        }
-    }
-
     uint32_t authorityClientId = ownClientId;
     for (auto& [clientId, client] : clients) {
         if (!client.online || client.self || !client.isSaveLoaded) {
@@ -598,7 +586,10 @@ uint32_t Anchor::GetEnemySyncAuthorityClientId(s16 sceneNum, s8 roomNum) {
         }
     }
 
-    if (!enemyRoomAuthorities.contains(roomKey) || enemyRoomAuthorities[roomKey] != authorityClientId) {
+    if (!enemyRoomAuthorities.contains(roomKey)) {
+        enemyRoomAuthorities[roomKey] = authorityClientId;
+        enemyRoomAuthorityGenerations[roomKey] = 1;
+    } else if (enemyRoomAuthorities[roomKey] != authorityClientId) {
         enemyRoomAuthorities[roomKey] = authorityClientId;
         enemyRoomAuthorityGenerations[roomKey] = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum) + 1;
     }
@@ -636,18 +627,11 @@ bool Anchor::IsValidEnemyAuthorityPacket(nlohmann::json payload) {
         authorityClientId = clientId;
     }
     uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
-    if (!enemyRoomAuthorities.contains(roomKey) && authorityClientId != 0) {
-        enemyRoomAuthorities[roomKey] = authorityClientId;
-        enemyRoomAuthorityGenerations[roomKey] = authorityGeneration > 0 ? authorityGeneration : 1;
-    }
     if (clientId != authorityClientId || authorityClientId != GetEnemySyncAuthorityClientId(sceneNum, roomNum)) {
         return false;
     }
 
     uint32_t localGeneration = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum);
-    if (authorityGeneration != 0 && authorityGeneration < localGeneration) {
-        return false;
-    }
     if (authorityGeneration > localGeneration) {
         enemyRoomAuthorityGenerations[roomKey] = authorityGeneration;
     }
@@ -660,7 +644,15 @@ void Anchor::MarkEnemyDead(uint64_t networkId) {
         return;
     }
 
-    deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].insert(networkId);
+    MarkEnemyDead(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num, networkId);
+}
+
+void Anchor::MarkEnemyDead(s16 sceneNum, s8 roomNum, uint64_t networkId) {
+    if (networkId == 0) {
+        return;
+    }
+
+    deadEnemyLedger[GetEnemyRoomKey(sceneNum, roomNum)].insert(networkId);
     enemyAuthorityTargets.erase(networkId);
     enemyExtraStates.erase(networkId);
 }
@@ -670,7 +662,15 @@ bool Anchor::IsEnemyMarkedDead(uint64_t networkId) {
         return false;
     }
 
-    uint32_t roomKey = GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    return IsEnemyMarkedDead(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num, networkId);
+}
+
+bool Anchor::IsEnemyMarkedDead(s16 sceneNum, s8 roomNum, uint64_t networkId) {
+    if (networkId == 0) {
+        return false;
+    }
+
+    uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
     return deadEnemyLedger.contains(roomKey) && deadEnemyLedger[roomKey].contains(networkId);
 }
 
@@ -679,10 +679,11 @@ void Anchor::ProcessActorBuffers() {
         return;
     }
 
-    while (!actorKillBuffer.empty()) {
-        Actor* actor = actorKillBuffer.front();
-        actorKillBuffer.erase(actorKillBuffer.begin());
-        if (actor != nullptr) {
+    while (!enemyKillBuffer.empty()) {
+        uint64_t networkId = enemyKillBuffer.front();
+        enemyKillBuffer.erase(enemyKillBuffer.begin());
+        Actor* actor = FindActorByEnemyNetworkId(networkId);
+        if (actor != nullptr && actor->update != nullptr) {
             Actor_Kill(actor);
         }
     }
@@ -723,7 +724,7 @@ void Anchor::DetectEnemyDamage() {
 
     for (Actor* act : currentEnemies) {
         if (IsEnemyMarkedDead(GetEnemyNetworkId(act))) {
-            actorKillBuffer.push_back(act);
+            enemyKillBuffer.push_back(GetEnemyNetworkId(act));
         }
     }
 

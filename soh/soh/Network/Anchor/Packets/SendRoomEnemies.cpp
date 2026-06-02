@@ -20,16 +20,25 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
     std::vector<float> enemiesX;
     std::vector<float> enemiesY;
     std::vector<float> enemiesZ;
+    std::vector<Actor*> actors;
 
     Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
     while (currAct != nullptr) {
+        actors.push_back(currAct);
+        currAct = currAct->next;
+    }
+
+    if (category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS) {
+        AssignEnemyNetworkIds(actors);
+    }
+
+    for (Actor* currAct : actors) {
         enemiesNetworkId.push_back(GetEnemyNetworkId(currAct));
         enemiesId.push_back(currAct->id);
         enemiesParams.push_back(currAct->params);
         enemiesX.push_back(currAct->world.pos.x);
         enemiesY.push_back(currAct->world.pos.y);
         enemiesZ.push_back(currAct->world.pos.z);
-        currAct = currAct->next;
     }
 
     nlohmann::json payload;
@@ -79,10 +88,10 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         if (IsEnemyMarkedDead(networkId)) {
             continue;
         }
-        deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].insert(networkId);
+        MarkEnemyDead(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num, networkId);
         Actor* deadActor = FindActorByEnemyNetworkId(networkId);
         if (deadActor != nullptr) {
-            actorKillBuffer.push_back(deadActor);
+            enemyKillBuffer.push_back(networkId);
         }
     }
 

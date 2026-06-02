@@ -48,18 +48,20 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
     }
 
     uint64_t networkId = payload.value("networkId", (uint64_t)0);
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
     if (networkId == 0) {
         return;
     }
 
-    if (IsEnemyMarkedDead(networkId)) {
+    if (IsEnemyMarkedDead(sceneNum, roomNum, networkId)) {
         return;
     }
 
-    MarkEnemyDead(networkId);
+    MarkEnemyDead(sceneNum, roomNum, networkId);
 
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target != nullptr) {
-        actorKillBuffer.push_back(target);
+        enemyKillBuffer.push_back(networkId);
     }
 }
