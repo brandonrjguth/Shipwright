@@ -9,8 +9,6 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
-extern nlohmann::json GetEnemyExtraState(Actor* actor);
-
 void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     if (!IsSaveLoaded()) {
         return;
@@ -32,30 +30,7 @@ void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     payload["posX"] = actor->world.pos.x;
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
-    payload["worldRotX"] = actor->world.rot.x;
-    payload["worldRotY"] = actor->world.rot.y;
-    payload["worldRotZ"] = actor->world.rot.z;
-    payload["shapeRotX"] = actor->shape.rot.x;
-    payload["shapeRotY"] = actor->shape.rot.y;
-    payload["shapeRotZ"] = actor->shape.rot.z;
-    payload["scaleX"] = actor->scale.x;
-    payload["scaleY"] = actor->scale.y;
-    payload["scaleZ"] = actor->scale.z;
-    payload["velocityX"] = actor->velocity.x;
-    payload["velocityY"] = actor->velocity.y;
-    payload["velocityZ"] = actor->velocity.z;
-    payload["speedXZ"] = actor->speedXZ;
-    payload["gravity"] = actor->gravity;
-    payload["minVelocityY"] = actor->minVelocityY;
-    payload["yawTowardsPlayer"] = actor->yawTowardsPlayer;
-    payload["xzDistToPlayer"] = actor->xzDistToPlayer;
-    payload["yDistToPlayer"] = actor->yDistToPlayer;
-    payload["xyzDistToPlayerSq"] = actor->xyzDistToPlayerSq;
-    payload["freezeTimer"] = actor->freezeTimer;
-    payload["colorFilterTimer"] = actor->colorFilterTimer;
-    payload["colorFilterParams"] = actor->colorFilterParams;
     payload["category"] = actor->category;
-    payload["extraState"] = GetEnemyExtraState(actor);
     payload["quiet"] = true;
 
     SendJsonToRemote(payload);
@@ -89,6 +64,7 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
             enemyHealthTracker[target] = 0;
             return;
         }
+
         target->colChkInfo.health = health;
         enemyHealthTracker[target] = target->colChkInfo.health;
     }
@@ -121,30 +97,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["posX"] = actor->world.pos.x;
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
-    payload["worldRotX"] = actor->world.rot.x;
-    payload["worldRotY"] = actor->world.rot.y;
-    payload["worldRotZ"] = actor->world.rot.z;
-    payload["shapeRotX"] = actor->shape.rot.x;
-    payload["shapeRotY"] = actor->shape.rot.y;
-    payload["shapeRotZ"] = actor->shape.rot.z;
-    payload["scaleX"] = actor->scale.x;
-    payload["scaleY"] = actor->scale.y;
-    payload["scaleZ"] = actor->scale.z;
-    payload["velocityX"] = actor->velocity.x;
-    payload["velocityY"] = actor->velocity.y;
-    payload["velocityZ"] = actor->velocity.z;
-    payload["speedXZ"] = actor->speedXZ;
-    payload["gravity"] = actor->gravity;
-    payload["minVelocityY"] = actor->minVelocityY;
-    payload["yawTowardsPlayer"] = actor->yawTowardsPlayer;
-    payload["xzDistToPlayer"] = actor->xzDistToPlayer;
-    payload["yDistToPlayer"] = actor->yDistToPlayer;
-    payload["xyzDistToPlayerSq"] = actor->xyzDistToPlayerSq;
-    payload["freezeTimer"] = actor->freezeTimer;
-    payload["colorFilterTimer"] = actor->colorFilterTimer;
-    payload["colorFilterParams"] = actor->colorFilterParams;
     payload["category"] = actor->category;
-    payload["extraState"] = GetEnemyExtraState(actor);
     payload["quiet"] = true;
 
     SendJsonToRemote(payload);
@@ -191,6 +144,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
             enemyKillBuffer.push_back(networkId);
             return;
         }
+
         target->colChkInfo.health = health;
         enemyHealthTracker[target] = target->colChkInfo.health;
         SendPacket_DamageEnemy(target, target->colChkInfo.health);

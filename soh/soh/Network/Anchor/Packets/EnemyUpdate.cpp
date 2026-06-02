@@ -124,7 +124,7 @@ static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
     skelAnime->morphRate = extra.value("skelMorphRate", skelAnime->morphRate);
 }
 
-nlohmann::json GetEnemyExtraState(Actor* actor) {
+static nlohmann::json GetEnemyExtraState(Actor* actor) {
     nlohmann::json extra;
 
     switch (actor->id) {
@@ -148,17 +148,6 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["stemSectionAngle"] = { dekubaba->stemSectionAngle[0], dekubaba->stemSectionAngle[1],
                                            dekubaba->stemSectionAngle[2] };
             extra["size"] = dekubaba->size;
-            extra["colliderAcOn"] = (dekubaba->collider.base.acFlags & AC_ON) != 0;
-            extra["colliderAcHard"] = (dekubaba->collider.base.acFlags & AC_HARD) != 0;
-            extra["colliderColType"] = dekubaba->collider.base.colType;
-            std::vector<bool> bumperOn;
-            std::vector<bool> ocElemOn;
-            for (s32 i = 0; i < ARRAY_COUNT(dekubaba->colliderElements); i++) {
-                bumperOn.push_back((dekubaba->collider.elements[i].info.bumperFlags & BUMP_ON) != 0);
-                ocElemOn.push_back((dekubaba->collider.elements[i].info.ocElemFlags & OCELEM_ON) != 0);
-            }
-            extra["bumperOn"] = bumperOn;
-            extra["ocElemOn"] = ocElemOn;
             AddSkelAnimeState(extra, &dekubaba->skelAnime);
             break;
         }
@@ -364,39 +353,6 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             dekubaba->stemSectionAngle[2] = stemSectionAngle[2];
         }
         dekubaba->size = extra.value("size", dekubaba->size);
-        if (extra.contains("colliderAcOn")) {
-            if (extra.value("colliderAcOn", false)) {
-                dekubaba->collider.base.acFlags |= AC_ON;
-            } else {
-                dekubaba->collider.base.acFlags &= ~AC_ON;
-            }
-        }
-        if (extra.contains("colliderAcHard")) {
-            if (extra.value("colliderAcHard", false)) {
-                dekubaba->collider.base.acFlags |= AC_HARD;
-            } else {
-                dekubaba->collider.base.acFlags &= ~AC_HARD;
-            }
-        }
-        dekubaba->collider.base.colType = extra.value("colliderColType", dekubaba->collider.base.colType);
-        std::vector<bool> bumperOn = extra.value("bumperOn", std::vector<bool>{});
-        std::vector<bool> ocElemOn = extra.value("ocElemOn", std::vector<bool>{});
-        for (s32 i = 0; i < ARRAY_COUNT(dekubaba->colliderElements); i++) {
-            if ((size_t)i < bumperOn.size()) {
-                if (bumperOn[i]) {
-                    dekubaba->collider.elements[i].info.bumperFlags |= BUMP_ON;
-                } else {
-                    dekubaba->collider.elements[i].info.bumperFlags &= ~BUMP_ON;
-                }
-            }
-            if ((size_t)i < ocElemOn.size()) {
-                if (ocElemOn[i]) {
-                    dekubaba->collider.elements[i].info.ocElemFlags |= OCELEM_ON;
-                } else {
-                    dekubaba->collider.elements[i].info.ocElemFlags &= ~OCELEM_ON;
-                }
-            }
-        }
         ApplySkelAnimeState(extra, &dekubaba->skelAnime);
     } else if (actor->id == ACTOR_EN_ST && kind == "EnSt") {
         EnSt* st = (EnSt*)actor;
