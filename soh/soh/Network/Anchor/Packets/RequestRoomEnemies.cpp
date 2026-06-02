@@ -10,7 +10,7 @@ extern PlayState* gPlayState;
 }
 
 void Anchor::SendPacket_RequestRoomEnemies() {
-    if (!IsSaveLoaded()) {
+    if (!IsRoomStable()) {
         return;
     }
 
@@ -24,7 +24,7 @@ void Anchor::SendPacket_RequestRoomEnemies() {
 }
 
 void Anchor::HandlePacket_RequestRoomEnemies(nlohmann::json payload) {
-    if (!IsSaveLoaded() || !HasEnemySyncAuthority()) {
+    if (!IsRoomStable() || !HasEnemySyncAuthority()) {
         return;
     }
 

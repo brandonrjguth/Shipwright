@@ -10,7 +10,7 @@ extern PlayState* gPlayState;
 }
 
 void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category) {
-    if (!IsSaveLoaded() || !HasEnemySyncAuthority()) {
+    if (!IsRoomStable() || !HasEnemySyncAuthority()) {
         return;
     }
 
@@ -63,7 +63,7 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
 }
 
 void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
-    if (!IsSaveLoaded()) {
+    if (!IsRoomStable()) {
         return;
     }
 

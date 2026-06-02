@@ -522,20 +522,30 @@ void Anchor::ResetEnemyRoomTransientState() {
     enemyTransformFrameCounter = 0;
 }
 
+bool Anchor::IsRoomStable() {
+    return IsSaveLoaded() && gPlayState->roomCtx.status == 0 && gPlayState->roomCtx.curRoom.num >= 0 &&
+           gPlayState->roomCtx.curRoom.segment != nullptr;
+}
+
 void Anchor::DetectEnemyRoomChange() {
     if (!IsSaveLoaded()) {
         return;
     }
 
-    if (enemySyncSceneNum == gPlayState->sceneNum && enemySyncRoomNum == gPlayState->roomCtx.curRoom.num) {
-        return;
+    bool roomChanged = enemySyncSceneNum != gPlayState->sceneNum || enemySyncRoomNum != gPlayState->roomCtx.curRoom.num;
+    if (roomChanged) {
+        enemySyncSceneNum = gPlayState->sceneNum;
+        enemySyncRoomNum = gPlayState->roomCtx.curRoom.num;
+        enemyRoomSyncPending = true;
+        ResetEnemyRoomTransientState();
+        SendPacket_UpdateClientState();
     }
 
-    enemySyncSceneNum = gPlayState->sceneNum;
-    enemySyncRoomNum = gPlayState->roomCtx.curRoom.num;
-    ResetEnemyRoomTransientState();
-    SendPacket_UpdateClientState();
-    SendPacket_RequestRoomEnemies();
+    if (enemyRoomSyncPending && IsRoomStable()) {
+        enemyRoomSyncPending = false;
+        SendPacket_UpdateClientState();
+        SendPacket_RequestRoomEnemies();
+    }
 }
 
 static float AnchorLerpFloat(float from, float to, float amount) {
@@ -686,14 +696,14 @@ uint32_t Anchor::GetEnemySyncAuthorityClientId() {
 }
 
 uint32_t Anchor::GetEnemySyncAuthorityClientId(s16 sceneNum, s8 roomNum) {
-    if (!IsSaveLoaded() || ownClientId == 0) {
+    if (!IsRoomStable() || ownClientId == 0) {
         return 0;
     }
 
     uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
     uint32_t authorityClientId = ownClientId;
     for (auto& [clientId, client] : clients) {
-        if (!client.online || client.self || !client.isSaveLoaded) {
+        if (!client.online || client.self || !client.isSaveLoaded || !client.roomStable) {
             continue;
         }
         if (client.sceneNum == sceneNum && client.curRoomNum == roomNum && clientId < authorityClientId) {
@@ -725,7 +735,7 @@ bool Anchor::HasEnemySyncAuthority(s16 sceneNum, s8 roomNum) {
 }
 
 bool Anchor::IsValidEnemyAuthorityPacket(nlohmann::json payload) {
-    if (!IsSaveLoaded()) {
+    if (!IsRoomStable()) {
         return false;
     }
 

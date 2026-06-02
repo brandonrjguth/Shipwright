@@ -581,7 +581,7 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
 }
 
 void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
-    if (!IsSaveLoaded() || !HasEnemySyncAuthority()) {
+    if (!IsRoomStable() || !HasEnemySyncAuthority()) {
         return;
     }
 
@@ -720,7 +720,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
 }
 
 void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
-    if (!IsSaveLoaded()) {
+    if (!IsRoomStable()) {
         return;
     }
 

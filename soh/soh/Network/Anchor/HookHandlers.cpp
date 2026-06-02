@@ -68,11 +68,12 @@ void Anchor::RegisterHooks() {
         SendPacket_UpdateClientState();
 
         if (IsSaveLoaded()) {
-            enemySyncSceneNum = gPlayState->sceneNum;
-            enemySyncRoomNum = gPlayState->roomCtx.curRoom.num;
+            enemySyncSceneNum = SCENE_ID_MAX;
+            enemySyncRoomNum = -1;
+            enemyRoomSyncPending = true;
             ResetEnemyRoomTransientState();
             RefreshClientActors();
-            SendPacket_RequestRoomEnemies();
+            DetectEnemyRoomChange();
         }
     });
 
@@ -97,7 +98,7 @@ void Anchor::RegisterHooks() {
 
     auto suppressReplicaEnemyDrop = [&](void* actorRef, bool* should) {
         Actor* actor = (Actor*)actorRef;
-        if (!IsSaveLoaded() || spawningNetworkedEnemyDropId != 0 || HasEnemySyncAuthority()) {
+        if (!IsRoomStable() || spawningNetworkedEnemyDropId != 0 || HasEnemySyncAuthority()) {
             return;
         }
 
@@ -108,7 +109,7 @@ void Anchor::RegisterHooks() {
 
     auto markAuthorityEnemyDrop = [&](void* actorRef) {
         Actor* actor = (Actor*)actorRef;
-        if (!IsSaveLoaded() || spawningNetworkedEnemyDropId != 0 || !HasEnemySyncAuthority()) {
+        if (!IsRoomStable() || spawningNetworkedEnemyDropId != 0 || !HasEnemySyncAuthority()) {
             return;
         }
 
@@ -143,6 +144,10 @@ void Anchor::RegisterHooks() {
     COND_HOOK(OnGameFrameUpdate, isConnected, [&]() { ProcessIncomingPacketQueue(); });
 
     COND_HOOK(OnActorUpdate, isConnected, [&](void* refActor) {
+        if (!IsRoomStable()) {
+            return;
+        }
+
         Actor* actor = (Actor*)refActor;
         uint64_t networkId = GetEnemyNetworkId(actor);
         if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && networkId == 0) {
@@ -213,7 +218,7 @@ void Anchor::RegisterHooks() {
     });
 
     COND_HOOK(OnActorKill, isConnected, [&](void* refActor) {
-        if (isProcessingIncomingPacket) {
+        if (isProcessingIncomingPacket || !IsRoomStable()) {
             return;
         }
         Actor* actor = (Actor*)refActor;
@@ -229,6 +234,10 @@ void Anchor::RegisterHooks() {
     });
 
     COND_HOOK(ShouldActorUpdate, isConnected, [&](void* refActor, bool* should) {
+        if (!IsRoomStable()) {
+            return;
+        }
+
         Actor* actor = (Actor*)refActor;
         uint64_t networkId = GetEnemyNetworkId(actor);
         if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS && networkId == 0) {

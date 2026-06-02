@@ -32,6 +32,7 @@ typedef struct {
     uint32_t seed;
     bool isSaveLoaded;
     bool isGameComplete;
+    bool roomStable;
     s16 sceneNum;
     s8 curRoomNum;
     s32 entranceIndex;
@@ -117,6 +118,7 @@ class Anchor : public Network {
     std::unordered_map<uint64_t, uint16_t> enemyDropCounters;
     s16 enemySyncSceneNum = SCENE_ID_MAX;
     s8 enemySyncRoomNum = -1;
+    bool enemyRoomSyncPending = true;
     u8 enemyTransformFrameCounter = 0;
 
     nlohmann::json PrepClientState();
@@ -132,6 +134,7 @@ class Anchor : public Network {
     uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);
     void AssignEnemyNetworkIds(std::vector<Actor*> actors);
+    bool IsRoomStable();
     void ResetEnemyRoomTransientState();
     void DetectEnemyRoomChange();
     void ProcessActorBuffers();

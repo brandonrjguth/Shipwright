@@ -33,6 +33,7 @@ nlohmann::json Anchor::PrepClientState() {
         payload["seed"] = IS_RANDO ? Rando::Context::GetInstance()->GetSeed() : 0;
         payload["isSaveLoaded"] = true;
         payload["isGameComplete"] = gSaveContext.ship.stats.gameComplete;
+        payload["roomStable"] = IsRoomStable();
         payload["sceneNum"] = gPlayState->sceneNum;
         payload["curRoomNum"] = gPlayState->roomCtx.curRoom.num;
         payload["entranceIndex"] = gSaveContext.entranceIndex;
@@ -40,6 +41,7 @@ nlohmann::json Anchor::PrepClientState() {
         payload["seed"] = 0;
         payload["isSaveLoaded"] = false;
         payload["isGameComplete"] = false;
+        payload["roomStable"] = false;
         payload["sceneNum"] = SCENE_ID_MAX;
         payload["curRoomNum"] = -1;
         payload["entranceIndex"] = 0x00;
@@ -70,6 +72,7 @@ void Anchor::HandlePacket_UpdateClientState(nlohmann::json payload) {
         clients[clientId].seed = client.seed;
         clients[clientId].isSaveLoaded = client.isSaveLoaded;
         clients[clientId].isGameComplete = client.isGameComplete;
+        clients[clientId].roomStable = client.roomStable;
         clients[clientId].sceneNum = client.sceneNum;
         clients[clientId].curRoomNum = client.curRoomNum;
         clients[clientId].entranceIndex = client.entranceIndex;

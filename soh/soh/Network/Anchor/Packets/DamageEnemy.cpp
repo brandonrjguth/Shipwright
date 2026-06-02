@@ -237,7 +237,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
 }
 
 void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
-    if (!IsSaveLoaded() || !HasEnemySyncAuthority()) {
+    if (!IsRoomStable() || !HasEnemySyncAuthority()) {
         return;
     }
 

@@ -95,6 +95,15 @@ void Math_Vec3s_Copy(Vec3s* dest, Vec3s* src) {
     dest->z = src->z;
 }
 
+static bool DummyPlayer_ShouldShow(AnchorClient& client) {
+    if (gPlayState == nullptr || gPlayState->roomCtx.status != 0 || gPlayState->roomCtx.curRoom.segment == nullptr) {
+        return false;
+    }
+
+    return client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
+           client.online && client.isSaveLoaded && client.roomStable;
+}
+
 // Update the actor with new data from the client
 void DummyPlayer_Update(Actor* actor, PlayState* play) {
     Player* player = (Player*)actor;
@@ -108,7 +117,7 @@ void DummyPlayer_Update(Actor* actor, PlayState* play) {
 
     AnchorClient& client = Anchor::Instance->clients[clientId];
 
-    if (client.sceneNum != gPlayState->sceneNum || !client.online || !client.isSaveLoaded) {
+    if (!DummyPlayer_ShouldShow(client)) {
         actor->world.pos.x = -9999.0f;
         actor->world.pos.y = -9999.0f;
         actor->world.pos.z = -9999.0f;
@@ -226,7 +235,7 @@ void DummyPlayer_Draw(Actor* actor, PlayState* play) {
 
     AnchorClient& client = Anchor::Instance->clients[clientId];
 
-    if (client.sceneNum != gPlayState->sceneNum || !client.online || !client.isSaveLoaded) {
+    if (!DummyPlayer_ShouldShow(client)) {
         return;
     }
 
