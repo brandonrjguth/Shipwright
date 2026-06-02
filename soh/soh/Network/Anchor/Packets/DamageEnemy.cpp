@@ -9,6 +9,32 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
+extern nlohmann::json GetEnemyExtraState(Actor* actor);
+extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
+
+static void ApplyReportedDekuBabaDeathMotion(Actor* target, nlohmann::json payload, nlohmann::json extraState) {
+    constexpr s32 DEKUBABA_ACTION_PRUNED_SOMERSAULT = 11;
+
+    if (target == nullptr || target->id != ACTOR_EN_DEKUBABA ||
+        extraState.value("action", (s32)-1) != DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
+        return;
+    }
+
+    target->world.rot.y = payload.value("worldRotY", target->world.rot.y);
+    target->shape.rot.x = payload.value("shapeRotX", target->shape.rot.x);
+    target->shape.rot.y = payload.value("shapeRotY", target->shape.rot.y);
+    target->shape.rot.z = payload.value("shapeRotZ", target->shape.rot.z);
+    target->velocity.x = payload.value("velocityX", target->velocity.x);
+    target->velocity.y = payload.value("velocityY", target->velocity.y);
+    target->velocity.z = payload.value("velocityZ", target->velocity.z);
+    target->speedXZ = payload.value("speedXZ", target->speedXZ);
+    target->gravity = payload.value("gravity", target->gravity);
+
+    u32 reportedFlags = payload.value("actorFlags", target->flags);
+    u32 deathMotionFlags = ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED;
+    target->flags = (target->flags & ~deathMotionFlags) | (reportedFlags & deathMotionFlags);
+}
+
 void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     if (!IsSaveLoaded()) {
         return;
@@ -98,6 +124,19 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
     payload["category"] = actor->category;
+    if (actor->id == ACTOR_EN_DEKUBABA) {
+        payload["extraState"] = GetEnemyExtraState(actor);
+        payload["worldRotY"] = actor->world.rot.y;
+        payload["shapeRotX"] = actor->shape.rot.x;
+        payload["shapeRotY"] = actor->shape.rot.y;
+        payload["shapeRotZ"] = actor->shape.rot.z;
+        payload["velocityX"] = actor->velocity.x;
+        payload["velocityY"] = actor->velocity.y;
+        payload["velocityZ"] = actor->velocity.z;
+        payload["speedXZ"] = actor->speedXZ;
+        payload["gravity"] = actor->gravity;
+        payload["actorFlags"] = actor->flags;
+    }
     payload["quiet"] = true;
 
     SendJsonToRemote(payload);
@@ -140,12 +179,21 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     if (health < target->colChkInfo.health) {
-        if (health == 0) {
+        bool hasDekuBabaState = target->id == ACTOR_EN_DEKUBABA && payload.contains("extraState") &&
+                                payload["extraState"].is_object();
+
+        if (health == 0 && !hasDekuBabaState) {
             enemyKillBuffer.push_back(networkId);
             return;
         }
 
         target->colChkInfo.health = health;
+        if (hasDekuBabaState) {
+            ApplyEnemyExtraState(target, payload["extraState"]);
+            if (health == 0) {
+                ApplyReportedDekuBabaDeathMotion(target, payload, payload["extraState"]);
+            }
+        }
         enemyHealthTracker[target] = target->colChkInfo.health;
         SendPacket_DamageEnemy(target, target->colChkInfo.health);
     }

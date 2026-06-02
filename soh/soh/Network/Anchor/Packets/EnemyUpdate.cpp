@@ -124,7 +124,7 @@ static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
     skelAnime->morphRate = extra.value("skelMorphRate", skelAnime->morphRate);
 }
 
-static nlohmann::json GetEnemyExtraState(Actor* actor) {
+nlohmann::json GetEnemyExtraState(Actor* actor) {
     nlohmann::json extra;
 
     switch (actor->id) {
