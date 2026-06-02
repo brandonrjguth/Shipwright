@@ -179,9 +179,10 @@ void Anchor::RegisterHooks() {
     // Enemy sync hooks
     COND_HOOK(OnEnemyDefeat, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
-        SendPacket_KillEnemy(actor);
 
         if (HasEnemySyncAuthority()) {
+            SendPacket_KillEnemy(actor);
+
             for (auto& [clientId, client] : clients) {
                 if (!client.online || client.self) {
                     continue;
@@ -190,12 +191,20 @@ void Anchor::RegisterHooks() {
                     SendPacket_SendRoomEnemies(clientId, (ActorCategory)actor->category);
                 }
             }
+        } else {
+            SendPacket_ReportEnemyDamage(actor, 0);
         }
     });
 
     COND_ID_HOOK(OnActorKill, ACTOR_EN_DEKUNUTS, isConnected, [&](void* refActor) {
-        if (!isProcessingIncomingPacket) {
-            SendPacket_KillEnemy((Actor*)refActor);
+        if (isProcessingIncomingPacket) {
+            return;
+        }
+        Actor* actor = (Actor*)refActor;
+        if (HasEnemySyncAuthority()) {
+            SendPacket_KillEnemy(actor);
+        } else {
+            SendPacket_ReportEnemyDamage(actor, 0);
         }
     });
 
@@ -235,7 +244,11 @@ void Anchor::RegisterHooks() {
 
     COND_HOOK(OnBossDefeat, isConnected, [&](void* refActor) {
         Actor* actor = (Actor*)refActor;
-        SendPacket_KillEnemy(actor);
+        if (HasEnemySyncAuthority()) {
+            SendPacket_KillEnemy(actor);
+        } else {
+            SendPacket_ReportEnemyDamage(actor, 0);
+        }
     });
 
     COND_HOOK(OnItemReceive, isConnected, [&](GetItemEntry itemEntry) {

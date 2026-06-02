@@ -41,14 +41,7 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
         return;
     }
 
-    uint32_t clientId = payload.at("clientId").get<uint32_t>();
-    if (!clients.contains(clientId)) {
-        return;
-    }
-
-    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
-    s8 roomNum = payload.value("roomNum", (s8)-1);
-    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+    if (!IsValidEnemyAuthorityPacket(payload)) {
         return;
     }
 
@@ -58,23 +51,16 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
         return;
     }
 
-    s16 actorId = payload.at("actorId").get<s16>();
     u8 health = payload.at("health").get<u8>();
-    float posX = payload.at("posX").get<float>();
-    float posY = payload.at("posY").get<float>();
-    float posZ = payload.at("posZ").get<float>();
-    s16 category = payload.at("category").get<s16>();
 
-    Vec3f pos = { posX, posY, posZ };
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
-        target = FindClosestActorByCategoryAndId((ActorCategory)category, actorId, pos);
-        SetEnemyNetworkId(target, networkId);
+        return;
     }
 
-    if (target != nullptr && health < target->colChkInfo.health) {
+    if (health < target->colChkInfo.health) {
         if (health == 0) {
-            MarkEnemyDead(GetEnemyNetworkId(target));
+            MarkEnemyDead(networkId);
             actorKillBuffer.push_back(target);
             return;
         }
@@ -128,44 +114,35 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum) {
+    if (client.sceneNum != gPlayState->sceneNum ||
+        client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
-    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
-    s8 roomNum = payload.value("roomNum", (s8)-1);
-    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
-        return;
-    }
     if (payload.value("authorityClientId", (uint32_t)0) != ownClientId) {
         return;
     }
 
     uint64_t networkId = payload.value("networkId", (uint64_t)0);
+    if (networkId == 0) {
+        return;
+    }
 
     if (IsEnemyMarkedDead(networkId)) {
         return;
     }
 
-    s16 actorId = payload.at("actorId").get<s16>();
     u8 health = payload.at("health").get<u8>();
-    float posX = payload.at("posX").get<float>();
-    float posY = payload.at("posY").get<float>();
-    float posZ = payload.at("posZ").get<float>();
-    s16 category = payload.at("category").get<s16>();
 
-    Vec3f pos = { posX, posY, posZ };
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
-        target = FindClosestActorByCategoryAndId((ActorCategory)category, actorId, pos);
-        SetEnemyNetworkId(target, networkId);
+        return;
     }
 
-    if (target != nullptr && health < target->colChkInfo.health) {
+    if (health < target->colChkInfo.health) {
         if (health == 0) {
-            MarkEnemyDead(GetEnemyNetworkId(target));
+            MarkEnemyDead(networkId);
             actorKillBuffer.push_back(target);
-            SendPacket_KillEnemy(target);
             return;
         }
 

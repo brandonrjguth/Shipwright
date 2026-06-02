@@ -296,6 +296,40 @@ Actor* Anchor::FindClosestActorByCategoryAndId(ActorCategory category, s16 actor
     return closestAct;
 }
 
+Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos, float maxDistSq) {
+    if (gPlayState == nullptr) {
+        return nullptr;
+    }
+
+    Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
+    Actor* closestAct = nullptr;
+    float closestDist = maxDistSq;
+
+    while (currAct != nullptr) {
+        if (currAct->id != actorId) {
+            currAct = currAct->next;
+            continue;
+        }
+        if (GetEnemyNetworkId(currAct) != 0) {
+            currAct = currAct->next;
+            continue;
+        }
+
+        float dx = currAct->world.pos.x - pos.x;
+        float dy = currAct->world.pos.y - pos.y;
+        float dz = currAct->world.pos.z - pos.z;
+        float distance = dx * dx + dy * dy + dz * dz;
+        if (distance < closestDist) {
+            closestAct = currAct;
+            closestDist = distance;
+        }
+
+        currAct = currAct->next;
+    }
+
+    return closestAct;
+}
+
 uint64_t Anchor::GetEnemyNetworkId(Actor* actor) {
     if (actor == nullptr) {
         return 0;
@@ -306,9 +340,16 @@ uint64_t Anchor::GetEnemyNetworkId(Actor* actor) {
 }
 
 void Anchor::SetEnemyNetworkId(Actor* actor, uint64_t networkId) {
-    if (actor != nullptr && networkId != 0) {
-        ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
+    if (actor == nullptr || networkId == 0) {
+        return;
     }
+    uint64_t existingId = GetEnemyNetworkId(actor);
+    if (existingId != 0 && existingId != networkId) {
+        SPDLOG_WARN("[Anchor] Refusing to overwrite actor {:x} networkId {} with {}",
+                     (uintptr_t)actor, existingId, networkId);
+        return;
+    }
+    ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
 }
 
 Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
@@ -659,7 +700,11 @@ void Anchor::DetectEnemyDamage() {
         if (enemyHealthTracker.contains(act)) {
             u8 lastHealth = enemyHealthTracker[act];
             if (currentHealth < lastHealth) {
-                SendPacket_DamageEnemy(act, currentHealth);
+                if (HasEnemySyncAuthority()) {
+                    SendPacket_DamageEnemy(act, currentHealth);
+                } else {
+                    SendPacket_ReportEnemyDamage(act, currentHealth);
+                }
             }
         }
 

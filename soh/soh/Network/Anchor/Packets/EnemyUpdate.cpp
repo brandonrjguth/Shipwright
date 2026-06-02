@@ -696,7 +696,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
         if (target == nullptr) {
-            target = FindClosestActorByCategoryAndId(category, actorIds[i], pos);
+            target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f);
             SetEnemyNetworkId(target, networkIds[i]);
         }
         if (target == nullptr) {
