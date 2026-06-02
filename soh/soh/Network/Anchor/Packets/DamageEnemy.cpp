@@ -10,7 +10,6 @@ extern PlayState* gPlayState;
 }
 
 extern nlohmann::json GetEnemyExtraState(Actor* actor);
-extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 
 void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     if (!IsSaveLoaded()) {
@@ -85,10 +84,12 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
     }
 
     if (health < target->colChkInfo.health) {
-        target->colChkInfo.health = health;
-        if (health == 0 && payload.contains("extraState")) {
-            ApplyEnemyExtraState(target, payload["extraState"]);
+        if (health == 0) {
+            target->colChkInfo.health = 0;
+            enemyHealthTracker[target] = 0;
+            return;
         }
+        target->colChkInfo.health = health;
         enemyHealthTracker[target] = target->colChkInfo.health;
     }
 }
@@ -186,10 +187,11 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     if (health < target->colChkInfo.health) {
-        target->colChkInfo.health = health;
-        if (health == 0 && payload.contains("extraState")) {
-            ApplyEnemyExtraState(target, payload["extraState"]);
+        if (health == 0) {
+            enemyKillBuffer.push_back(networkId);
+            return;
         }
+        target->colChkInfo.health = health;
         enemyHealthTracker[target] = target->colChkInfo.health;
         SendPacket_DamageEnemy(target, target->colChkInfo.health);
     }

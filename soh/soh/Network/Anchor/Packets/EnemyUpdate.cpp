@@ -768,7 +768,9 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         ApplyEnemyAuthorityState(target, state, false);
         if (!extraStates.empty()) {
             enemyExtraStates[networkIds[i]] = extraStates[i];
-            ApplyEnemyExtraState(target, extraStates[i]);
+            if (!(target->colChkInfo.health < state.health)) {
+                ApplyEnemyExtraState(target, extraStates[i]);
+            }
         }
     }
 }
