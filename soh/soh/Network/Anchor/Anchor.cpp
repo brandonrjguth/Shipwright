@@ -738,7 +738,9 @@ void Anchor::DetectEnemyDamage() {
             assignableEnemies.push_back(act);
         }
     }
-    AssignEnemyNetworkIds(assignableEnemies);
+    if (HasEnemySyncAuthority()) {
+        AssignEnemyNetworkIds(assignableEnemies);
+    }
 
     for (Actor* act : currentEnemies) {
         if (IsEnemyMarkedDead(GetEnemyNetworkId(act))) {

@@ -144,4 +144,14 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
             SetEnemyNetworkId(closestActor, enemiesNetworkId[ri]);
         }
     }
+
+    if ((category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS) && !HasEnemySyncAuthority()) {
+        for (Actor* local : localActors) {
+            if (local == nullptr || local->update == nullptr || GetEnemyNetworkId(local) != 0) {
+                continue;
+            }
+
+            Actor_Kill(local);
+        }
+    }
 }
