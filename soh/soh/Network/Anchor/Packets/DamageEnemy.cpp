@@ -6,7 +6,11 @@
 extern "C" {
 #include "macros.h"
 #include "functions.h"
+#include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 extern PlayState* gPlayState;
+
+void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
+void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
 }
 
 extern nlohmann::json GetEnemyExtraState(Actor* actor);
@@ -14,8 +18,21 @@ extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 
 static void ApplyReportedDekuBabaContext(Actor* target, nlohmann::json payload, nlohmann::json extraState) {
     constexpr s32 DEKUBABA_ACTION_PRUNED_SOMERSAULT = 11;
+    constexpr s32 DEKUBABA_ACTION_SHRINK_DIE = 12;
 
     if (target == nullptr || target->id != ACTOR_EN_DEKUBABA) {
+        return;
+    }
+
+    s32 remoteAction = extraState.value("action", (s32)-1);
+
+    if (target->colChkInfo.health == 0 && remoteAction == DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
+        EnDekubaba_SetupPrunedSomersault((EnDekubaba*)target);
+        return;
+    }
+
+    if (target->colChkInfo.health == 0 && remoteAction == DEKUBABA_ACTION_SHRINK_DIE) {
+        EnDekubaba_SetupShrinkDie((EnDekubaba*)target);
         return;
     }
 
@@ -28,7 +45,7 @@ static void ApplyReportedDekuBabaContext(Actor* target, nlohmann::json payload, 
     target->shape.rot.y = payload.value("shapeRotY", target->shape.rot.y);
     target->shape.rot.z = payload.value("shapeRotZ", target->shape.rot.z);
 
-    if (extraState.value("action", (s32)-1) != DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
+    if (remoteAction != DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
         return;
     }
 
