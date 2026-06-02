@@ -12,23 +12,32 @@ extern PlayState* gPlayState;
 extern nlohmann::json GetEnemyExtraState(Actor* actor);
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 
-static void ApplyReportedDekuBabaDeathMotion(Actor* target, nlohmann::json payload, nlohmann::json extraState) {
+static void ApplyReportedDekuBabaContext(Actor* target, nlohmann::json payload, nlohmann::json extraState) {
     constexpr s32 DEKUBABA_ACTION_PRUNED_SOMERSAULT = 11;
 
-    if (target == nullptr || target->id != ACTOR_EN_DEKUBABA ||
-        extraState.value("action", (s32)-1) != DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
+    if (target == nullptr || target->id != ACTOR_EN_DEKUBABA) {
         return;
     }
 
+    target->world.pos.x = payload.value("posX", target->world.pos.x);
+    target->world.pos.y = payload.value("posY", target->world.pos.y);
+    target->world.pos.z = payload.value("posZ", target->world.pos.z);
+    target->prevPos = target->world.pos;
     target->world.rot.y = payload.value("worldRotY", target->world.rot.y);
     target->shape.rot.x = payload.value("shapeRotX", target->shape.rot.x);
     target->shape.rot.y = payload.value("shapeRotY", target->shape.rot.y);
     target->shape.rot.z = payload.value("shapeRotZ", target->shape.rot.z);
+
+    if (extraState.value("action", (s32)-1) != DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
+        return;
+    }
+
     target->velocity.x = payload.value("velocityX", target->velocity.x);
     target->velocity.y = payload.value("velocityY", target->velocity.y);
     target->velocity.z = payload.value("velocityZ", target->velocity.z);
     target->speedXZ = payload.value("speedXZ", target->speedXZ);
     target->gravity = payload.value("gravity", target->gravity);
+    target->minVelocityY = payload.value("minVelocityY", target->minVelocityY);
 
     u32 reportedFlags = payload.value("actorFlags", target->flags);
     u32 deathMotionFlags = ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED;
@@ -135,6 +144,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
         payload["velocityZ"] = actor->velocity.z;
         payload["speedXZ"] = actor->speedXZ;
         payload["gravity"] = actor->gravity;
+        payload["minVelocityY"] = actor->minVelocityY;
         payload["actorFlags"] = actor->flags;
     }
     payload["quiet"] = true;
@@ -190,9 +200,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         target->colChkInfo.health = health;
         if (hasDekuBabaState) {
             ApplyEnemyExtraState(target, payload["extraState"]);
-            if (health == 0) {
-                ApplyReportedDekuBabaDeathMotion(target, payload, payload["extraState"]);
-            }
+            ApplyReportedDekuBabaContext(target, payload, payload["extraState"]);
         }
         enemyHealthTracker[target] = target->colChkInfo.health;
         SendPacket_DamageEnemy(target, target->colChkInfo.health);
