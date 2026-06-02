@@ -16,39 +16,40 @@ void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
 extern nlohmann::json GetEnemyExtraState(Actor* actor);
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 
-static void ApplyReportedDekuBabaContext(Actor* target, nlohmann::json payload, nlohmann::json extraState) {
-    constexpr s32 DEKUBABA_ACTION_PRUNED_SOMERSAULT = 11;
-    constexpr s32 DEKUBABA_ACTION_SHRINK_DIE = 12;
+static bool HasReportedEnemyState(nlohmann::json payload) {
+    return payload.contains("extraState") && payload["extraState"].is_object() &&
+           !payload["extraState"].value("kind", std::string("")).empty();
+}
 
-    if (target == nullptr || target->id != ACTOR_EN_DEKUBABA) {
+static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
+    nlohmann::json extraState = GetEnemyExtraState(actor);
+    if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
         return;
     }
 
-    s32 remoteAction = extraState.value("action", (s32)-1);
+    payload["extraState"] = extraState;
+    payload["worldRotX"] = actor->world.rot.x;
+    payload["worldRotY"] = actor->world.rot.y;
+    payload["worldRotZ"] = actor->world.rot.z;
+    payload["shapeRotX"] = actor->shape.rot.x;
+    payload["shapeRotY"] = actor->shape.rot.y;
+    payload["shapeRotZ"] = actor->shape.rot.z;
+    payload["velocityX"] = actor->velocity.x;
+    payload["velocityY"] = actor->velocity.y;
+    payload["velocityZ"] = actor->velocity.z;
+    payload["speedXZ"] = actor->speedXZ;
+    payload["gravity"] = actor->gravity;
+    payload["minVelocityY"] = actor->minVelocityY;
+    payload["actorFlags"] = actor->flags;
+}
 
-    if (target->colChkInfo.health == 0 && remoteAction == DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
-        EnDekubaba_SetupPrunedSomersault((EnDekubaba*)target);
-        return;
-    }
-
-    if (target->colChkInfo.health == 0 && remoteAction == DEKUBABA_ACTION_SHRINK_DIE) {
-        EnDekubaba_SetupShrinkDie((EnDekubaba*)target);
-        return;
-    }
-
-    target->world.pos.x = payload.value("posX", target->world.pos.x);
-    target->world.pos.y = payload.value("posY", target->world.pos.y);
-    target->world.pos.z = payload.value("posZ", target->world.pos.z);
-    target->prevPos = target->world.pos;
+static void ApplyReportedEnemyDeathMotion(Actor* target, nlohmann::json payload) {
+    target->world.rot.x = payload.value("worldRotX", target->world.rot.x);
     target->world.rot.y = payload.value("worldRotY", target->world.rot.y);
+    target->world.rot.z = payload.value("worldRotZ", target->world.rot.z);
     target->shape.rot.x = payload.value("shapeRotX", target->shape.rot.x);
     target->shape.rot.y = payload.value("shapeRotY", target->shape.rot.y);
     target->shape.rot.z = payload.value("shapeRotZ", target->shape.rot.z);
-
-    if (remoteAction != DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
-        return;
-    }
-
     target->velocity.x = payload.value("velocityX", target->velocity.x);
     target->velocity.y = payload.value("velocityY", target->velocity.y);
     target->velocity.z = payload.value("velocityZ", target->velocity.z);
@@ -59,6 +60,32 @@ static void ApplyReportedDekuBabaContext(Actor* target, nlohmann::json payload, 
     u32 reportedFlags = payload.value("actorFlags", target->flags);
     u32 deathMotionFlags = ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED;
     target->flags = (target->flags & ~deathMotionFlags) | (reportedFlags & deathMotionFlags);
+}
+
+static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
+    nlohmann::json extraState = payload["extraState"];
+
+    ApplyEnemyExtraState(target, extraState);
+
+    if (target->id == ACTOR_EN_DEKUBABA && target->colChkInfo.health == 0) {
+        constexpr s32 DEKUBABA_ACTION_PRUNED_SOMERSAULT = 11;
+        constexpr s32 DEKUBABA_ACTION_SHRINK_DIE = 12;
+        s32 remoteAction = extraState.value("action", (s32)-1);
+
+        if (remoteAction == DEKUBABA_ACTION_PRUNED_SOMERSAULT) {
+            EnDekubaba_SetupPrunedSomersault((EnDekubaba*)target);
+            return;
+        }
+
+        if (remoteAction == DEKUBABA_ACTION_SHRINK_DIE) {
+            EnDekubaba_SetupShrinkDie((EnDekubaba*)target);
+            return;
+        }
+    }
+
+    if (target->colChkInfo.health == 0) {
+        ApplyReportedEnemyDeathMotion(target, payload);
+    }
 }
 
 void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
@@ -150,20 +177,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
     payload["category"] = actor->category;
-    if (actor->id == ACTOR_EN_DEKUBABA) {
-        payload["extraState"] = GetEnemyExtraState(actor);
-        payload["worldRotY"] = actor->world.rot.y;
-        payload["shapeRotX"] = actor->shape.rot.x;
-        payload["shapeRotY"] = actor->shape.rot.y;
-        payload["shapeRotZ"] = actor->shape.rot.z;
-        payload["velocityX"] = actor->velocity.x;
-        payload["velocityY"] = actor->velocity.y;
-        payload["velocityZ"] = actor->velocity.z;
-        payload["speedXZ"] = actor->speedXZ;
-        payload["gravity"] = actor->gravity;
-        payload["minVelocityY"] = actor->minVelocityY;
-        payload["actorFlags"] = actor->flags;
-    }
+    AddReportedEnemyContextPayload(actor, payload);
     payload["quiet"] = true;
 
     SendJsonToRemote(payload);
@@ -206,18 +220,16 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     if (health < target->colChkInfo.health) {
-        bool hasDekuBabaState = target->id == ACTOR_EN_DEKUBABA && payload.contains("extraState") &&
-                                payload["extraState"].is_object();
+        bool hasReportedState = HasReportedEnemyState(payload);
 
-        if (health == 0 && !hasDekuBabaState) {
+        if (health == 0 && !hasReportedState) {
             enemyKillBuffer.push_back(networkId);
             return;
         }
 
         target->colChkInfo.health = health;
-        if (hasDekuBabaState) {
-            ApplyEnemyExtraState(target, payload["extraState"]);
-            ApplyReportedDekuBabaContext(target, payload, payload["extraState"]);
+        if (hasReportedState) {
+            ApplyReportedEnemyState(target, payload);
         }
         enemyHealthTracker[target] = target->colChkInfo.health;
         SendPacket_DamageEnemy(target, target->colChkInfo.health);
