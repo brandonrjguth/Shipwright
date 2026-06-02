@@ -177,7 +177,7 @@ static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
 }
 
 nlohmann::json GetEnemyExtraState(Actor* actor) {
-    nlohmann::json extra;
+    nlohmann::json extra = nlohmann::json::object();
 
     switch (actor->id) {
         case ACTOR_EN_DEKUNUTS: {
@@ -387,6 +387,10 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
 }
 
 void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
+    if (actor == nullptr || !extra.is_object()) {
+        return;
+    }
+
     std::string kind = extra.value("kind", "");
 
     if (actor->id == ACTOR_EN_DEKUNUTS && kind == "EnDekunuts") {
@@ -822,9 +826,14 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         enemyAuthorityTargets[networkIds[i]] = state;
         ApplyEnemyAuthorityState(target, state, false);
         if (!extraStates.empty()) {
-            enemyExtraStates[networkIds[i]] = extraStates[i];
-            if (!(target->colChkInfo.health < state.health)) {
-                ApplyEnemyExtraState(target, extraStates[i]);
+            nlohmann::json extraState = extraStates[i];
+            if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
+                enemyExtraStates.erase(networkIds[i]);
+            } else {
+                enemyExtraStates[networkIds[i]] = extraState;
+                if (!(target->colChkInfo.health < state.health)) {
+                    ApplyEnemyExtraState(target, extraState);
+                }
             }
         }
     }
