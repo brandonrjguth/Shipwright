@@ -148,6 +148,8 @@ static nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["stemSectionAngle"] = { dekubaba->stemSectionAngle[0], dekubaba->stemSectionAngle[1],
                                            dekubaba->stemSectionAngle[2] };
             extra["size"] = dekubaba->size;
+            extra["colliderColType"] = dekubaba->collider.base.colType;
+            extra["colliderAcHard"] = (dekubaba->collider.base.acFlags & AC_HARD) != 0;
             AddSkelAnimeState(extra, &dekubaba->skelAnime);
             break;
         }
@@ -353,6 +355,14 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             dekubaba->stemSectionAngle[2] = stemSectionAngle[2];
         }
         dekubaba->size = extra.value("size", dekubaba->size);
+        dekubaba->collider.base.colType = extra.value("colliderColType", dekubaba->collider.base.colType);
+        if (extra.contains("colliderAcHard")) {
+            if (extra.value("colliderAcHard", false)) {
+                dekubaba->collider.base.acFlags |= AC_HARD;
+            } else {
+                dekubaba->collider.base.acFlags &= ~AC_HARD;
+            }
+        }
         ApplySkelAnimeState(extra, &dekubaba->skelAnime);
     } else if (actor->id == ACTOR_EN_ST && kind == "EnSt") {
         EnSt* st = (EnSt*)actor;
