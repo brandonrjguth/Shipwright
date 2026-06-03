@@ -78,9 +78,6 @@ void EnDekubaba_Sway(EnDekubaba*, PlayState*);
 void EnDekubaba_PrunedSomersault(EnDekubaba*, PlayState*);
 void EnDekubaba_ShrinkDie(EnDekubaba*, PlayState*);
 void EnDekubaba_DeadStickDrop(EnDekubaba*, PlayState*);
-void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
-void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
-void EnDekubaba_SetupDeadStickDrop(EnDekubaba* thisx, PlayState* play);
 void EnShopnuts_SetupWait(EnShopnuts* thisx);
 void EnShopnuts_SetupLookAround(EnShopnuts* thisx);
 void EnShopnuts_SetupThrowNut(EnShopnuts* thisx);
@@ -654,24 +651,13 @@ static void ApplyDekubabaAction(EnDekubaba* dekubaba, s32 action) {
         return;
     }
 
-    if (dekubaba->actor.colChkInfo.health == 0) {
-        switch (action) {
-            case DEKUBABA_ACTION_PRUNED_SOMERSAULT:
-                EnDekubaba_SetupPrunedSomersault(dekubaba);
-                return;
-            case DEKUBABA_ACTION_SHRINK_DIE:
-                EnDekubaba_SetupShrinkDie(dekubaba);
-                return;
-            case DEKUBABA_ACTION_DEAD_STICK_DROP:
-                if (gPlayState != nullptr) {
-                    EnDekubaba_SetupDeadStickDrop(dekubaba, gPlayState);
-                } else {
-                    dekubaba->actionFunc = EnDekubaba_DeadStickDrop;
-                }
-                return;
-            default:
-                break;
-        }
+    bool isDeathAction = action == DEKUBABA_ACTION_PRUNED_SOMERSAULT ||
+                         action == DEKUBABA_ACTION_SHRINK_DIE ||
+                         action == DEKUBABA_ACTION_DEAD_STICK_DROP;
+
+    if (isDeathAction) {
+        dekubaba->collider.base.acFlags &= ~AC_ON;
+        dekubaba->actor.flags &= ~(ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE);
     }
 
     EnDekubabaActionFunc remoteFunc = GetDekubabaActionFunc(action);
@@ -1083,12 +1069,19 @@ static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
 }
 
 static void EnsureEnStDeathState(EnSt* st) {
-    if (st == nullptr || st->actor.colChkInfo.health != 0) {
+    if (st == nullptr) {
+        return;
+    }
+
+    s32 action = GetEnStActionId(st->actionFunc);
+    bool isDeathAction = action == ENST_ACTION_BOUNCE_AROUND || action == ENST_ACTION_FINISH_BOUNCING ||
+                         action == ENST_ACTION_DIE;
+
+    if (st->actor.colChkInfo.health != 0 && !isDeathAction) {
         return;
     }
 
     st->actor.flags &= ~(ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_ATTACHED_TO_ARROW);
-    s32 action = GetEnStActionId(st->actionFunc);
     if (action == ENST_ACTION_BOUNCE_AROUND) {
         if (st->groundBounces <= 0) {
             EnSt_SetupAction(st, EnSt_FinishBouncing);
@@ -1116,13 +1109,20 @@ static void EnsureEnStDeathState(EnSt* st) {
 }
 
 static void EnsureEnSwDeathState(EnSw* sw) {
-    if (sw == nullptr || sw->actor.colChkInfo.health != 0) {
+    if (sw == nullptr) {
+        return;
+    }
+
+    s32 skulltulaType = (sw->actor.params & 0xE000) >> 0xD;
+    s32 action = GetEnSwActionId(sw->actionFunc);
+    bool isDeathAction = (skulltulaType != 0 && action == ENSW_ACTION_DIE_GOLD) ||
+                         (skulltulaType == 0 && (action == ENSW_ACTION_FALL || action == ENSW_ACTION_DIE_WALL));
+
+    if (sw->actor.colChkInfo.health != 0 && !isDeathAction) {
         return;
     }
 
     sw->actor.flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
-    s32 skulltulaType = (sw->actor.params & 0xE000) >> 0xD;
-    s32 action = GetEnSwActionId(sw->actionFunc);
     if (skulltulaType != 0) {
         if (action == ENSW_ACTION_DIE_GOLD) {
             return;
@@ -1191,21 +1191,10 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
     }
 
     if (actor->id == ACTOR_EN_DEKUNUTS) {
-        if (authorityExtra.value("kind", std::string("")) == "EnDekunuts") {
-            s32 remoteAction = authorityExtra.value("action", (s32)-1);
-            if (IsDekunutsFleeAction(remoteAction) || remoteAction == DEKUNUTS_ACTION_BE_DAMAGED ||
-                remoteAction == DEKUNUTS_ACTION_BE_STUNNED || remoteAction == DEKUNUTS_ACTION_DIE) {
-                return false;
-            }
-        }
         return true;
     }
 
     if (actor->id == ACTOR_EN_SHOPNUTS) {
-        if (authorityExtra.value("kind", std::string("")) == "EnShopnuts" &&
-            IsShopnutsCaughtAction(authorityExtra.value("action", (s32)-1))) {
-            return false;
-        }
         return true;
     }
 
