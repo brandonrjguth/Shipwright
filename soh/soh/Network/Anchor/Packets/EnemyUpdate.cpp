@@ -2081,14 +2081,17 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                       colorFilterParams.empty() ? (u16)0 : colorFilterParams[i],
                                       health[i] };
         enemyAuthorityTargets[networkIds[i]] = state;
-        ApplyEnemyAuthorityState(target, state, false);
+        bool hasLocalPush = target->id == ACTOR_OBJ_OSHIHIKI && IsLocalPlayerPushingObjOshihiki((ObjOshihiki*)target);
+        if (!hasLocalPush) {
+            ApplyEnemyAuthorityState(target, state, false);
+        }
         if (!extraStates.empty()) {
             nlohmann::json extraState = extraStates[i];
             if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
                 enemyExtraStates.erase(networkIds[i]);
             } else {
                 enemyExtraStates[networkIds[i]] = extraState;
-                if (!(target->colChkInfo.health < state.health)) {
+                if (!hasLocalPush && !(target->colChkInfo.health < state.health)) {
                     ApplyEnemyExtraState(target, extraState);
                 }
             }
