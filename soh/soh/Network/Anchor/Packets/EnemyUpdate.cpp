@@ -14,6 +14,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
 #include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
+#include "src/overlays/actors/ovl_Obj_Oshihiki/z_obj_oshihiki.h"
 
 extern "C" {
 void EnDekunuts_Wait(EnDekunuts* thisx, PlayState* play);
@@ -63,6 +64,10 @@ void func_80B0E5E0(EnSw* thisx, PlayState* play);
 void func_80B0E728(EnSw* thisx, PlayState* play);
 void func_80B0E90C(EnSw* thisx, PlayState* play);
 void func_80B0E9BC(EnSw* thisx, PlayState* play);
+void ObjOshihiki_OnScene(ObjOshihiki* thisx, PlayState* play);
+void ObjOshihiki_OnActor(ObjOshihiki* thisx, PlayState* play);
+void ObjOshihiki_Push(ObjOshihiki* thisx, PlayState* play);
+void ObjOshihiki_Fall(ObjOshihiki* thisx, PlayState* play);
 
 enum DekunutsAction : s32 {
     DEKUNUTS_ACTION_WAIT = 0,
@@ -112,6 +117,41 @@ static EnDekunutsActionFunc GetDekunutsActionFunc(s32 actionId) {
 
 static bool IsDekunutsFleeAction(s32 action) {
     return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
+}
+
+enum ObjOshihikiAction : s32 {
+    OBJOSHIHIKI_ACTION_ON_SCENE = 0,
+    OBJOSHIHIKI_ACTION_ON_ACTOR = 1,
+    OBJOSHIHIKI_ACTION_PUSH = 2,
+    OBJOSHIHIKI_ACTION_FALL = 3,
+};
+
+static s32 GetObjOshihikiActionId(ObjOshihikiActionFunc actionFunc) {
+    if (actionFunc == ObjOshihiki_OnScene) return OBJOSHIHIKI_ACTION_ON_SCENE;
+    if (actionFunc == ObjOshihiki_OnActor) return OBJOSHIHIKI_ACTION_ON_ACTOR;
+    if (actionFunc == ObjOshihiki_Push) return OBJOSHIHIKI_ACTION_PUSH;
+    if (actionFunc == ObjOshihiki_Fall) return OBJOSHIHIKI_ACTION_FALL;
+    return -1;
+}
+
+static ObjOshihikiActionFunc GetObjOshihikiActionFunc(s32 actionId) {
+    switch (actionId) {
+        case OBJOSHIHIKI_ACTION_ON_SCENE: return ObjOshihiki_OnScene;
+        case OBJOSHIHIKI_ACTION_ON_ACTOR: return ObjOshihiki_OnActor;
+        case OBJOSHIHIKI_ACTION_PUSH: return ObjOshihiki_Push;
+        case OBJOSHIHIKI_ACTION_FALL: return ObjOshihiki_Fall;
+        default: return nullptr;
+    }
+}
+
+static bool IsObjOshihikiMoving(ObjOshihiki* block) {
+    if (block == nullptr) {
+        return false;
+    }
+
+    constexpr u16 movingFlags = PUSHBLOCK_SETUP_PUSH | PUSHBLOCK_PUSH | PUSHBLOCK_SETUP_FALL | PUSHBLOCK_FALL;
+    return (block->stateFlags & movingFlags) != 0 || fabsf(block->dyna.unk_150) > 0.001f ||
+           fabsf(block->dyna.actor.velocity.y) > 0.001f;
 }
 
 enum DekubabaAction : s32 {
@@ -372,12 +412,20 @@ static void EnsureEnSwDeathState(EnSw* sw) {
 }
 
 bool ShouldReportEnemyExtraState(Actor* actor) {
-    if (actor == nullptr || actor->id != ACTOR_EN_DEKUNUTS) {
+    if (actor == nullptr) {
         return false;
     }
 
-    EnDekunuts* dekunuts = (EnDekunuts*)actor;
-    return IsDekunutsFleeAction(GetDekunutsActionId(dekunuts->actionFunc));
+    if (actor->id == ACTOR_EN_DEKUNUTS) {
+        EnDekunuts* dekunuts = (EnDekunuts*)actor;
+        return IsDekunutsFleeAction(GetDekunutsActionId(dekunuts->actionFunc));
+    }
+
+    if (actor->id == ACTOR_OBJ_OSHIHIKI) {
+        return IsObjOshihikiMoving((ObjOshihiki*)actor);
+    }
+
+    return false;
 }
 
 nlohmann::json GetEnemyExtraState(Actor* actor) {
@@ -588,6 +636,30 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["yOffsetStep"] = reeba->yOffsetStep;
             extra["scale"] = reeba->scale;
             AddSkelAnimeState(extra, &reeba->skelanime);
+            break;
+        }
+        case ACTOR_OBJ_OSHIHIKI: {
+            ObjOshihiki* block = (ObjOshihiki*)actor;
+            extra["kind"] = "ObjOshihiki";
+            extra["action"] = GetObjOshihikiActionId(block->actionFunc);
+            extra["stateFlags"] = block->stateFlags;
+            extra["timer"] = block->timer;
+            extra["pushSpeed"] = block->pushSpeed;
+            extra["pushDist"] = block->pushDist;
+            extra["direction"] = block->direction;
+            extra["highestFloor"] = block->highestFloor;
+            extra["cantMove"] = block->cantMove;
+            extra["dynaUnk150"] = block->dyna.unk_150;
+            extra["dynaUnk154"] = block->dyna.unk_154;
+            extra["dynaUnk158"] = block->dyna.unk_158;
+            extra["dynaUnk15A"] = block->dyna.unk_15A;
+            extra["dynaTransformFlags"] = block->dyna.transformFlags;
+            extra["dynaInteractFlags"] = block->dyna.interactFlags;
+            extra["dynaUnk162"] = block->dyna.unk_162;
+            extra["homeX"] = block->dyna.actor.home.pos.x;
+            extra["homeY"] = block->dyna.actor.home.pos.y;
+            extra["homeZ"] = block->dyna.actor.home.pos.z;
+            extra["floorHeight"] = block->dyna.actor.floorHeight;
             break;
         }
     }
@@ -817,6 +889,37 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         reeba->yOffsetStep = extra.value("yOffsetStep", reeba->yOffsetStep);
         reeba->scale = extra.value("scale", reeba->scale);
         ApplySkelAnimeState(extra, &reeba->skelanime);
+    } else if (actor->id == ACTOR_OBJ_OSHIHIKI && kind == "ObjOshihiki") {
+        ObjOshihiki* block = (ObjOshihiki*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetObjOshihikiActionId(block->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            ObjOshihikiActionFunc remoteFunc = GetObjOshihikiActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                block->actionFunc = remoteFunc;
+            }
+        }
+        block->stateFlags = extra.value("stateFlags", block->stateFlags);
+        block->timer = extra.value("timer", block->timer);
+        block->pushSpeed = extra.value("pushSpeed", block->pushSpeed);
+        block->pushDist = extra.value("pushDist", block->pushDist);
+        block->direction = extra.value("direction", block->direction);
+        block->highestFloor = extra.value("highestFloor", block->highestFloor);
+        block->cantMove = extra.value("cantMove", block->cantMove);
+        block->dyna.unk_150 = extra.value("dynaUnk150", block->dyna.unk_150);
+        block->dyna.unk_154 = extra.value("dynaUnk154", block->dyna.unk_154);
+        block->dyna.unk_158 = extra.value("dynaUnk158", block->dyna.unk_158);
+        block->dyna.unk_15A = extra.value("dynaUnk15A", block->dyna.unk_15A);
+        block->dyna.transformFlags = extra.value("dynaTransformFlags", block->dyna.transformFlags);
+        block->dyna.interactFlags = extra.value("dynaInteractFlags", block->dyna.interactFlags);
+        block->dyna.unk_162 = extra.value("dynaUnk162", block->dyna.unk_162);
+        block->dyna.actor.home.pos.x = extra.value("homeX", block->dyna.actor.home.pos.x);
+        block->dyna.actor.home.pos.y = extra.value("homeY", block->dyna.actor.home.pos.y);
+        block->dyna.actor.home.pos.z = extra.value("homeZ", block->dyna.actor.home.pos.z);
+        block->dyna.actor.floorHeight = extra.value("floorHeight", block->dyna.actor.floorHeight);
+        block->dyna.actor.world.rot.y = block->dyna.unk_158;
+        block->yawSin = Math_SinS(block->dyna.actor.world.rot.y);
+        block->yawCos = Math_CosS(block->dyna.actor.world.rot.y);
     }
 }
 

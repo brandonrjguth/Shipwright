@@ -410,7 +410,8 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
 }
 
 bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
-    return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_SW;
+    return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_SW ||
+           actorId == ACTOR_OBJ_OSHIHIKI;
 }
 
 bool Anchor::IsEnemySyncActor(Actor* actor) {
@@ -427,7 +428,9 @@ Actor* Anchor::FindNearbyDeadEnemyDropSource(Actor* dropActor) {
     for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
         Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
         while (currAct != nullptr) {
-            if (IsEnemySyncActor(currAct) && GetEnemyNetworkId(currAct) != 0 && currAct->colChkInfo.health == 0 &&
+            bool canDropCollectible = currAct->category == ACTORCAT_ENEMY || currAct->category == ACTORCAT_BOSS ||
+                                      currAct->id == ACTOR_EN_SW;
+            if (canDropCollectible && GetEnemyNetworkId(currAct) != 0 && currAct->colChkInfo.health == 0 &&
                 currAct->update != nullptr) {
                 float dx = currAct->world.pos.x - dropActor->world.pos.x;
                 float dy = currAct->world.pos.y - dropActor->world.pos.y;
@@ -658,6 +661,10 @@ void Anchor::ApplyEnemyAuthorityTargets() {
         Actor* actor = FindActorByEnemyNetworkId(it->first);
         if (actor == nullptr) {
             it = enemyAuthorityTargets.erase(it);
+            continue;
+        }
+        if (ShouldReportEnemyExtraState(actor)) {
+            ++it;
             continue;
         }
         ApplyEnemyAuthorityState(actor, it->second, false);

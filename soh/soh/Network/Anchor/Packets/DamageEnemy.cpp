@@ -45,6 +45,14 @@ static bool IsReportedDekunutsFleeState(Actor* target, nlohmann::json payload) {
     return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
 }
 
+static bool IsReportedMovableBlockState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_OBJ_OSHIHIKI || !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    return payload["extraState"].value("kind", std::string("")) == "ObjOshihiki";
+}
+
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
     nlohmann::json extraState = GetEnemyExtraState(actor);
     if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
@@ -132,7 +140,7 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
 
     ApplyEnemyExtraState(target, extraState);
 
-    if (target->id == ACTOR_EN_DEKUNUTS) {
+    if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_OBJ_OSHIHIKI) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;
     }
@@ -301,7 +309,9 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     bool hasReportedState = HasReportedEnemyState(payload);
-    bool hasReportedNonDamageState = health == target->colChkInfo.health && IsReportedDekunutsFleeState(target, payload);
+    bool hasReportedNonDamageState = health == target->colChkInfo.health &&
+                                     (IsReportedDekunutsFleeState(target, payload) ||
+                                      IsReportedMovableBlockState(target, payload));
 
     if (hasReportedNonDamageState) {
         ApplyReportedEnemyState(target, payload);

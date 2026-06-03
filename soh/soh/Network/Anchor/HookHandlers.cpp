@@ -161,12 +161,12 @@ void Anchor::RegisterHooks() {
             return;
         }
 
-        if (enemyAuthorityTargets.contains(networkId)) {
-            ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
-        }
         bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
                                      actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
         bool hasPendingLocalExtraState = ShouldReportEnemyExtraState(actor);
+        if (enemyAuthorityTargets.contains(networkId) && !hasPendingLocalExtraState) {
+            ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
+        }
         if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
             ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
         }
@@ -251,12 +251,12 @@ void Anchor::RegisterHooks() {
         }
 
         if (!HasEnemySyncAuthority()) {
-            if (enemyAuthorityTargets.contains(networkId)) {
-                ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
-            }
             bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
                                          actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
             bool hasPendingLocalExtraState = ShouldReportEnemyExtraState(actor);
+            if (enemyAuthorityTargets.contains(networkId) && !hasPendingLocalExtraState) {
+                ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
+            }
             if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }
