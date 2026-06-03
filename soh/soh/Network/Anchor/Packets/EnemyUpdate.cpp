@@ -855,6 +855,48 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
     return false;
 }
 
+bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra) {
+    if (actor == nullptr || !ShouldReportEnemyExtraState(actor)) {
+        return false;
+    }
+
+    if (actor->id == ACTOR_OBJ_OSHIHIKI) {
+        return IsLocalPlayerPushingObjOshihiki((ObjOshihiki*)actor);
+    }
+
+    if (actor->id == ACTOR_EN_DEKUNUTS) {
+        EnDekunuts* dekunuts = (EnDekunuts*)actor;
+        s32 localAction = GetDekunutsActionId(dekunuts->actionFunc);
+        if (!IsDekunutsFleeAction(localAction)) {
+            return false;
+        }
+
+        if (authorityExtra.is_object() && authorityExtra.value("kind", std::string("")) == "EnDekunuts" &&
+            IsDekunutsFleeAction(authorityExtra.value("action", (s32)-1))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    if (actor->id == ACTOR_EN_SHOPNUTS) {
+        EnShopnuts* shopnuts = (EnShopnuts*)actor;
+        s32 localAction = GetShopnutsActionId(shopnuts->actionFunc);
+        if (!IsShopnutsCaughtAction(localAction)) {
+            return false;
+        }
+
+        if (authorityExtra.is_object() && authorityExtra.value("kind", std::string("")) == "EnShopnuts" &&
+            IsShopnutsCaughtAction(authorityExtra.value("action", (s32)-1))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    return true;
+}
+
 nlohmann::json GetEnemyExtraState(Actor* actor) {
     nlohmann::json extra = nlohmann::json::object();
 
@@ -2182,13 +2224,12 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                       colorFilterParams.empty() ? (u16)0 : colorFilterParams[i],
                                       health[i] };
         enemyAuthorityTargets[networkIds[i]] = state;
-        bool preserveLocalState = (target->id == ACTOR_OBJ_OSHIHIKI && IsLocalPlayerPushingObjOshihiki((ObjOshihiki*)target)) ||
-                                  (target->id == ACTOR_EN_SHOPNUTS && ShouldReportEnemyExtraState(target));
+        nlohmann::json extraState = extraStates.empty() ? nlohmann::json::object() : extraStates[i];
+        bool preserveLocalState = ShouldPreserveLocalEnemyExtraState(target, extraState);
         if (!preserveLocalState) {
             ApplyEnemyAuthorityState(target, state, false);
         }
         if (!extraStates.empty()) {
-            nlohmann::json extraState = extraStates[i];
             if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
                 enemyExtraStates.erase(networkIds[i]);
             } else {

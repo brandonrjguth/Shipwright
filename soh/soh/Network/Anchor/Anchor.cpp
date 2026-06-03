@@ -13,7 +13,7 @@ extern PlayState* gPlayState;
 }
 
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
-extern bool ShouldReportEnemyExtraState(Actor* actor);
+extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
 
 extern "C" bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos) {
     if (Anchor::Instance == nullptr || actor == nullptr || outPos == nullptr || !Anchor::Instance->IsSaveLoaded()) {
@@ -668,7 +668,9 @@ void Anchor::ApplyEnemyAuthorityTargets() {
             it = enemyAuthorityTargets.erase(it);
             continue;
         }
-        if (ShouldReportEnemyExtraState(actor)) {
+        nlohmann::json authorityExtra =
+            enemyExtraStates.contains(it->first) ? enemyExtraStates[it->first] : nlohmann::json::object();
+        if (ShouldPreserveLocalEnemyExtraState(actor, authorityExtra)) {
             ++it;
             continue;
         }
@@ -692,7 +694,7 @@ void Anchor::ApplyEnemyExtraStates() {
             ++it;
             continue;
         }
-        if (ShouldReportEnemyExtraState(actor)) {
+        if (ShouldPreserveLocalEnemyExtraState(actor, it->second)) {
             ++it;
             continue;
         }
@@ -912,13 +914,17 @@ void Anchor::DetectEnemyDamage() {
 
         if (enemyHealthTracker.contains(act)) {
             u8 lastHealth = enemyHealthTracker[act];
+            uint64_t networkId = GetEnemyNetworkId(act);
+            nlohmann::json authorityExtra =
+                enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             if (currentHealth < lastHealth) {
                 if (HasEnemySyncAuthority()) {
                     SendPacket_DamageEnemy(act, currentHealth);
                 } else {
                     SendPacket_ReportEnemyDamage(act, currentHealth);
                 }
-            } else if (!HasEnemySyncAuthority() && currentHealth == lastHealth && ShouldReportEnemyExtraState(act)) {
+            } else if (!HasEnemySyncAuthority() && currentHealth == lastHealth &&
+                       ShouldPreserveLocalEnemyExtraState(act, authorityExtra)) {
                 SendPacket_ReportEnemyDamage(act, currentHealth);
             }
         }
