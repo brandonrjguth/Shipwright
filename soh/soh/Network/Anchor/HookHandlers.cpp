@@ -181,7 +181,7 @@ void Anchor::RegisterHooks() {
         if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
             ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
         }
-        if (actor->id == ACTOR_OBJ_OSHIHIKI && hasPendingLocalExtraState) {
+        if ((actor->id == ACTOR_OBJ_OSHIHIKI || actor->id == ACTOR_EN_SHOPNUTS) && hasPendingLocalExtraState) {
             SendPacket_ReportEnemyDamage(actor, actor->colChkInfo.health);
         }
     });

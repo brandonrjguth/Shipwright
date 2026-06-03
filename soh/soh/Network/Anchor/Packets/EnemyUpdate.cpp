@@ -7,6 +7,7 @@ extern "C" {
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#include "src/overlays/actors/ovl_En_Shopnuts/z_en_shopnuts.h"
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
 #undef this
@@ -65,6 +66,18 @@ void EnDekubaba_Sway(EnDekubaba*, PlayState*);
 void EnDekubaba_PrunedSomersault(EnDekubaba*, PlayState*);
 void EnDekubaba_ShrinkDie(EnDekubaba*, PlayState*);
 void EnDekubaba_DeadStickDrop(EnDekubaba*, PlayState*);
+void EnShopnuts_SetupWait(EnShopnuts* thisx);
+void EnShopnuts_SetupLookAround(EnShopnuts* thisx);
+void EnShopnuts_SetupThrowNut(EnShopnuts* thisx);
+void EnShopnuts_SetupStand(EnShopnuts* thisx);
+void EnShopnuts_SetupBurrow(EnShopnuts* thisx);
+void EnShopnuts_SetupSpawnSalesman(EnShopnuts* thisx);
+void EnShopnuts_Wait(EnShopnuts* thisx, PlayState* play);
+void EnShopnuts_LookAround(EnShopnuts* thisx, PlayState* play);
+void EnShopnuts_Stand(EnShopnuts* thisx, PlayState* play);
+void EnShopnuts_ThrowNut(EnShopnuts* thisx, PlayState* play);
+void EnShopnuts_Burrow(EnShopnuts* thisx, PlayState* play);
+void EnShopnuts_SpawnSalesman(EnShopnuts* thisx, PlayState* play);
 }
 
 void EnSt_SetupAction(EnSt* thisx, EnStActionFunc actionFunc);
@@ -178,6 +191,58 @@ static EnDekunutsActionFunc GetDekunutsActionFunc(s32 actionId) {
 
 static bool IsDekunutsFleeAction(s32 action) {
     return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
+}
+
+enum ShopnutsAction : s32 {
+    SHOPNUTS_ACTION_WAIT = 0,
+    SHOPNUTS_ACTION_LOOK_AROUND = 1,
+    SHOPNUTS_ACTION_STAND = 2,
+    SHOPNUTS_ACTION_THROW_NUT = 3,
+    SHOPNUTS_ACTION_BURROW = 4,
+    SHOPNUTS_ACTION_SPAWN_SALESMAN = 5,
+};
+
+static s32 GetShopnutsActionId(EnShopnutsActionFunc actionFunc) {
+    if (actionFunc == EnShopnuts_Wait) return SHOPNUTS_ACTION_WAIT;
+    if (actionFunc == EnShopnuts_LookAround) return SHOPNUTS_ACTION_LOOK_AROUND;
+    if (actionFunc == EnShopnuts_Stand) return SHOPNUTS_ACTION_STAND;
+    if (actionFunc == EnShopnuts_ThrowNut) return SHOPNUTS_ACTION_THROW_NUT;
+    if (actionFunc == EnShopnuts_Burrow) return SHOPNUTS_ACTION_BURROW;
+    if (actionFunc == EnShopnuts_SpawnSalesman) return SHOPNUTS_ACTION_SPAWN_SALESMAN;
+    return -1;
+}
+
+static void ApplyShopnutsAction(EnShopnuts* shopnuts, s32 action) {
+    if (shopnuts == nullptr || action == GetShopnutsActionId(shopnuts->actionFunc)) {
+        return;
+    }
+
+    switch (action) {
+        case SHOPNUTS_ACTION_WAIT:
+            EnShopnuts_SetupWait(shopnuts);
+            break;
+        case SHOPNUTS_ACTION_LOOK_AROUND:
+            EnShopnuts_SetupLookAround(shopnuts);
+            break;
+        case SHOPNUTS_ACTION_STAND:
+            EnShopnuts_SetupStand(shopnuts);
+            break;
+        case SHOPNUTS_ACTION_THROW_NUT:
+            EnShopnuts_SetupThrowNut(shopnuts);
+            break;
+        case SHOPNUTS_ACTION_BURROW:
+            EnShopnuts_SetupBurrow(shopnuts);
+            break;
+        case SHOPNUTS_ACTION_SPAWN_SALESMAN:
+            EnShopnuts_SetupSpawnSalesman(shopnuts);
+            break;
+        default:
+            break;
+    }
+}
+
+static bool IsShopnutsCaughtAction(s32 action) {
+    return action == SHOPNUTS_ACTION_SPAWN_SALESMAN;
 }
 
 enum ObjOshihikiAction : s32 {
@@ -774,6 +839,11 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return IsDekunutsFleeAction(GetDekunutsActionId(dekunuts->actionFunc));
     }
 
+    if (actor->id == ACTOR_EN_SHOPNUTS) {
+        EnShopnuts* shopnuts = (EnShopnuts*)actor;
+        return IsShopnutsCaughtAction(GetShopnutsActionId(shopnuts->actionFunc));
+    }
+
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
         return IsObjOshihikiMoving((ObjOshihiki*)actor);
     }
@@ -816,6 +886,17 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["colliderColType"] = dekubaba->collider.base.colType;
             extra["colliderAcHard"] = (dekubaba->collider.base.acFlags & AC_HARD) != 0;
             AddSkelAnimeState(extra, &dekubaba->skelAnime);
+            break;
+        }
+        case ACTOR_EN_SHOPNUTS: {
+            EnShopnuts* shopnuts = (EnShopnuts*)actor;
+            extra["kind"] = "EnShopnuts";
+            extra["action"] = GetShopnutsActionId(shopnuts->actionFunc);
+            extra["animFlagAndTimer"] = shopnuts->animFlagAndTimer;
+            extra["colliderAcOn"] = (shopnuts->collider.base.acFlags & AC_ON) != 0;
+            extra["colliderAcHit"] = (shopnuts->collider.base.acFlags & AC_HIT) != 0;
+            extra["colliderHeight"] = shopnuts->collider.dim.height;
+            AddSkelAnimeState(extra, &shopnuts->skelAnime);
             break;
         }
         case ACTOR_EN_ST: {
@@ -1364,6 +1445,26 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             }
         }
         ApplySkelAnimeState(extra, &dekubaba->skelAnime);
+    } else if (actor->id == ACTOR_EN_SHOPNUTS && kind == "EnShopnuts") {
+        EnShopnuts* shopnuts = (EnShopnuts*)actor;
+        ApplyShopnutsAction(shopnuts, extra.value("action", (s32)-1));
+        shopnuts->animFlagAndTimer = extra.value("animFlagAndTimer", shopnuts->animFlagAndTimer);
+        shopnuts->collider.dim.height = extra.value("colliderHeight", shopnuts->collider.dim.height);
+        if (extra.contains("colliderAcOn")) {
+            if (extra.value("colliderAcOn", false)) {
+                shopnuts->collider.base.acFlags |= AC_ON;
+            } else {
+                shopnuts->collider.base.acFlags &= ~AC_ON;
+            }
+        }
+        if (extra.contains("colliderAcHit")) {
+            if (extra.value("colliderAcHit", false)) {
+                shopnuts->collider.base.acFlags |= AC_HIT;
+            } else {
+                shopnuts->collider.base.acFlags &= ~AC_HIT;
+            }
+        }
+        ApplySkelAnimeState(extra, &shopnuts->skelAnime);
     } else if (actor->id == ACTOR_EN_ST && kind == "EnSt") {
         EnSt* st = (EnSt*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
@@ -2081,8 +2182,9 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                       colorFilterParams.empty() ? (u16)0 : colorFilterParams[i],
                                       health[i] };
         enemyAuthorityTargets[networkIds[i]] = state;
-        bool hasLocalPush = target->id == ACTOR_OBJ_OSHIHIKI && IsLocalPlayerPushingObjOshihiki((ObjOshihiki*)target);
-        if (!hasLocalPush) {
+        bool preserveLocalState = (target->id == ACTOR_OBJ_OSHIHIKI && IsLocalPlayerPushingObjOshihiki((ObjOshihiki*)target)) ||
+                                  (target->id == ACTOR_EN_SHOPNUTS && ShouldReportEnemyExtraState(target));
+        if (!preserveLocalState) {
             ApplyEnemyAuthorityState(target, state, false);
         }
         if (!extraStates.empty()) {
@@ -2091,7 +2193,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                 enemyExtraStates.erase(networkIds[i]);
             } else {
                 enemyExtraStates[networkIds[i]] = extraState;
-                if (!hasLocalPush && !(target->colChkInfo.health < state.health)) {
+                if (!preserveLocalState && !(target->colChkInfo.health < state.health)) {
                     ApplyEnemyExtraState(target, extraState);
                 }
             }
