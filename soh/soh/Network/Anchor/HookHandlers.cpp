@@ -24,6 +24,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_Bg_Ydan_Maruta/z_bg_ydan_maruta.h"
 #include "src/overlays/actors/ovl_Bg_Ydan_Sp/z_bg_ydan_sp.h"
 #include "src/overlays/actors/ovl_Door_Shutter/z_door_shutter.h"
+#include "src/overlays/actors/ovl_En_Dns/z_en_dns.h"
 #include "src/overlays/actors/ovl_En_Door/z_en_door.h"
 #include "src/overlays/actors/ovl_En_Si/z_en_si.h"
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
@@ -124,6 +125,16 @@ void Anchor::RegisterHooks() {
     COND_ID_HOOK(ShouldActorInit, ACTOR_EN_ELF, isConnected, suppressReplicaEnemyDrop);
     COND_ID_HOOK(OnActorInit, ACTOR_EN_ITEM00, isConnected, markAuthorityEnemyDrop);
     COND_ID_HOOK(OnActorInit, ACTOR_EN_ELF, isConnected, markAuthorityEnemyDrop);
+
+    COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_DNS, isConnected, [&](void* refActor, bool* should) {
+        EnDns* scrub = static_cast<EnDns*>(refActor);
+        Actor* collidedActor = scrub->collider.base.oc;
+        if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update) {
+            scrub->collider.base.oc = nullptr;
+            scrub->collider.base.ocFlags1 &= ~OC1_HIT;
+            scrub->actor.flags &= ~ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED;
+        }
+    });
 
     COND_HOOK(OnPlayerUpdate, isConnected, [&]() {
         if (justLoadedSave) {
