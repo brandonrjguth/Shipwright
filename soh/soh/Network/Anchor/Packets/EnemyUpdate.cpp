@@ -291,6 +291,51 @@ static bool IsObjOshihikiMoving(ObjOshihiki* block) {
            fabsf(block->dyna.actor.velocity.y) > 0.001f;
 }
 
+static std::unordered_map<ObjOshihiki*, u8> sLocalObjOshihikiReportFrames;
+
+static bool IsObjOshihikiAuthorityAtLocalTile(ObjOshihiki* block, nlohmann::json authorityExtra) {
+    if (block == nullptr || !authorityExtra.is_object() ||
+        authorityExtra.value("kind", std::string("")) != "ObjOshihiki") {
+        return false;
+    }
+
+    f32 homeX = authorityExtra.value("homeX", block->dyna.actor.home.pos.x);
+    f32 homeY = authorityExtra.value("homeY", block->dyna.actor.home.pos.y);
+    f32 homeZ = authorityExtra.value("homeZ", block->dyna.actor.home.pos.z);
+    return fabsf(block->dyna.actor.home.pos.x - homeX) < 0.5f &&
+           fabsf(block->dyna.actor.home.pos.y - homeY) < 0.5f &&
+           fabsf(block->dyna.actor.home.pos.z - homeZ) < 0.5f;
+}
+
+static bool ShouldPreserveLocalObjOshihiki(ObjOshihiki* block, nlohmann::json authorityExtra) {
+    if (block == nullptr) {
+        return false;
+    }
+
+    if (IsLocalPlayerPushingObjOshihiki(block)) {
+        sLocalObjOshihikiReportFrames[block] = 60;
+        return true;
+    }
+
+    auto it = sLocalObjOshihikiReportFrames.find(block);
+    if (it == sLocalObjOshihikiReportFrames.end()) {
+        return false;
+    }
+
+    if (IsObjOshihikiAuthorityAtLocalTile(block, authorityExtra)) {
+        sLocalObjOshihikiReportFrames.erase(it);
+        return false;
+    }
+
+    if (it->second == 0) {
+        sLocalObjOshihikiReportFrames.erase(it);
+        return false;
+    }
+
+    it->second--;
+    return true;
+}
+
 enum DekubabaAction : s32 {
     DEKUBABA_ACTION_WAIT = 0,
     DEKUBABA_ACTION_GROW = 1,
@@ -856,41 +901,23 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
 }
 
 bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra) {
-    if (actor == nullptr || !ShouldReportEnemyExtraState(actor)) {
+    if (actor == nullptr) {
         return false;
     }
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
-        return IsLocalPlayerPushingObjOshihiki((ObjOshihiki*)actor);
+        return ShouldPreserveLocalObjOshihiki((ObjOshihiki*)actor, authorityExtra);
+    }
+
+    if (!ShouldReportEnemyExtraState(actor)) {
+        return false;
     }
 
     if (actor->id == ACTOR_EN_DEKUNUTS) {
-        EnDekunuts* dekunuts = (EnDekunuts*)actor;
-        s32 localAction = GetDekunutsActionId(dekunuts->actionFunc);
-        if (!IsDekunutsFleeAction(localAction)) {
-            return false;
-        }
-
-        if (authorityExtra.is_object() && authorityExtra.value("kind", std::string("")) == "EnDekunuts" &&
-            IsDekunutsFleeAction(authorityExtra.value("action", (s32)-1))) {
-            return false;
-        }
-
         return true;
     }
 
     if (actor->id == ACTOR_EN_SHOPNUTS) {
-        EnShopnuts* shopnuts = (EnShopnuts*)actor;
-        s32 localAction = GetShopnutsActionId(shopnuts->actionFunc);
-        if (!IsShopnutsCaughtAction(localAction)) {
-            return false;
-        }
-
-        if (authorityExtra.is_object() && authorityExtra.value("kind", std::string("")) == "EnShopnuts" &&
-            IsShopnutsCaughtAction(authorityExtra.value("action", (s32)-1))) {
-            return false;
-        }
-
         return true;
     }
 
