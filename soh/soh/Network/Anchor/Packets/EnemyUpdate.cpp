@@ -54,6 +54,16 @@ void EnDekunuts_Gasp(EnDekunuts* thisx, PlayState* play);
 void EnDekunuts_BeDamaged(EnDekunuts* thisx, PlayState* play);
 void EnDekunuts_BeStunned(EnDekunuts* thisx, PlayState* play);
 void EnDekunuts_Die(EnDekunuts* thisx, PlayState* play);
+void EnDekunuts_SetupWait(EnDekunuts* thisx);
+void EnDekunuts_SetupLookAround(EnDekunuts* thisx);
+void EnDekunuts_SetupStand(EnDekunuts* thisx);
+void EnDekunuts_SetupThrowNut(EnDekunuts* thisx);
+void EnDekunuts_SetupBurrow(EnDekunuts* thisx);
+void EnDekunuts_SetupBeginRun(EnDekunuts* thisx);
+void EnDekunuts_SetupRun(EnDekunuts* thisx);
+void EnDekunuts_SetupGasp(EnDekunuts* thisx);
+void EnDekunuts_SetupBeStunned(EnDekunuts* thisx);
+void EnDekunuts_SetupDie(EnDekunuts* thisx);
 void EnDekubaba_Wait(EnDekubaba*, PlayState*);
 void EnDekubaba_Grow(EnDekubaba*, PlayState*);
 void EnDekubaba_Retract(EnDekubaba*, PlayState*);
@@ -251,6 +261,54 @@ static void RestoreActorMotion(Actor* actor, ActorMotionSnapshot motion) {
     actor->speedXZ = motion.speedXZ;
     actor->gravity = motion.gravity;
     actor->minVelocityY = motion.minVelocityY;
+}
+
+static void ApplyDekunutsAction(EnDekunuts* dekunuts, s32 action) {
+    if (dekunuts == nullptr || action < 0 || action == GetDekunutsActionId(dekunuts->actionFunc)) {
+        return;
+    }
+
+    ActorMotionSnapshot motion = CaptureActorMotion(&dekunuts->actor);
+    switch (action) {
+        case DEKUNUTS_ACTION_WAIT:
+            EnDekunuts_SetupWait(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_LOOK_AROUND:
+            EnDekunuts_SetupLookAround(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_STAND:
+            EnDekunuts_SetupStand(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_THROW_NUT:
+            EnDekunuts_SetupThrowNut(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_BURROW:
+            EnDekunuts_SetupBurrow(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_BEGIN_RUN:
+            EnDekunuts_SetupBeginRun(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_RUN:
+            EnDekunuts_SetupRun(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_GASP:
+            EnDekunuts_SetupGasp(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_BE_DAMAGED: {
+            EnDekunutsActionFunc remoteFunc = GetDekunutsActionFunc(action);
+            if (remoteFunc != nullptr) {
+                dekunuts->actionFunc = remoteFunc;
+            }
+            break;
+        }
+        case DEKUNUTS_ACTION_BE_STUNNED:
+            EnDekunuts_SetupBeStunned(dekunuts);
+            break;
+        case DEKUNUTS_ACTION_DIE:
+            EnDekunuts_SetupDie(dekunuts);
+            break;
+    }
+    RestoreActorMotion(&dekunuts->actor, motion);
 }
 
 enum ShopnutsAction : s32 {
@@ -1008,10 +1066,7 @@ static void EnsureEnStDeathState(EnSt* st) {
     s32 action = GetEnStActionId(st->actionFunc);
     if (action == ENST_ACTION_BOUNCE_AROUND) {
         if (st->groundBounces <= 0) {
-            st->groundBounces = 3;
-        }
-        if (st->deathTimer <= 0) {
-            st->deathTimer = 20;
+            EnSt_SetupAction(st, EnSt_FinishBouncing);
         }
         if (st->actor.gravity == 0.0f) {
             st->actor.gravity = -1.0f;
@@ -1019,15 +1074,9 @@ static void EnsureEnStDeathState(EnSt* st) {
         return;
     }
     if (action == ENST_ACTION_FINISH_BOUNCING) {
-        if (st->deathTimer <= 0 && st->finishDeathTimer <= 0) {
-            st->deathTimer = 20;
-        }
         return;
     }
     if (action == ENST_ACTION_DIE) {
-        if (st->finishDeathTimer <= 0) {
-            st->finishDeathTimer = 8;
-        }
         return;
     }
 
@@ -1055,9 +1104,6 @@ static void EnsureEnSwDeathState(EnSw* sw) {
         }
 
         sw->skelAnime.playSpeed = 8.0f;
-        if (sw->unk_394 <= 0) {
-            sw->unk_394 = 10;
-        }
         if (sw->unk_38A <= 0) {
             sw->unk_38A = 1;
         }
@@ -1720,13 +1766,7 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     if (actor->id == ACTOR_EN_DEKUNUTS && kind == "EnDekunuts") {
         EnDekunuts* dekunuts = (EnDekunuts*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
-        s32 localAction = GetDekunutsActionId(dekunuts->actionFunc);
-        if (remoteAction >= 0 && remoteAction != localAction) {
-            EnDekunutsActionFunc remoteFunc = GetDekunutsActionFunc(remoteAction);
-            if (remoteFunc != nullptr) {
-                dekunuts->actionFunc = remoteFunc;
-            }
-        }
+        ApplyDekunutsAction(dekunuts, remoteAction);
         dekunuts->playWalkSound = extra.value("playWalkSound", dekunuts->playWalkSound);
         dekunuts->runAwayCount = extra.value("runAwayCount", dekunuts->runAwayCount);
         dekunuts->animFlagAndTimer = extra.value("animFlagAndTimer", dekunuts->animFlagAndTimer);
