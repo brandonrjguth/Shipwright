@@ -411,7 +411,12 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
 
 bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
     return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_SW ||
-           actorId == ACTOR_OBJ_OSHIHIKI;
+           actorId == ACTOR_OBJ_OSHIHIKI || actorId == ACTOR_OBJ_HSBLOCK || actorId == ACTOR_OBJ_ELEVATOR ||
+           actorId == ACTOR_OBJ_LIFT || actorId == ACTOR_OBJ_TIMEBLOCK || actorId == ACTOR_BG_MIZU_WATER ||
+           actorId == ACTOR_BG_MIZU_MOVEBG || actorId == ACTOR_BG_MIZU_SHUTTER ||
+           actorId == ACTOR_BG_HIDAN_FSLIFT || actorId == ACTOR_BG_JYA_COBRA ||
+           actorId == ACTOR_BG_JYA_BIGMIRROR || actorId == ACTOR_BG_HAKA_SHIP ||
+           actorId == ACTOR_BG_HAKA_WATER || actorId == ACTOR_BG_HAKA_GATE || actorId == ACTOR_BG_BDAN_OBJECTS;
 }
 
 bool Anchor::IsEnemySyncActor(Actor* actor) {

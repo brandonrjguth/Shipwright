@@ -14,7 +14,30 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
 #include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
+#include "src/overlays/actors/ovl_En_Okuta/z_en_okuta.h"
+#include "src/overlays/actors/ovl_En_Firefly/z_en_firefly.h"
+#include "src/overlays/actors/ovl_En_Bb/z_en_bb.h"
+#include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
+#include "src/overlays/actors/ovl_En_Peehat/z_en_peehat.h"
+#include "src/overlays/actors/ovl_En_Reeba/z_en_reeba.h"
 #include "src/overlays/actors/ovl_Obj_Oshihiki/z_obj_oshihiki.h"
+#include "src/overlays/actors/ovl_Obj_Hsblock/z_obj_hsblock.h"
+#include "src/overlays/actors/ovl_Obj_Elevator/z_obj_elevator.h"
+#include "src/overlays/actors/ovl_Obj_Lift/z_obj_lift.h"
+#include "src/overlays/actors/ovl_Obj_Timeblock/z_obj_timeblock.h"
+#include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
+#include "src/overlays/actors/ovl_Boss_Dodongo/z_boss_dodongo.h"
+#include "src/overlays/actors/ovl_Boss_Ganondrof/z_boss_ganondrof.h"
+#include "src/overlays/actors/ovl_Bg_Jya_Bigmirror/z_bg_jya_bigmirror.h"
+#include "src/overlays/actors/ovl_Bg_Jya_Cobra/z_bg_jya_cobra.h"
+#include "src/overlays/actors/ovl_Bg_Mizu_Water/z_bg_mizu_water.h"
+#include "src/overlays/actors/ovl_Bg_Mizu_Movebg/z_bg_mizu_movebg.h"
+#include "src/overlays/actors/ovl_Bg_Mizu_Shutter/z_bg_mizu_shutter.h"
+#include "src/overlays/actors/ovl_Bg_Hidan_Fslift/z_bg_hidan_fslift.h"
+#include "src/overlays/actors/ovl_Bg_Haka_Ship/z_bg_haka_ship.h"
+#include "src/overlays/actors/ovl_Bg_Haka_Water/z_bg_haka_water.h"
+#include "src/overlays/actors/ovl_Bg_Haka_Gate/z_bg_haka_gate.h"
+#include "src/overlays/actors/ovl_Bg_Bdan_Objects/z_bg_bdan_objects.h"
 
 extern "C" {
 void EnDekunuts_Wait(EnDekunuts* thisx, PlayState* play);
@@ -68,6 +91,44 @@ void ObjOshihiki_OnScene(ObjOshihiki* thisx, PlayState* play);
 void ObjOshihiki_OnActor(ObjOshihiki* thisx, PlayState* play);
 void ObjOshihiki_Push(ObjOshihiki* thisx, PlayState* play);
 void ObjOshihiki_Fall(ObjOshihiki* thisx, PlayState* play);
+void BossGoma_Encounter(BossGoma* thisx, PlayState* play);
+void BossGoma_Defeated(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorAttackPosture(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorPrepareAttack(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorAttack(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorDamaged(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorLandStruckDown(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorLand(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorStunned(BossGoma* thisx, PlayState* play);
+void BossGoma_FallJump(BossGoma* thisx, PlayState* play);
+void BossGoma_FallStruckDown(BossGoma* thisx, PlayState* play);
+void BossGoma_CeilingSpawnGohmas(BossGoma* thisx, PlayState* play);
+void BossGoma_CeilingPrepareSpawnGohmas(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorIdle(BossGoma* thisx, PlayState* play);
+void BossGoma_CeilingIdle(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorMain(BossGoma* thisx, PlayState* play);
+void BossGoma_WallClimb(BossGoma* thisx, PlayState* play);
+void BossGoma_CeilingMoveToCenter(BossGoma* thisx, PlayState* play);
+void BossDodongo_IntroCutscene(BossDodongo* thisx, PlayState* play);
+void BossDodongo_Walk(BossDodongo* thisx, PlayState* play);
+void BossDodongo_Inhale(BossDodongo* thisx, PlayState* play);
+void BossDodongo_BlowFire(BossDodongo* thisx, PlayState* play);
+void BossDodongo_Roll(BossDodongo* thisx, PlayState* play);
+void BossDodongo_Explode(BossDodongo* thisx, PlayState* play);
+void BossDodongo_LayDown(BossDodongo* thisx, PlayState* play);
+void BossDodongo_Vulnerable(BossDodongo* thisx, PlayState* play);
+void BossDodongo_GetUp(BossDodongo* thisx, PlayState* play);
+void BossDodongo_DeathCutscene(BossDodongo* thisx, PlayState* play);
+void BossDodongo_Damaged(BossDodongo* thisx, PlayState* play);
+void BossGanondrof_Intro(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Paintings(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Neutral(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Throw(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Block(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Return(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Charge(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Stunned(BossGanondrof* thisx, PlayState* play);
+void BossGanondrof_Death(BossGanondrof* thisx, PlayState* play);
 
 enum DekunutsAction : s32 {
     DEKUNUTS_ACTION_WAIT = 0,
@@ -291,15 +352,296 @@ static EnSwActionFunc GetEnSwActionFunc(s32 actionId) {
         default: return nullptr;
     }
 }
-#include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
-#include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
-#include "src/overlays/actors/ovl_En_Okuta/z_en_okuta.h"
-#include "src/overlays/actors/ovl_En_Firefly/z_en_firefly.h"
-#include "src/overlays/actors/ovl_En_Bb/z_en_bb.h"
-#include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
-#include "src/overlays/actors/ovl_En_Peehat/z_en_peehat.h"
-#include "src/overlays/actors/ovl_En_Reeba/z_en_reeba.h"
 extern PlayState* gPlayState;
+}
+
+enum BossGomaAction : s32 {
+    BOSSGOMA_ACTION_ENCOUNTER = 0,
+    BOSSGOMA_ACTION_DEFEATED = 1,
+    BOSSGOMA_ACTION_FLOOR_ATTACK_POSTURE = 2,
+    BOSSGOMA_ACTION_FLOOR_PREPARE_ATTACK = 3,
+    BOSSGOMA_ACTION_FLOOR_ATTACK = 4,
+    BOSSGOMA_ACTION_FLOOR_DAMAGED = 5,
+    BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN = 6,
+    BOSSGOMA_ACTION_FLOOR_LAND = 7,
+    BOSSGOMA_ACTION_FLOOR_STUNNED = 8,
+    BOSSGOMA_ACTION_FALL_JUMP = 9,
+    BOSSGOMA_ACTION_FALL_STRUCK_DOWN = 10,
+    BOSSGOMA_ACTION_CEILING_SPAWN_GOHMAS = 11,
+    BOSSGOMA_ACTION_CEILING_PREPARE_SPAWN_GOHMAS = 12,
+    BOSSGOMA_ACTION_FLOOR_IDLE = 13,
+    BOSSGOMA_ACTION_CEILING_IDLE = 14,
+    BOSSGOMA_ACTION_FLOOR_MAIN = 15,
+    BOSSGOMA_ACTION_WALL_CLIMB = 16,
+    BOSSGOMA_ACTION_CEILING_MOVE_TO_CENTER = 17,
+};
+
+static s32 GetBossGomaActionId(BossGomaActionFunc actionFunc) {
+    if (actionFunc == BossGoma_Encounter) return BOSSGOMA_ACTION_ENCOUNTER;
+    if (actionFunc == BossGoma_Defeated) return BOSSGOMA_ACTION_DEFEATED;
+    if (actionFunc == BossGoma_FloorAttackPosture) return BOSSGOMA_ACTION_FLOOR_ATTACK_POSTURE;
+    if (actionFunc == BossGoma_FloorPrepareAttack) return BOSSGOMA_ACTION_FLOOR_PREPARE_ATTACK;
+    if (actionFunc == BossGoma_FloorAttack) return BOSSGOMA_ACTION_FLOOR_ATTACK;
+    if (actionFunc == BossGoma_FloorDamaged) return BOSSGOMA_ACTION_FLOOR_DAMAGED;
+    if (actionFunc == BossGoma_FloorLandStruckDown) return BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN;
+    if (actionFunc == BossGoma_FloorLand) return BOSSGOMA_ACTION_FLOOR_LAND;
+    if (actionFunc == BossGoma_FloorStunned) return BOSSGOMA_ACTION_FLOOR_STUNNED;
+    if (actionFunc == BossGoma_FallJump) return BOSSGOMA_ACTION_FALL_JUMP;
+    if (actionFunc == BossGoma_FallStruckDown) return BOSSGOMA_ACTION_FALL_STRUCK_DOWN;
+    if (actionFunc == BossGoma_CeilingSpawnGohmas) return BOSSGOMA_ACTION_CEILING_SPAWN_GOHMAS;
+    if (actionFunc == BossGoma_CeilingPrepareSpawnGohmas) return BOSSGOMA_ACTION_CEILING_PREPARE_SPAWN_GOHMAS;
+    if (actionFunc == BossGoma_FloorIdle) return BOSSGOMA_ACTION_FLOOR_IDLE;
+    if (actionFunc == BossGoma_CeilingIdle) return BOSSGOMA_ACTION_CEILING_IDLE;
+    if (actionFunc == BossGoma_FloorMain) return BOSSGOMA_ACTION_FLOOR_MAIN;
+    if (actionFunc == BossGoma_WallClimb) return BOSSGOMA_ACTION_WALL_CLIMB;
+    if (actionFunc == BossGoma_CeilingMoveToCenter) return BOSSGOMA_ACTION_CEILING_MOVE_TO_CENTER;
+    return -1;
+}
+
+static BossGomaActionFunc GetBossGomaActionFunc(s32 actionId) {
+    switch (actionId) {
+        case BOSSGOMA_ACTION_ENCOUNTER: return BossGoma_Encounter;
+        case BOSSGOMA_ACTION_DEFEATED: return BossGoma_Defeated;
+        case BOSSGOMA_ACTION_FLOOR_ATTACK_POSTURE: return BossGoma_FloorAttackPosture;
+        case BOSSGOMA_ACTION_FLOOR_PREPARE_ATTACK: return BossGoma_FloorPrepareAttack;
+        case BOSSGOMA_ACTION_FLOOR_ATTACK: return BossGoma_FloorAttack;
+        case BOSSGOMA_ACTION_FLOOR_DAMAGED: return BossGoma_FloorDamaged;
+        case BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN: return BossGoma_FloorLandStruckDown;
+        case BOSSGOMA_ACTION_FLOOR_LAND: return BossGoma_FloorLand;
+        case BOSSGOMA_ACTION_FLOOR_STUNNED: return BossGoma_FloorStunned;
+        case BOSSGOMA_ACTION_FALL_JUMP: return BossGoma_FallJump;
+        case BOSSGOMA_ACTION_FALL_STRUCK_DOWN: return BossGoma_FallStruckDown;
+        case BOSSGOMA_ACTION_CEILING_SPAWN_GOHMAS: return BossGoma_CeilingSpawnGohmas;
+        case BOSSGOMA_ACTION_CEILING_PREPARE_SPAWN_GOHMAS: return BossGoma_CeilingPrepareSpawnGohmas;
+        case BOSSGOMA_ACTION_FLOOR_IDLE: return BossGoma_FloorIdle;
+        case BOSSGOMA_ACTION_CEILING_IDLE: return BossGoma_CeilingIdle;
+        case BOSSGOMA_ACTION_FLOOR_MAIN: return BossGoma_FloorMain;
+        case BOSSGOMA_ACTION_WALL_CLIMB: return BossGoma_WallClimb;
+        case BOSSGOMA_ACTION_CEILING_MOVE_TO_CENTER: return BossGoma_CeilingMoveToCenter;
+        default: return nullptr;
+    }
+}
+
+enum BossDodongoAction : s32 {
+    BOSSDODONGO_ACTION_INTRO_CUTSCENE = 0,
+    BOSSDODONGO_ACTION_WALK = 1,
+    BOSSDODONGO_ACTION_INHALE = 2,
+    BOSSDODONGO_ACTION_BLOW_FIRE = 3,
+    BOSSDODONGO_ACTION_ROLL = 4,
+    BOSSDODONGO_ACTION_EXPLODE = 5,
+    BOSSDODONGO_ACTION_LAY_DOWN = 6,
+    BOSSDODONGO_ACTION_VULNERABLE = 7,
+    BOSSDODONGO_ACTION_GET_UP = 8,
+    BOSSDODONGO_ACTION_DEATH_CUTSCENE = 9,
+    BOSSDODONGO_ACTION_DAMAGED = 10,
+};
+
+static s32 GetBossDodongoActionId(BossDodongoActionFunc actionFunc) {
+    if (actionFunc == BossDodongo_IntroCutscene) return BOSSDODONGO_ACTION_INTRO_CUTSCENE;
+    if (actionFunc == BossDodongo_Walk) return BOSSDODONGO_ACTION_WALK;
+    if (actionFunc == BossDodongo_Inhale) return BOSSDODONGO_ACTION_INHALE;
+    if (actionFunc == BossDodongo_BlowFire) return BOSSDODONGO_ACTION_BLOW_FIRE;
+    if (actionFunc == BossDodongo_Roll) return BOSSDODONGO_ACTION_ROLL;
+    if (actionFunc == BossDodongo_Explode) return BOSSDODONGO_ACTION_EXPLODE;
+    if (actionFunc == BossDodongo_LayDown) return BOSSDODONGO_ACTION_LAY_DOWN;
+    if (actionFunc == BossDodongo_Vulnerable) return BOSSDODONGO_ACTION_VULNERABLE;
+    if (actionFunc == BossDodongo_GetUp) return BOSSDODONGO_ACTION_GET_UP;
+    if (actionFunc == BossDodongo_DeathCutscene) return BOSSDODONGO_ACTION_DEATH_CUTSCENE;
+    if (actionFunc == BossDodongo_Damaged) return BOSSDODONGO_ACTION_DAMAGED;
+    return -1;
+}
+
+static BossDodongoActionFunc GetBossDodongoActionFunc(s32 actionId) {
+    switch (actionId) {
+        case BOSSDODONGO_ACTION_INTRO_CUTSCENE: return BossDodongo_IntroCutscene;
+        case BOSSDODONGO_ACTION_WALK: return BossDodongo_Walk;
+        case BOSSDODONGO_ACTION_INHALE: return BossDodongo_Inhale;
+        case BOSSDODONGO_ACTION_BLOW_FIRE: return BossDodongo_BlowFire;
+        case BOSSDODONGO_ACTION_ROLL: return BossDodongo_Roll;
+        case BOSSDODONGO_ACTION_EXPLODE: return BossDodongo_Explode;
+        case BOSSDODONGO_ACTION_LAY_DOWN: return BossDodongo_LayDown;
+        case BOSSDODONGO_ACTION_VULNERABLE: return BossDodongo_Vulnerable;
+        case BOSSDODONGO_ACTION_GET_UP: return BossDodongo_GetUp;
+        case BOSSDODONGO_ACTION_DEATH_CUTSCENE: return BossDodongo_DeathCutscene;
+        case BOSSDODONGO_ACTION_DAMAGED: return BossDodongo_Damaged;
+        default: return nullptr;
+    }
+}
+
+enum BossGanondrofAction : s32 {
+    BOSSGANONDROF_ACTION_INTRO = 0,
+    BOSSGANONDROF_ACTION_PAINTINGS = 1,
+    BOSSGANONDROF_ACTION_NEUTRAL = 2,
+    BOSSGANONDROF_ACTION_THROW = 3,
+    BOSSGANONDROF_ACTION_BLOCK = 4,
+    BOSSGANONDROF_ACTION_RETURN = 5,
+    BOSSGANONDROF_ACTION_CHARGE = 6,
+    BOSSGANONDROF_ACTION_STUNNED = 7,
+    BOSSGANONDROF_ACTION_DEATH = 8,
+};
+
+static s32 GetBossGanondrofActionId(BossGanondrofActionFunc actionFunc) {
+    if (actionFunc == BossGanondrof_Intro) return BOSSGANONDROF_ACTION_INTRO;
+    if (actionFunc == BossGanondrof_Paintings) return BOSSGANONDROF_ACTION_PAINTINGS;
+    if (actionFunc == BossGanondrof_Neutral) return BOSSGANONDROF_ACTION_NEUTRAL;
+    if (actionFunc == BossGanondrof_Throw) return BOSSGANONDROF_ACTION_THROW;
+    if (actionFunc == BossGanondrof_Block) return BOSSGANONDROF_ACTION_BLOCK;
+    if (actionFunc == BossGanondrof_Return) return BOSSGANONDROF_ACTION_RETURN;
+    if (actionFunc == BossGanondrof_Charge) return BOSSGANONDROF_ACTION_CHARGE;
+    if (actionFunc == BossGanondrof_Stunned) return BOSSGANONDROF_ACTION_STUNNED;
+    if (actionFunc == BossGanondrof_Death) return BOSSGANONDROF_ACTION_DEATH;
+    return -1;
+}
+
+static BossGanondrofActionFunc GetBossGanondrofActionFunc(s32 actionId) {
+    switch (actionId) {
+        case BOSSGANONDROF_ACTION_INTRO: return BossGanondrof_Intro;
+        case BOSSGANONDROF_ACTION_PAINTINGS: return BossGanondrof_Paintings;
+        case BOSSGANONDROF_ACTION_NEUTRAL: return BossGanondrof_Neutral;
+        case BOSSGANONDROF_ACTION_THROW: return BossGanondrof_Throw;
+        case BOSSGANONDROF_ACTION_BLOCK: return BossGanondrof_Block;
+        case BOSSGANONDROF_ACTION_RETURN: return BossGanondrof_Return;
+        case BOSSGANONDROF_ACTION_CHARGE: return BossGanondrof_Charge;
+        case BOSSGANONDROF_ACTION_STUNNED: return BossGanondrof_Stunned;
+        case BOSSGANONDROF_ACTION_DEATH: return BossGanondrof_Death;
+        default: return nullptr;
+    }
+}
+
+static void AddVec3fState(nlohmann::json& extra, const std::string& name, Vec3f vec) {
+    extra[name + "X"] = vec.x;
+    extra[name + "Y"] = vec.y;
+    extra[name + "Z"] = vec.z;
+}
+
+static void ApplyVec3fState(nlohmann::json extra, const std::string& name, Vec3f* vec) {
+    if (vec == nullptr) {
+        return;
+    }
+
+    vec->x = extra.value(name + "X", vec->x);
+    vec->y = extra.value(name + "Y", vec->y);
+    vec->z = extra.value(name + "Z", vec->z);
+}
+
+static void AddVec3sState(nlohmann::json& extra, const std::string& name, Vec3s vec) {
+    extra[name + "X"] = vec.x;
+    extra[name + "Y"] = vec.y;
+    extra[name + "Z"] = vec.z;
+}
+
+static void ApplyVec3sState(nlohmann::json extra, const std::string& name, Vec3s* vec) {
+    if (vec == nullptr) {
+        return;
+    }
+
+    vec->x = extra.value(name + "X", vec->x);
+    vec->y = extra.value(name + "Y", vec->y);
+    vec->z = extra.value(name + "Z", vec->z);
+}
+
+static void AddDynaPolyState(nlohmann::json& extra, DynaPolyActor* dyna) {
+    if (dyna == nullptr) {
+        return;
+    }
+
+    extra["dynaBgId"] = dyna->bgId;
+    extra["dynaUnk150"] = dyna->unk_150;
+    extra["dynaUnk154"] = dyna->unk_154;
+    extra["dynaUnk158"] = dyna->unk_158;
+    extra["dynaUnk15A"] = dyna->unk_15A;
+    extra["dynaTransformFlags"] = dyna->transformFlags;
+    extra["dynaInteractFlags"] = dyna->interactFlags;
+    extra["dynaUnk162"] = dyna->unk_162;
+    extra["floorHeight"] = dyna->actor.floorHeight;
+    extra["bgCheckFlags"] = dyna->actor.bgCheckFlags;
+    AddVec3fState(extra, "homePos", dyna->actor.home.pos);
+    AddVec3sState(extra, "homeRot", dyna->actor.home.rot);
+    AddVec3fState(extra, "prevPos", dyna->actor.prevPos);
+}
+
+static void ApplyDynaPolyState(nlohmann::json extra, DynaPolyActor* dyna) {
+    if (dyna == nullptr) {
+        return;
+    }
+
+    dyna->bgId = extra.value("dynaBgId", dyna->bgId);
+    dyna->unk_150 = extra.value("dynaUnk150", dyna->unk_150);
+    dyna->unk_154 = extra.value("dynaUnk154", dyna->unk_154);
+    dyna->unk_158 = extra.value("dynaUnk158", dyna->unk_158);
+    dyna->unk_15A = extra.value("dynaUnk15A", dyna->unk_15A);
+    dyna->transformFlags = extra.value("dynaTransformFlags", dyna->transformFlags);
+    dyna->interactFlags = extra.value("dynaInteractFlags", dyna->interactFlags);
+    dyna->unk_162 = extra.value("dynaUnk162", dyna->unk_162);
+    dyna->actor.floorHeight = extra.value("floorHeight", dyna->actor.floorHeight);
+    dyna->actor.bgCheckFlags = extra.value("bgCheckFlags", dyna->actor.bgCheckFlags);
+    ApplyVec3fState(extra, "homePos", &dyna->actor.home.pos);
+    ApplyVec3sState(extra, "homeRot", &dyna->actor.home.rot);
+    ApplyVec3fState(extra, "prevPos", &dyna->actor.prevPos);
+}
+
+static bool IsDynaPolyMoving(DynaPolyActor* dyna) {
+    if (dyna == nullptr) {
+        return false;
+    }
+
+    Actor* actor = &dyna->actor;
+    return fabsf(actor->velocity.x) > 0.001f || fabsf(actor->velocity.y) > 0.001f ||
+           fabsf(actor->velocity.z) > 0.001f || fabsf(actor->speedXZ) > 0.001f ||
+           fabsf(dyna->unk_150) > 0.001f || fabsf(dyna->unk_154) > 0.001f;
+}
+
+static bool IsPuzzleActorActive(Actor* actor) {
+    if (actor == nullptr) {
+        return false;
+    }
+
+    switch (actor->id) {
+        case ACTOR_OBJ_HSBLOCK:
+            return IsDynaPolyMoving(&((ObjHsblock*)actor)->dyna);
+        case ACTOR_OBJ_ELEVATOR:
+            return IsDynaPolyMoving(&((ObjElevator*)actor)->dyna);
+        case ACTOR_OBJ_LIFT: {
+            ObjLift* lift = (ObjLift*)actor;
+            return lift->timer > 0 || IsDynaPolyMoving(&lift->dyna);
+        }
+        case ACTOR_OBJ_TIMEBLOCK: {
+            ObjTimeblock* timeblock = (ObjTimeblock*)actor;
+            return timeblock->demoEffectTimer > 0 || timeblock->songEndTimer > 0 || IsDynaPolyMoving(&timeblock->dyna);
+        }
+        case ACTOR_BG_MIZU_WATER: {
+            BgMizuWater* water = (BgMizuWater*)actor;
+            return fabsf(water->actor.world.pos.y - water->targetY) > 0.01f || fabsf(water->actor.velocity.y) > 0.001f;
+        }
+        case ACTOR_BG_MIZU_MOVEBG:
+            return IsDynaPolyMoving(&((BgMizuMovebg*)actor)->dyna);
+        case ACTOR_BG_MIZU_SHUTTER: {
+            BgMizuShutter* shutter = (BgMizuShutter*)actor;
+            return shutter->timer > 0 || IsDynaPolyMoving(&shutter->dyna);
+        }
+        case ACTOR_BG_HIDAN_FSLIFT: {
+            BgHidanFslift* lift = (BgHidanFslift*)actor;
+            return lift->timer > 0 || IsDynaPolyMoving(&lift->dyna);
+        }
+        case ACTOR_BG_JYA_COBRA: {
+            BgJyaCobra* cobra = (BgJyaCobra*)actor;
+            return cobra->unk_170 != 0 || IsDynaPolyMoving(&cobra->dyna);
+        }
+        case ACTOR_BG_HAKA_SHIP: {
+            BgHakaShip* ship = (BgHakaShip*)actor;
+            return ship->counter > 0 || IsDynaPolyMoving(&ship->dyna);
+        }
+        case ACTOR_BG_HAKA_GATE: {
+            BgHakaGate* gate = (BgHakaGate*)actor;
+            return IsDynaPolyMoving(&gate->dyna);
+        }
+        case ACTOR_BG_BDAN_OBJECTS: {
+            BgBdanObjects* objects = (BgBdanObjects*)actor;
+            return IsDynaPolyMoving(&objects->dyna);
+        }
+        default:
+            return false;
+    }
 }
 
 static void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime) {
@@ -423,6 +765,10 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
         return IsObjOshihikiMoving((ObjOshihiki*)actor);
+    }
+
+    if (IsPuzzleActorActive(actor)) {
+        return true;
     }
 
     return false;
@@ -638,6 +984,147 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             AddSkelAnimeState(extra, &reeba->skelanime);
             break;
         }
+        case ACTOR_BOSS_GOMA: {
+            BossGoma* goma = (BossGoma*)actor;
+            extra["kind"] = "BossGoma";
+            extra["action"] = GetBossGomaActionId(goma->actionFunc);
+            extra["frameCount"] = goma->frameCount;
+            extra["patienceTimer"] = goma->patienceTimer;
+            extra["eyeLidBottomRotX"] = goma->eyeLidBottomRotX;
+            extra["eyeLidTopRotX"] = goma->eyeLidTopRotX;
+            extra["eyeClosedTimer"] = goma->eyeClosedTimer;
+            extra["eyeIrisRotX"] = goma->eyeIrisRotX;
+            extra["eyeIrisRotY"] = goma->eyeIrisRotY;
+            extra["childrenGohmaState"] = { goma->childrenGohmaState[0], goma->childrenGohmaState[1],
+                                             goma->childrenGohmaState[2] };
+            extra["tailLimbsScaleTimers"] = { goma->tailLimbsScaleTimers[0], goma->tailLimbsScaleTimers[1],
+                                               goma->tailLimbsScaleTimers[2], goma->tailLimbsScaleTimers[3] };
+            extra["spawnGohmasActionTimer"] = goma->spawnGohmasActionTimer;
+            extra["eyeState"] = goma->eyeState;
+            extra["doNotMoveThisFrame"] = goma->doNotMoveThisFrame;
+            extra["visualState"] = goma->visualState;
+            extra["invincibilityFrames"] = goma->invincibilityFrames;
+            extra["disableGameplayLogic"] = goma->disableGameplayLogic;
+            extra["decayingProgress"] = goma->decayingProgress;
+            extra["noBackfaceCulling"] = goma->noBackfaceCulling;
+            extra["blinkTimer"] = goma->blinkTimer;
+            extra["lookedAtFrames"] = goma->lookedAtFrames;
+            extra["actionState"] = goma->actionState;
+            extra["framesUntilNextAction"] = goma->framesUntilNextAction;
+            extra["timer"] = goma->timer;
+            extra["sfxFaintTimer"] = goma->sfxFaintTimer;
+            extra["tailLimbsScale"] = { goma->tailLimbsScale[0], goma->tailLimbsScale[1], goma->tailLimbsScale[2],
+                                         goma->tailLimbsScale[3] };
+            extra["eyeIrisScaleX"] = goma->eyeIrisScaleX;
+            extra["eyeIrisScaleY"] = goma->eyeIrisScaleY;
+            extra["mainEnvColor"] = { goma->mainEnvColor[0], goma->mainEnvColor[1], goma->mainEnvColor[2] };
+            extra["eyeEnvColor"] = { goma->eyeEnvColor[0], goma->eyeEnvColor[1], goma->eyeEnvColor[2] };
+            extra["currentAnimFrameCount"] = goma->currentAnimFrameCount;
+            AddSkelAnimeState(extra, &goma->skelanime);
+            break;
+        }
+        case ACTOR_BOSS_DODONGO: {
+            BossDodongo* dodongo = (BossDodongo*)actor;
+            extra["kind"] = "BossDodongo";
+            extra["action"] = GetBossDodongoActionId(dodongo->actionFunc);
+            extra["health"] = dodongo->health;
+            extra["unk_196"] = dodongo->unk_196;
+            extra["unk_198"] = dodongo->unk_198;
+            extra["unk_19A"] = dodongo->unk_19A;
+            extra["csState"] = dodongo->csState;
+            extra["unk_19E"] = dodongo->unk_19E;
+            extra["unk_1A0"] = dodongo->unk_1A0;
+            extra["unk_1A2"] = dodongo->unk_1A2;
+            extra["unk_1A4"] = dodongo->unk_1A4;
+            extra["unk_1A6"] = dodongo->unk_1A6;
+            extra["numWallCollisions"] = dodongo->numWallCollisions;
+            extra["unk_1AA"] = dodongo->unk_1AA;
+            extra["unk_1AC"] = dodongo->unk_1AC;
+            extra["unk_1AE"] = dodongo->unk_1AE;
+            extra["unk_1B0"] = dodongo->unk_1B0;
+            extra["unk_1B6"] = dodongo->unk_1B6;
+            extra["playerYawInRange"] = dodongo->playerYawInRange;
+            extra["playerPosInRange"] = dodongo->playerPosInRange;
+            extra["unk_1BC"] = dodongo->unk_1BC;
+            extra["unk_1BE"] = dodongo->unk_1BE;
+            extra["unk_1C0"] = dodongo->unk_1C0;
+            extra["unk_1C2"] = dodongo->unk_1C2;
+            extra["unk_1C4"] = dodongo->unk_1C4;
+            extra["unk_1C6"] = dodongo->unk_1C6;
+            extra["unk_1C8"] = dodongo->unk_1C8;
+            extra["unk_1CC"] = dodongo->unk_1CC;
+            extra["unk_1DA"] = dodongo->unk_1DA;
+            extra["unk_1DC"] = dodongo->unk_1DC;
+            extra["unk_1DE"] = dodongo->unk_1DE;
+            extra["unk_1E0"] = dodongo->unk_1E0;
+            extra["unk_1E2"] = dodongo->unk_1E2;
+            extra["unk_1E3"] = dodongo->unk_1E3;
+            extra["unk_1E4"] = dodongo->unk_1E4;
+            extra["unk_1E8"] = dodongo->unk_1E8;
+            extra["unk_1EC"] = dodongo->unk_1EC;
+            extra["unk_1F8"] = dodongo->unk_1F8;
+            extra["unk_1FC"] = dodongo->unk_1FC;
+            extra["unk_200"] = dodongo->unk_200;
+            extra["unk_204"] = dodongo->unk_204;
+            extra["unk_208"] = dodongo->unk_208;
+            extra["unk_20C"] = dodongo->unk_20C;
+            extra["colorFilterR"] = dodongo->colorFilterR;
+            extra["colorFilterG"] = dodongo->colorFilterG;
+            extra["colorFilterB"] = dodongo->colorFilterB;
+            extra["colorFilterMin"] = dodongo->colorFilterMin;
+            extra["colorFilterMax"] = dodongo->colorFilterMax;
+            extra["unk_224"] = dodongo->unk_224;
+            extra["unk_228"] = dodongo->unk_228;
+            extra["unk_22C"] = dodongo->unk_22C;
+            extra["unk_230"] = dodongo->unk_230;
+            extra["unk_234"] = dodongo->unk_234;
+            extra["unk_238"] = dodongo->unk_238;
+            extra["unk_23C"] = dodongo->unk_23C;
+            extra["unk_240"] = dodongo->unk_240;
+            extra["unk_244"] = dodongo->unk_244;
+            AddVec3fState(extra, "vec", dodongo->vec);
+            AddVec3fState(extra, "firePos", dodongo->firePos);
+            AddVec3fState(extra, "mouthPos", dodongo->mouthPos);
+            AddSkelAnimeState(extra, &dodongo->skelAnime);
+            break;
+        }
+        case ACTOR_BOSS_GANONDROF: {
+            BossGanondrof* ganondrof = (BossGanondrof*)actor;
+            extra["kind"] = "BossGanondrof";
+            extra["action"] = GetBossGanondrofActionId(ganondrof->actionFunc);
+            std::vector<s16> work;
+            work.reserve(GND_SHORT_COUNT);
+            for (s32 i = 0; i < GND_SHORT_COUNT; i++) {
+                work.push_back(ganondrof->work[i]);
+            }
+            extra["work"] = work;
+            extra["timers"] = { ganondrof->timers[0], ganondrof->timers[1], ganondrof->timers[2],
+                                 ganondrof->timers[3], ganondrof->timers[4] };
+            extra["killActor"] = ganondrof->killActor;
+            extra["returnCount"] = ganondrof->returnCount;
+            extra["shockTimer"] = ganondrof->shockTimer;
+            extra["flyMode"] = ganondrof->flyMode;
+            extra["returnSuccess"] = ganondrof->returnSuccess;
+            std::vector<f32> fwork;
+            fwork.reserve(GND_FLOAT_COUNT);
+            for (s32 i = 0; i < GND_FLOAT_COUNT; i++) {
+                fwork.push_back(ganondrof->fwork[i]);
+            }
+            extra["fwork"] = fwork;
+            AddVec3fState(extra, "spearTip", ganondrof->spearTip);
+            AddVec3fState(extra, "targetPos", ganondrof->targetPos);
+            extra["deathCamera"] = ganondrof->deathCamera;
+            extra["deathState"] = ganondrof->deathState;
+            extra["cameraSpeedMod"] = ganondrof->cameraSpeedMod;
+            extra["cameraAccel"] = ganondrof->cameraAccel;
+            extra["legRotY"] = ganondrof->legRotY;
+            extra["legRotZ"] = ganondrof->legRotZ;
+            extra["legSplitY"] = ganondrof->legSplitY;
+            extra["armRotY"] = ganondrof->armRotY;
+            extra["armRotZ"] = ganondrof->armRotZ;
+            AddSkelAnimeState(extra, &ganondrof->skelAnime);
+            break;
+        }
         case ACTOR_OBJ_OSHIHIKI: {
             ObjOshihiki* block = (ObjOshihiki*)actor;
             extra["kind"] = "ObjOshihiki";
@@ -660,6 +1147,146 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["homeY"] = block->dyna.actor.home.pos.y;
             extra["homeZ"] = block->dyna.actor.home.pos.z;
             extra["floorHeight"] = block->dyna.actor.floorHeight;
+            break;
+        }
+        case ACTOR_OBJ_HSBLOCK: {
+            ObjHsblock* block = (ObjHsblock*)actor;
+            extra["kind"] = "ObjHsblock";
+            AddDynaPolyState(extra, &block->dyna);
+            break;
+        }
+        case ACTOR_OBJ_ELEVATOR: {
+            ObjElevator* elevator = (ObjElevator*)actor;
+            extra["kind"] = "ObjElevator";
+            AddDynaPolyState(extra, &elevator->dyna);
+            extra["unk_168"] = elevator->unk_168;
+            extra["unk_16C"] = elevator->unk_16C;
+            extra["unk_170"] = elevator->unk_170;
+            break;
+        }
+        case ACTOR_OBJ_LIFT: {
+            ObjLift* lift = (ObjLift*)actor;
+            extra["kind"] = "ObjLift";
+            AddDynaPolyState(extra, &lift->dyna);
+            AddVec3sState(extra, "shakeOrientation", lift->shakeOrientation);
+            extra["timer"] = lift->timer;
+            break;
+        }
+        case ACTOR_OBJ_TIMEBLOCK: {
+            ObjTimeblock* timeblock = (ObjTimeblock*)actor;
+            extra["kind"] = "ObjTimeblock";
+            AddDynaPolyState(extra, &timeblock->dyna);
+            extra["demoEffectTimer"] = timeblock->demoEffectTimer;
+            extra["songEndTimer"] = timeblock->songEndTimer;
+            extra["unk_172"] = timeblock->unk_172;
+            extra["unk_174"] = timeblock->unk_174;
+            extra["unk_175"] = timeblock->unk_175;
+            extra["unk_176"] = timeblock->unk_176;
+            extra["unk_177"] = timeblock->unk_177;
+            extra["isVisible"] = timeblock->isVisible;
+            break;
+        }
+        case ACTOR_BG_MIZU_WATER: {
+            BgMizuWater* water = (BgMizuWater*)actor;
+            extra["kind"] = "BgMizuWater";
+            extra["type"] = water->type;
+            extra["targetY"] = water->targetY;
+            extra["baseY"] = water->baseY;
+            extra["switchFlag"] = water->switchFlag;
+            break;
+        }
+        case ACTOR_BG_MIZU_MOVEBG: {
+            BgMizuMovebg* movebg = (BgMizuMovebg*)actor;
+            extra["kind"] = "BgMizuMovebg";
+            AddDynaPolyState(extra, &movebg->dyna);
+            extra["homeY"] = movebg->homeY;
+            extra["scrollAlpha1"] = movebg->scrollAlpha1;
+            extra["scrollAlpha2"] = movebg->scrollAlpha2;
+            extra["scrollAlpha3"] = movebg->scrollAlpha3;
+            extra["scrollAlpha4"] = movebg->scrollAlpha4;
+            extra["sfxFlags"] = movebg->sfxFlags;
+            extra["waypointId"] = movebg->waypointId;
+            break;
+        }
+        case ACTOR_BG_MIZU_SHUTTER: {
+            BgMizuShutter* shutter = (BgMizuShutter*)actor;
+            extra["kind"] = "BgMizuShutter";
+            AddDynaPolyState(extra, &shutter->dyna);
+            extra["timer"] = shutter->timer;
+            extra["timerMax"] = shutter->timerMax;
+            extra["maxSpeed"] = shutter->maxSpeed;
+            AddVec3fState(extra, "closedPos", shutter->closedPos);
+            AddVec3fState(extra, "openPos", shutter->openPos);
+            break;
+        }
+        case ACTOR_BG_HIDAN_FSLIFT: {
+            BgHidanFslift* lift = (BgHidanFslift*)actor;
+            extra["kind"] = "BgHidanFslift";
+            AddDynaPolyState(extra, &lift->dyna);
+            extra["timer"] = lift->timer;
+            extra["cameraSetting"] = lift->cameraSetting;
+            break;
+        }
+        case ACTOR_BG_JYA_COBRA: {
+            BgJyaCobra* cobra = (BgJyaCobra*)actor;
+            extra["kind"] = "BgJyaCobra";
+            AddDynaPolyState(extra, &cobra->dyna);
+            extra["unk_168"] = cobra->unk_168;
+            extra["unk_16A"] = cobra->unk_16A;
+            extra["unk_16C"] = cobra->unk_16C;
+            extra["unk_16E"] = cobra->unk_16E;
+            extra["unk_170"] = cobra->unk_170;
+            extra["unk_172"] = cobra->unk_172;
+            AddVec3fState(extra, "unk_174", cobra->unk_174);
+            AddVec3fState(extra, "unk_180", cobra->unk_180);
+            extra["unk_18C"] = cobra->unk_18C;
+            extra["unk_190"] = cobra->unk_190;
+            break;
+        }
+        case ACTOR_BG_JYA_BIGMIRROR: {
+            BgJyaBigmirror* mirror = (BgJyaBigmirror*)actor;
+            extra["kind"] = "BgJyaBigmirror";
+            extra["cobraRotY"] = { mirror->cobraInfo[0].rotY, mirror->cobraInfo[1].rotY };
+            extra["puzzleFlags"] = mirror->puzzleFlags;
+            extra["spawned"] = mirror->spawned;
+            extra["liftHeight"] = mirror->liftHeight;
+            break;
+        }
+        case ACTOR_BG_HAKA_SHIP: {
+            BgHakaShip* ship = (BgHakaShip*)actor;
+            extra["kind"] = "BgHakaShip";
+            AddDynaPolyState(extra, &ship->dyna);
+            extra["counter"] = ship->counter;
+            extra["switchFlag"] = ship->switchFlag;
+            extra["yOffset"] = ship->yOffset;
+            AddVec3fState(extra, "bellSoundPos", ship->bellSoundPos);
+            break;
+        }
+        case ACTOR_BG_HAKA_WATER: {
+            BgHakaWater* water = (BgHakaWater*)actor;
+            extra["kind"] = "BgHakaWater";
+            extra["isLowered"] = water->isLowered;
+            break;
+        }
+        case ACTOR_BG_HAKA_GATE: {
+            BgHakaGate* gate = (BgHakaGate*)actor;
+            extra["kind"] = "BgHakaGate";
+            AddDynaPolyState(extra, &gate->dyna);
+            extra["switchFlag"] = gate->switchFlag;
+            extra["actionVar1"] = gate->actionVar1;
+            extra["actionVar2"] = gate->actionVar2;
+            extra["actionVar3"] = gate->actionVar3;
+            extra["actionVar4"] = gate->actionVar4;
+            extra["actionVar5"] = gate->actionVar5;
+            break;
+        }
+        case ACTOR_BG_BDAN_OBJECTS: {
+            BgBdanObjects* objects = (BgBdanObjects*)actor;
+            extra["kind"] = "BgBdanObjects";
+            AddDynaPolyState(extra, &objects->dyna);
+            extra["switchFlag"] = objects->switchFlag;
+            extra["timer"] = objects->timer;
+            extra["cameraSetting"] = objects->cameraSetting;
             break;
         }
     }
@@ -889,6 +1516,187 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         reeba->yOffsetStep = extra.value("yOffsetStep", reeba->yOffsetStep);
         reeba->scale = extra.value("scale", reeba->scale);
         ApplySkelAnimeState(extra, &reeba->skelanime);
+    } else if (actor->id == ACTOR_BOSS_GOMA && kind == "BossGoma") {
+        BossGoma* goma = (BossGoma*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetBossGomaActionId(goma->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            BossGomaActionFunc remoteFunc = GetBossGomaActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                goma->actionFunc = remoteFunc;
+            }
+        }
+        goma->frameCount = extra.value("frameCount", goma->frameCount);
+        goma->patienceTimer = extra.value("patienceTimer", goma->patienceTimer);
+        goma->eyeLidBottomRotX = extra.value("eyeLidBottomRotX", goma->eyeLidBottomRotX);
+        goma->eyeLidTopRotX = extra.value("eyeLidTopRotX", goma->eyeLidTopRotX);
+        goma->eyeClosedTimer = extra.value("eyeClosedTimer", goma->eyeClosedTimer);
+        goma->eyeIrisRotX = extra.value("eyeIrisRotX", goma->eyeIrisRotX);
+        goma->eyeIrisRotY = extra.value("eyeIrisRotY", goma->eyeIrisRotY);
+        std::vector<s16> childrenGohmaState = extra.value("childrenGohmaState", std::vector<s16>{});
+        if (childrenGohmaState.size() == 3) {
+            goma->childrenGohmaState[0] = childrenGohmaState[0];
+            goma->childrenGohmaState[1] = childrenGohmaState[1];
+            goma->childrenGohmaState[2] = childrenGohmaState[2];
+        }
+        std::vector<s16> tailLimbsScaleTimers = extra.value("tailLimbsScaleTimers", std::vector<s16>{});
+        if (tailLimbsScaleTimers.size() == 4) {
+            goma->tailLimbsScaleTimers[0] = tailLimbsScaleTimers[0];
+            goma->tailLimbsScaleTimers[1] = tailLimbsScaleTimers[1];
+            goma->tailLimbsScaleTimers[2] = tailLimbsScaleTimers[2];
+            goma->tailLimbsScaleTimers[3] = tailLimbsScaleTimers[3];
+        }
+        goma->spawnGohmasActionTimer = extra.value("spawnGohmasActionTimer", goma->spawnGohmasActionTimer);
+        goma->eyeState = extra.value("eyeState", goma->eyeState);
+        goma->doNotMoveThisFrame = extra.value("doNotMoveThisFrame", goma->doNotMoveThisFrame);
+        goma->visualState = extra.value("visualState", goma->visualState);
+        goma->invincibilityFrames = extra.value("invincibilityFrames", goma->invincibilityFrames);
+        goma->disableGameplayLogic = extra.value("disableGameplayLogic", goma->disableGameplayLogic);
+        goma->decayingProgress = extra.value("decayingProgress", goma->decayingProgress);
+        goma->noBackfaceCulling = extra.value("noBackfaceCulling", goma->noBackfaceCulling);
+        goma->blinkTimer = extra.value("blinkTimer", goma->blinkTimer);
+        goma->lookedAtFrames = extra.value("lookedAtFrames", goma->lookedAtFrames);
+        goma->actionState = extra.value("actionState", goma->actionState);
+        goma->framesUntilNextAction = extra.value("framesUntilNextAction", goma->framesUntilNextAction);
+        goma->timer = extra.value("timer", goma->timer);
+        goma->sfxFaintTimer = extra.value("sfxFaintTimer", goma->sfxFaintTimer);
+        std::vector<f32> tailLimbsScale = extra.value("tailLimbsScale", std::vector<f32>{});
+        if (tailLimbsScale.size() == 4) {
+            goma->tailLimbsScale[0] = tailLimbsScale[0];
+            goma->tailLimbsScale[1] = tailLimbsScale[1];
+            goma->tailLimbsScale[2] = tailLimbsScale[2];
+            goma->tailLimbsScale[3] = tailLimbsScale[3];
+        }
+        goma->eyeIrisScaleX = extra.value("eyeIrisScaleX", goma->eyeIrisScaleX);
+        goma->eyeIrisScaleY = extra.value("eyeIrisScaleY", goma->eyeIrisScaleY);
+        std::vector<f32> mainEnvColor = extra.value("mainEnvColor", std::vector<f32>{});
+        if (mainEnvColor.size() == 3) {
+            goma->mainEnvColor[0] = mainEnvColor[0];
+            goma->mainEnvColor[1] = mainEnvColor[1];
+            goma->mainEnvColor[2] = mainEnvColor[2];
+        }
+        std::vector<f32> eyeEnvColor = extra.value("eyeEnvColor", std::vector<f32>{});
+        if (eyeEnvColor.size() == 3) {
+            goma->eyeEnvColor[0] = eyeEnvColor[0];
+            goma->eyeEnvColor[1] = eyeEnvColor[1];
+            goma->eyeEnvColor[2] = eyeEnvColor[2];
+        }
+        goma->currentAnimFrameCount = extra.value("currentAnimFrameCount", goma->currentAnimFrameCount);
+        ApplySkelAnimeState(extra, &goma->skelanime);
+    } else if (actor->id == ACTOR_BOSS_DODONGO && kind == "BossDodongo") {
+        BossDodongo* dodongo = (BossDodongo*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetBossDodongoActionId(dodongo->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            BossDodongoActionFunc remoteFunc = GetBossDodongoActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                dodongo->actionFunc = remoteFunc;
+            }
+        }
+        dodongo->health = extra.value("health", dodongo->health);
+        dodongo->unk_196 = extra.value("unk_196", dodongo->unk_196);
+        dodongo->unk_198 = extra.value("unk_198", dodongo->unk_198);
+        dodongo->unk_19A = extra.value("unk_19A", dodongo->unk_19A);
+        dodongo->csState = extra.value("csState", dodongo->csState);
+        dodongo->unk_19E = extra.value("unk_19E", dodongo->unk_19E);
+        dodongo->unk_1A0 = extra.value("unk_1A0", dodongo->unk_1A0);
+        dodongo->unk_1A2 = extra.value("unk_1A2", dodongo->unk_1A2);
+        dodongo->unk_1A4 = extra.value("unk_1A4", dodongo->unk_1A4);
+        dodongo->unk_1A6 = extra.value("unk_1A6", dodongo->unk_1A6);
+        dodongo->numWallCollisions = extra.value("numWallCollisions", dodongo->numWallCollisions);
+        dodongo->unk_1AA = extra.value("unk_1AA", dodongo->unk_1AA);
+        dodongo->unk_1AC = extra.value("unk_1AC", dodongo->unk_1AC);
+        dodongo->unk_1AE = extra.value("unk_1AE", dodongo->unk_1AE);
+        dodongo->unk_1B0 = extra.value("unk_1B0", dodongo->unk_1B0);
+        dodongo->unk_1B6 = extra.value("unk_1B6", dodongo->unk_1B6);
+        dodongo->playerYawInRange = extra.value("playerYawInRange", dodongo->playerYawInRange);
+        dodongo->playerPosInRange = extra.value("playerPosInRange", dodongo->playerPosInRange);
+        dodongo->unk_1BC = extra.value("unk_1BC", dodongo->unk_1BC);
+        dodongo->unk_1BE = extra.value("unk_1BE", dodongo->unk_1BE);
+        dodongo->unk_1C0 = extra.value("unk_1C0", dodongo->unk_1C0);
+        dodongo->unk_1C2 = extra.value("unk_1C2", dodongo->unk_1C2);
+        dodongo->unk_1C4 = extra.value("unk_1C4", dodongo->unk_1C4);
+        dodongo->unk_1C6 = extra.value("unk_1C6", dodongo->unk_1C6);
+        dodongo->unk_1C8 = extra.value("unk_1C8", dodongo->unk_1C8);
+        dodongo->unk_1CC = extra.value("unk_1CC", dodongo->unk_1CC);
+        dodongo->unk_1DA = extra.value("unk_1DA", dodongo->unk_1DA);
+        dodongo->unk_1DC = extra.value("unk_1DC", dodongo->unk_1DC);
+        dodongo->unk_1DE = extra.value("unk_1DE", dodongo->unk_1DE);
+        dodongo->unk_1E0 = extra.value("unk_1E0", dodongo->unk_1E0);
+        dodongo->unk_1E2 = extra.value("unk_1E2", dodongo->unk_1E2);
+        dodongo->unk_1E3 = extra.value("unk_1E3", dodongo->unk_1E3);
+        dodongo->unk_1E4 = extra.value("unk_1E4", dodongo->unk_1E4);
+        dodongo->unk_1E8 = extra.value("unk_1E8", dodongo->unk_1E8);
+        dodongo->unk_1EC = extra.value("unk_1EC", dodongo->unk_1EC);
+        dodongo->unk_1F8 = extra.value("unk_1F8", dodongo->unk_1F8);
+        dodongo->unk_1FC = extra.value("unk_1FC", dodongo->unk_1FC);
+        dodongo->unk_200 = extra.value("unk_200", dodongo->unk_200);
+        dodongo->unk_204 = extra.value("unk_204", dodongo->unk_204);
+        dodongo->unk_208 = extra.value("unk_208", dodongo->unk_208);
+        dodongo->unk_20C = extra.value("unk_20C", dodongo->unk_20C);
+        dodongo->colorFilterR = extra.value("colorFilterR", dodongo->colorFilterR);
+        dodongo->colorFilterG = extra.value("colorFilterG", dodongo->colorFilterG);
+        dodongo->colorFilterB = extra.value("colorFilterB", dodongo->colorFilterB);
+        dodongo->colorFilterMin = extra.value("colorFilterMin", dodongo->colorFilterMin);
+        dodongo->colorFilterMax = extra.value("colorFilterMax", dodongo->colorFilterMax);
+        dodongo->unk_224 = extra.value("unk_224", dodongo->unk_224);
+        dodongo->unk_228 = extra.value("unk_228", dodongo->unk_228);
+        dodongo->unk_22C = extra.value("unk_22C", dodongo->unk_22C);
+        dodongo->unk_230 = extra.value("unk_230", dodongo->unk_230);
+        dodongo->unk_234 = extra.value("unk_234", dodongo->unk_234);
+        dodongo->unk_238 = extra.value("unk_238", dodongo->unk_238);
+        dodongo->unk_23C = extra.value("unk_23C", dodongo->unk_23C);
+        dodongo->unk_240 = extra.value("unk_240", dodongo->unk_240);
+        dodongo->unk_244 = extra.value("unk_244", dodongo->unk_244);
+        ApplyVec3fState(extra, "vec", &dodongo->vec);
+        ApplyVec3fState(extra, "firePos", &dodongo->firePos);
+        ApplyVec3fState(extra, "mouthPos", &dodongo->mouthPos);
+        ApplySkelAnimeState(extra, &dodongo->skelAnime);
+    } else if (actor->id == ACTOR_BOSS_GANONDROF && kind == "BossGanondrof") {
+        BossGanondrof* ganondrof = (BossGanondrof*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetBossGanondrofActionId(ganondrof->actionFunc);
+        if (remoteAction >= 0 && remoteAction != localAction) {
+            BossGanondrofActionFunc remoteFunc = GetBossGanondrofActionFunc(remoteAction);
+            if (remoteFunc != nullptr) {
+                ganondrof->actionFunc = remoteFunc;
+            }
+        }
+        std::vector<s16> work = extra.value("work", std::vector<s16>{});
+        if (work.size() == GND_SHORT_COUNT) {
+            for (s32 i = 0; i < GND_SHORT_COUNT; i++) {
+                ganondrof->work[i] = work[i];
+            }
+        }
+        std::vector<s16> timers = extra.value("timers", std::vector<s16>{});
+        if (timers.size() == 5) {
+            for (s32 i = 0; i < 5; i++) {
+                ganondrof->timers[i] = timers[i];
+            }
+        }
+        ganondrof->killActor = extra.value("killActor", ganondrof->killActor);
+        ganondrof->returnCount = extra.value("returnCount", ganondrof->returnCount);
+        ganondrof->shockTimer = extra.value("shockTimer", ganondrof->shockTimer);
+        ganondrof->flyMode = extra.value("flyMode", ganondrof->flyMode);
+        ganondrof->returnSuccess = extra.value("returnSuccess", ganondrof->returnSuccess);
+        std::vector<f32> fwork = extra.value("fwork", std::vector<f32>{});
+        if (fwork.size() == GND_FLOAT_COUNT) {
+            for (s32 i = 0; i < GND_FLOAT_COUNT; i++) {
+                ganondrof->fwork[i] = fwork[i];
+            }
+        }
+        ApplyVec3fState(extra, "spearTip", &ganondrof->spearTip);
+        ApplyVec3fState(extra, "targetPos", &ganondrof->targetPos);
+        ganondrof->deathCamera = extra.value("deathCamera", ganondrof->deathCamera);
+        ganondrof->deathState = extra.value("deathState", ganondrof->deathState);
+        ganondrof->cameraSpeedMod = extra.value("cameraSpeedMod", ganondrof->cameraSpeedMod);
+        ganondrof->cameraAccel = extra.value("cameraAccel", ganondrof->cameraAccel);
+        ganondrof->legRotY = extra.value("legRotY", ganondrof->legRotY);
+        ganondrof->legRotZ = extra.value("legRotZ", ganondrof->legRotZ);
+        ganondrof->legSplitY = extra.value("legSplitY", ganondrof->legSplitY);
+        ganondrof->armRotY = extra.value("armRotY", ganondrof->armRotY);
+        ganondrof->armRotZ = extra.value("armRotZ", ganondrof->armRotZ);
+        ApplySkelAnimeState(extra, &ganondrof->skelAnime);
     } else if (actor->id == ACTOR_OBJ_OSHIHIKI && kind == "ObjOshihiki") {
         ObjOshihiki* block = (ObjOshihiki*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
@@ -920,6 +1728,108 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         block->dyna.actor.world.rot.y = block->dyna.unk_158;
         block->yawSin = Math_SinS(block->dyna.actor.world.rot.y);
         block->yawCos = Math_CosS(block->dyna.actor.world.rot.y);
+    } else if (actor->id == ACTOR_OBJ_HSBLOCK && kind == "ObjHsblock") {
+        ObjHsblock* block = (ObjHsblock*)actor;
+        ApplyDynaPolyState(extra, &block->dyna);
+    } else if (actor->id == ACTOR_OBJ_ELEVATOR && kind == "ObjElevator") {
+        ObjElevator* elevator = (ObjElevator*)actor;
+        ApplyDynaPolyState(extra, &elevator->dyna);
+        elevator->unk_168 = extra.value("unk_168", elevator->unk_168);
+        elevator->unk_16C = extra.value("unk_16C", elevator->unk_16C);
+        elevator->unk_170 = extra.value("unk_170", elevator->unk_170);
+    } else if (actor->id == ACTOR_OBJ_LIFT && kind == "ObjLift") {
+        ObjLift* lift = (ObjLift*)actor;
+        ApplyDynaPolyState(extra, &lift->dyna);
+        ApplyVec3sState(extra, "shakeOrientation", &lift->shakeOrientation);
+        lift->timer = extra.value("timer", lift->timer);
+    } else if (actor->id == ACTOR_OBJ_TIMEBLOCK && kind == "ObjTimeblock") {
+        ObjTimeblock* timeblock = (ObjTimeblock*)actor;
+        ApplyDynaPolyState(extra, &timeblock->dyna);
+        timeblock->demoEffectTimer = extra.value("demoEffectTimer", timeblock->demoEffectTimer);
+        timeblock->songEndTimer = extra.value("songEndTimer", timeblock->songEndTimer);
+        timeblock->unk_172 = extra.value("unk_172", timeblock->unk_172);
+        timeblock->unk_174 = extra.value("unk_174", timeblock->unk_174);
+        timeblock->unk_175 = extra.value("unk_175", timeblock->unk_175);
+        timeblock->unk_176 = extra.value("unk_176", timeblock->unk_176);
+        timeblock->unk_177 = extra.value("unk_177", timeblock->unk_177);
+        timeblock->isVisible = extra.value("isVisible", timeblock->isVisible);
+    } else if (actor->id == ACTOR_BG_MIZU_WATER && kind == "BgMizuWater") {
+        BgMizuWater* water = (BgMizuWater*)actor;
+        water->type = extra.value("type", water->type);
+        water->targetY = extra.value("targetY", water->targetY);
+        water->baseY = extra.value("baseY", water->baseY);
+        water->switchFlag = extra.value("switchFlag", water->switchFlag);
+    } else if (actor->id == ACTOR_BG_MIZU_MOVEBG && kind == "BgMizuMovebg") {
+        BgMizuMovebg* movebg = (BgMizuMovebg*)actor;
+        ApplyDynaPolyState(extra, &movebg->dyna);
+        movebg->homeY = extra.value("homeY", movebg->homeY);
+        movebg->scrollAlpha1 = extra.value("scrollAlpha1", movebg->scrollAlpha1);
+        movebg->scrollAlpha2 = extra.value("scrollAlpha2", movebg->scrollAlpha2);
+        movebg->scrollAlpha3 = extra.value("scrollAlpha3", movebg->scrollAlpha3);
+        movebg->scrollAlpha4 = extra.value("scrollAlpha4", movebg->scrollAlpha4);
+        movebg->sfxFlags = extra.value("sfxFlags", movebg->sfxFlags);
+        movebg->waypointId = extra.value("waypointId", movebg->waypointId);
+    } else if (actor->id == ACTOR_BG_MIZU_SHUTTER && kind == "BgMizuShutter") {
+        BgMizuShutter* shutter = (BgMizuShutter*)actor;
+        ApplyDynaPolyState(extra, &shutter->dyna);
+        shutter->timer = extra.value("timer", shutter->timer);
+        shutter->timerMax = extra.value("timerMax", shutter->timerMax);
+        shutter->maxSpeed = extra.value("maxSpeed", shutter->maxSpeed);
+        ApplyVec3fState(extra, "closedPos", &shutter->closedPos);
+        ApplyVec3fState(extra, "openPos", &shutter->openPos);
+    } else if (actor->id == ACTOR_BG_HIDAN_FSLIFT && kind == "BgHidanFslift") {
+        BgHidanFslift* lift = (BgHidanFslift*)actor;
+        ApplyDynaPolyState(extra, &lift->dyna);
+        lift->timer = extra.value("timer", lift->timer);
+        lift->cameraSetting = extra.value("cameraSetting", lift->cameraSetting);
+    } else if (actor->id == ACTOR_BG_JYA_COBRA && kind == "BgJyaCobra") {
+        BgJyaCobra* cobra = (BgJyaCobra*)actor;
+        ApplyDynaPolyState(extra, &cobra->dyna);
+        cobra->unk_168 = extra.value("unk_168", cobra->unk_168);
+        cobra->unk_16A = extra.value("unk_16A", cobra->unk_16A);
+        cobra->unk_16C = extra.value("unk_16C", cobra->unk_16C);
+        cobra->unk_16E = extra.value("unk_16E", cobra->unk_16E);
+        cobra->unk_170 = extra.value("unk_170", cobra->unk_170);
+        cobra->unk_172 = extra.value("unk_172", cobra->unk_172);
+        ApplyVec3fState(extra, "unk_174", &cobra->unk_174);
+        ApplyVec3fState(extra, "unk_180", &cobra->unk_180);
+        cobra->unk_18C = extra.value("unk_18C", cobra->unk_18C);
+        cobra->unk_190 = extra.value("unk_190", cobra->unk_190);
+    } else if (actor->id == ACTOR_BG_JYA_BIGMIRROR && kind == "BgJyaBigmirror") {
+        BgJyaBigmirror* mirror = (BgJyaBigmirror*)actor;
+        std::vector<s16> cobraRotY = extra.value("cobraRotY", std::vector<s16>{});
+        if (cobraRotY.size() == 2) {
+            mirror->cobraInfo[0].rotY = cobraRotY[0];
+            mirror->cobraInfo[1].rotY = cobraRotY[1];
+        }
+        mirror->puzzleFlags = extra.value("puzzleFlags", mirror->puzzleFlags);
+        mirror->spawned = extra.value("spawned", mirror->spawned);
+        mirror->liftHeight = extra.value("liftHeight", mirror->liftHeight);
+    } else if (actor->id == ACTOR_BG_HAKA_SHIP && kind == "BgHakaShip") {
+        BgHakaShip* ship = (BgHakaShip*)actor;
+        ApplyDynaPolyState(extra, &ship->dyna);
+        ship->counter = extra.value("counter", ship->counter);
+        ship->switchFlag = extra.value("switchFlag", ship->switchFlag);
+        ship->yOffset = extra.value("yOffset", ship->yOffset);
+        ApplyVec3fState(extra, "bellSoundPos", &ship->bellSoundPos);
+    } else if (actor->id == ACTOR_BG_HAKA_WATER && kind == "BgHakaWater") {
+        BgHakaWater* water = (BgHakaWater*)actor;
+        water->isLowered = extra.value("isLowered", water->isLowered);
+    } else if (actor->id == ACTOR_BG_HAKA_GATE && kind == "BgHakaGate") {
+        BgHakaGate* gate = (BgHakaGate*)actor;
+        ApplyDynaPolyState(extra, &gate->dyna);
+        gate->switchFlag = extra.value("switchFlag", gate->switchFlag);
+        gate->actionVar1 = extra.value("actionVar1", gate->actionVar1);
+        gate->actionVar2 = extra.value("actionVar2", gate->actionVar2);
+        gate->actionVar3 = extra.value("actionVar3", gate->actionVar3);
+        gate->actionVar4 = extra.value("actionVar4", gate->actionVar4);
+        gate->actionVar5 = extra.value("actionVar5", gate->actionVar5);
+    } else if (actor->id == ACTOR_BG_BDAN_OBJECTS && kind == "BgBdanObjects") {
+        BgBdanObjects* objects = (BgBdanObjects*)actor;
+        ApplyDynaPolyState(extra, &objects->dyna);
+        objects->switchFlag = extra.value("switchFlag", objects->switchFlag);
+        objects->timer = extra.value("timer", objects->timer);
+        objects->cameraSetting = extra.value("cameraSetting", objects->cameraSetting);
     }
 }
 

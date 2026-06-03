@@ -53,6 +53,31 @@ static bool IsReportedMovableBlockState(Actor* target, nlohmann::json payload) {
     return payload["extraState"].value("kind", std::string("")) == "ObjOshihiki";
 }
 
+static bool IsReportedPuzzleActorState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    std::string kind = payload["extraState"].value("kind", std::string(""));
+    switch (target->id) {
+        case ACTOR_OBJ_HSBLOCK: return kind == "ObjHsblock";
+        case ACTOR_OBJ_ELEVATOR: return kind == "ObjElevator";
+        case ACTOR_OBJ_LIFT: return kind == "ObjLift";
+        case ACTOR_OBJ_TIMEBLOCK: return kind == "ObjTimeblock";
+        case ACTOR_BG_MIZU_WATER: return kind == "BgMizuWater";
+        case ACTOR_BG_MIZU_MOVEBG: return kind == "BgMizuMovebg";
+        case ACTOR_BG_MIZU_SHUTTER: return kind == "BgMizuShutter";
+        case ACTOR_BG_HIDAN_FSLIFT: return kind == "BgHidanFslift";
+        case ACTOR_BG_JYA_COBRA: return kind == "BgJyaCobra";
+        case ACTOR_BG_JYA_BIGMIRROR: return kind == "BgJyaBigmirror";
+        case ACTOR_BG_HAKA_SHIP: return kind == "BgHakaShip";
+        case ACTOR_BG_HAKA_WATER: return kind == "BgHakaWater";
+        case ACTOR_BG_HAKA_GATE: return kind == "BgHakaGate";
+        case ACTOR_BG_BDAN_OBJECTS: return kind == "BgBdanObjects";
+        default: return false;
+    }
+}
+
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
     nlohmann::json extraState = GetEnemyExtraState(actor);
     if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
@@ -76,6 +101,10 @@ static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload
 }
 
 static void ApplyReportedEnemyDeathMotion(Actor* target, nlohmann::json payload) {
+    target->world.pos.x = payload.value("posX", target->world.pos.x);
+    target->world.pos.y = payload.value("posY", target->world.pos.y);
+    target->world.pos.z = payload.value("posZ", target->world.pos.z);
+    target->prevPos = target->world.pos;
     target->world.rot.x = payload.value("worldRotX", target->world.rot.x);
     target->world.rot.y = payload.value("worldRotY", target->world.rot.y);
     target->world.rot.z = payload.value("worldRotZ", target->world.rot.z);
@@ -140,7 +169,7 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
 
     ApplyEnemyExtraState(target, extraState);
 
-    if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_OBJ_OSHIHIKI) {
+    if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_OBJ_OSHIHIKI || IsReportedPuzzleActorState(target, payload)) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;
     }
@@ -310,8 +339,9 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     bool hasReportedState = HasReportedEnemyState(payload);
     bool hasReportedNonDamageState = health == target->colChkInfo.health &&
-                                     (IsReportedDekunutsFleeState(target, payload) ||
-                                      IsReportedMovableBlockState(target, payload));
+                                      (IsReportedDekunutsFleeState(target, payload) ||
+                                       IsReportedMovableBlockState(target, payload) ||
+                                       IsReportedPuzzleActorState(target, payload));
 
     if (hasReportedNonDamageState) {
         ApplyReportedEnemyState(target, payload);

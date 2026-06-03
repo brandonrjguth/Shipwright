@@ -43,4 +43,5 @@ void Anchor::HandlePacket_RequestRoomEnemies(nlohmann::json payload) {
     SendPacket_SendRoomEnemies(clientId, ACTORCAT_BOSS);
     SendPacket_SendRoomEnemies(clientId, ACTORCAT_NPC);
     SendPacket_SendRoomEnemies(clientId, ACTORCAT_PROP);
+    SendPacket_SendRoomEnemies(clientId, ACTORCAT_BG);
 }
