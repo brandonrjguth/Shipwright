@@ -78,6 +78,9 @@ void EnDekubaba_Sway(EnDekubaba*, PlayState*);
 void EnDekubaba_PrunedSomersault(EnDekubaba*, PlayState*);
 void EnDekubaba_ShrinkDie(EnDekubaba*, PlayState*);
 void EnDekubaba_DeadStickDrop(EnDekubaba*, PlayState*);
+void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
+void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
+void EnDekubaba_SetupDeadStickDrop(EnDekubaba* thisx, PlayState* play);
 void EnShopnuts_SetupWait(EnShopnuts* thisx);
 void EnShopnuts_SetupLookAround(EnShopnuts* thisx);
 void EnShopnuts_SetupThrowNut(EnShopnuts* thisx);
@@ -335,6 +338,7 @@ static void ApplyShopnutsAction(EnShopnuts* shopnuts, s32 action) {
         return;
     }
 
+    ActorMotionSnapshot motion = CaptureActorMotion(&shopnuts->actor);
     switch (action) {
         case SHOPNUTS_ACTION_WAIT:
             EnShopnuts_SetupWait(shopnuts);
@@ -357,6 +361,7 @@ static void ApplyShopnutsAction(EnShopnuts* shopnuts, s32 action) {
         default:
             break;
     }
+    RestoreActorMotion(&shopnuts->actor, motion);
 }
 
 static bool IsShopnutsCaughtAction(s32 action) {
@@ -647,6 +652,26 @@ static EnDekubabaActionFunc GetDekubabaActionFunc(s32 actionId) {
 static void ApplyDekubabaAction(EnDekubaba* dekubaba, s32 action) {
     if (dekubaba == nullptr || action < 0 || action == GetDekubabaActionId(dekubaba->actionFunc)) {
         return;
+    }
+
+    if (dekubaba->actor.colChkInfo.health == 0) {
+        switch (action) {
+            case DEKUBABA_ACTION_PRUNED_SOMERSAULT:
+                EnDekubaba_SetupPrunedSomersault(dekubaba);
+                return;
+            case DEKUBABA_ACTION_SHRINK_DIE:
+                EnDekubaba_SetupShrinkDie(dekubaba);
+                return;
+            case DEKUBABA_ACTION_DEAD_STICK_DROP:
+                if (gPlayState != nullptr) {
+                    EnDekubaba_SetupDeadStickDrop(dekubaba, gPlayState);
+                } else {
+                    dekubaba->actionFunc = EnDekubaba_DeadStickDrop;
+                }
+                return;
+            default:
+                break;
+        }
     }
 
     EnDekubabaActionFunc remoteFunc = GetDekubabaActionFunc(action);
@@ -1166,10 +1191,21 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
     }
 
     if (actor->id == ACTOR_EN_DEKUNUTS) {
+        if (authorityExtra.value("kind", std::string("")) == "EnDekunuts") {
+            s32 remoteAction = authorityExtra.value("action", (s32)-1);
+            if (IsDekunutsFleeAction(remoteAction) || remoteAction == DEKUNUTS_ACTION_BE_DAMAGED ||
+                remoteAction == DEKUNUTS_ACTION_BE_STUNNED || remoteAction == DEKUNUTS_ACTION_DIE) {
+                return false;
+            }
+        }
         return true;
     }
 
     if (actor->id == ACTOR_EN_SHOPNUTS) {
+        if (authorityExtra.value("kind", std::string("")) == "EnShopnuts" &&
+            IsShopnutsCaughtAction(authorityExtra.value("action", (s32)-1))) {
+            return false;
+        }
         return true;
     }
 
