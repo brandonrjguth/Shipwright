@@ -1059,48 +1059,6 @@ static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
     skelAnime->morphRate = extra.value("skelMorphRate", skelAnime->morphRate);
 }
 
-static void AddGenericActorExtraState(nlohmann::json& extra, Actor* actor) {
-    if (actor == nullptr) {
-        return;
-    }
-
-    extra["kind"] = "GenericActor";
-    extra["genericActorFlags"] = actor->flags;
-    extra["genericTargetMode"] = actor->targetMode;
-    extra["genericNaviEnemyId"] = actor->naviEnemyId;
-    extra["genericMass"] = actor->colChkInfo.mass;
-    extra["genericBgCheckFlags"] = actor->bgCheckFlags;
-    extra["genericFloorHeight"] = actor->floorHeight;
-    extra["genericShapeYOffset"] = actor->shape.yOffset;
-    extra["genericShadowScale"] = actor->shape.shadowScale;
-    extra["genericShadowAlpha"] = actor->shape.shadowAlpha;
-    AddVec3fState(extra, "genericHomePos", actor->home.pos);
-    AddVec3sState(extra, "genericHomeRot", actor->home.rot);
-    AddVec3fState(extra, "genericFocusPos", actor->focus.pos);
-}
-
-static void ApplyGenericActorExtraState(Actor* actor, nlohmann::json extra) {
-    if (actor == nullptr || !extra.is_object()) {
-        return;
-    }
-
-    constexpr u32 syncedFlagMask = ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE |
-                                   ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED;
-    u32 remoteFlags = extra.value("genericActorFlags", actor->flags);
-    actor->flags = (actor->flags & ~syncedFlagMask) | (remoteFlags & syncedFlagMask);
-    actor->targetMode = extra.value("genericTargetMode", actor->targetMode);
-    actor->naviEnemyId = extra.value("genericNaviEnemyId", actor->naviEnemyId);
-    actor->colChkInfo.mass = extra.value("genericMass", actor->colChkInfo.mass);
-    actor->bgCheckFlags = extra.value("genericBgCheckFlags", actor->bgCheckFlags);
-    actor->floorHeight = extra.value("genericFloorHeight", actor->floorHeight);
-    actor->shape.yOffset = extra.value("genericShapeYOffset", actor->shape.yOffset);
-    actor->shape.shadowScale = extra.value("genericShadowScale", actor->shape.shadowScale);
-    actor->shape.shadowAlpha = extra.value("genericShadowAlpha", actor->shape.shadowAlpha);
-    ApplyVec3fState(extra, "genericHomePos", &actor->home.pos);
-    ApplyVec3sState(extra, "genericHomeRot", &actor->home.rot);
-    ApplyVec3fState(extra, "genericFocusPos", &actor->focus.pos);
-}
-
 static void EnsureEnStDeathState(EnSt* st) {
     if (st == nullptr || st->actor.colChkInfo.health != 0) {
         return;
@@ -1234,7 +1192,6 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
 
 nlohmann::json GetEnemyExtraState(Actor* actor) {
     nlohmann::json extra = nlohmann::json::object();
-    AddGenericActorExtraState(extra, actor);
 
     switch (actor->id) {
         case ACTOR_EN_DEKUNUTS: {
@@ -1819,7 +1776,6 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     }
 
     std::string kind = extra.value("kind", "");
-    ApplyGenericActorExtraState(actor, extra);
 
     if (actor->id == ACTOR_EN_DEKUNUTS && kind == "EnDekunuts") {
         EnDekunuts* dekunuts = (EnDekunuts*)actor;
@@ -2639,10 +2595,8 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
             target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f);
             SetEnemyNetworkId(target, networkIds[i]);
             if (target == nullptr && !actorParams.empty()) {
-                spawningNetworkedEnemyDropId = networkIds[i];
                 target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],
                                      worldRotY[i], worldRotZ[i], actorParams[i]);
-                spawningNetworkedEnemyDropId = 0;
                 SetEnemyNetworkId(target, networkIds[i]);
             }
         } else if (target == nullptr && (actorIds[i] == ACTOR_EN_ITEM00 || actorIds[i] == ACTOR_EN_ELF) &&

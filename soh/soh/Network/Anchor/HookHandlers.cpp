@@ -150,24 +150,10 @@ void Anchor::RegisterHooks() {
         }
     };
 
-    auto suppressReplicaEnemyChild = [&](void* actorRef, bool* should) {
-        Actor* actor = (Actor*)actorRef;
-        if (!IsRoomStable() || spawningNetworkedEnemyDropId != 0 || HasEnemySyncAuthority()) {
-            return;
-        }
-
-        bool isDynamicGomaActor = actor->id == ACTOR_EN_GOMA && (actor->params < 6 || actor->params >= 10);
-        if (actor->id == ACTOR_EN_NUTSBALL || isDynamicGomaActor) {
-            *should = false;
-        }
-    };
-
     COND_ID_HOOK(ShouldActorInit, ACTOR_EN_ITEM00, isConnected, suppressReplicaEnemyDrop);
     COND_ID_HOOK(ShouldActorInit, ACTOR_EN_ELF, isConnected, suppressReplicaEnemyDrop);
     COND_ID_HOOK(OnActorInit, ACTOR_EN_ITEM00, isConnected, markAuthorityEnemyDrop);
     COND_ID_HOOK(OnActorInit, ACTOR_EN_ELF, isConnected, markAuthorityEnemyDrop);
-    COND_ID_HOOK(ShouldActorInit, ACTOR_EN_NUTSBALL, isConnected, suppressReplicaEnemyChild);
-    COND_ID_HOOK(ShouldActorInit, ACTOR_EN_GOMA, isConnected, suppressReplicaEnemyChild);
 
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_DNS, isConnected, [&](void* refActor, bool* should) {
         ClearDummyBusinessScrubTalkOffer(static_cast<EnDns*>(refActor));
