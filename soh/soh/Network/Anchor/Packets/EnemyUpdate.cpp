@@ -205,13 +205,24 @@ static ObjOshihikiActionFunc GetObjOshihikiActionFunc(s32 actionId) {
     }
 }
 
+static bool IsLocalPlayerPushingObjOshihiki(ObjOshihiki* block) {
+    if (block == nullptr || gPlayState == nullptr) {
+        return false;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    return player != nullptr && (player->stateFlags2 & PLAYER_STATE2_MOVING_DYNAPOLY) &&
+           player->actor.wallBgId == block->dyna.bgId;
+}
+
 static bool IsObjOshihikiMoving(ObjOshihiki* block) {
     if (block == nullptr) {
         return false;
     }
 
-    constexpr u16 movingFlags = PUSHBLOCK_SETUP_PUSH | PUSHBLOCK_PUSH | PUSHBLOCK_SETUP_FALL | PUSHBLOCK_FALL;
-    return (block->stateFlags & movingFlags) != 0 || fabsf(block->dyna.unk_150) > 0.001f ||
+    s32 action = GetObjOshihikiActionId(block->actionFunc);
+    return IsLocalPlayerPushingObjOshihiki(block) || action == OBJOSHIHIKI_ACTION_PUSH ||
+           action == OBJOSHIHIKI_ACTION_FALL || fabsf(block->pushDist) > 0.001f ||
            fabsf(block->dyna.actor.velocity.y) > 0.001f;
 }
 
@@ -1129,7 +1140,6 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             ObjOshihiki* block = (ObjOshihiki*)actor;
             extra["kind"] = "ObjOshihiki";
             extra["action"] = GetObjOshihikiActionId(block->actionFunc);
-            extra["stateFlags"] = block->stateFlags;
             extra["timer"] = block->timer;
             extra["pushSpeed"] = block->pushSpeed;
             extra["pushDist"] = block->pushDist;
@@ -1707,7 +1717,6 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
                 block->actionFunc = remoteFunc;
             }
         }
-        block->stateFlags = extra.value("stateFlags", block->stateFlags);
         block->timer = extra.value("timer", block->timer);
         block->pushSpeed = extra.value("pushSpeed", block->pushSpeed);
         block->pushDist = extra.value("pushDist", block->pushDist);
