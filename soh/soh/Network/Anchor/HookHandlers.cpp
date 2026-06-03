@@ -62,6 +62,35 @@ float OTRGetDimensionFromRightEdge(float v);
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
 
+static void ClearDummyBusinessScrubTalkOffer(EnDns* scrub) {
+    if (scrub == nullptr) {
+        return;
+    }
+
+    Actor* collidedActor = scrub->collider.base.oc;
+    if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update) {
+        scrub->collider.base.oc = nullptr;
+        scrub->collider.base.ocFlags1 &= ~OC1_HIT;
+        scrub->actor.flags &= ~ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED;
+    }
+}
+
+static void ClearDummyBusinessScrubTalkOffers() {
+    if (gPlayState == nullptr) {
+        return;
+    }
+
+    for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
+        Actor* actor = gPlayState->actorCtx.actorLists[category].head;
+        while (actor != nullptr) {
+            if (actor->id == ACTOR_EN_DNS) {
+                ClearDummyBusinessScrubTalkOffer((EnDns*)actor);
+            }
+            actor = actor->next;
+        }
+    }
+}
+
 void Anchor::RegisterHooks() {
 
     // #region Hooks that are required for basic Anchor functionality
@@ -127,13 +156,7 @@ void Anchor::RegisterHooks() {
     COND_ID_HOOK(OnActorInit, ACTOR_EN_ELF, isConnected, markAuthorityEnemyDrop);
 
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_DNS, isConnected, [&](void* refActor, bool* should) {
-        EnDns* scrub = static_cast<EnDns*>(refActor);
-        Actor* collidedActor = scrub->collider.base.oc;
-        if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update) {
-            scrub->collider.base.oc = nullptr;
-            scrub->collider.base.ocFlags1 &= ~OC1_HIT;
-            scrub->actor.flags &= ~ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED;
-        }
+        ClearDummyBusinessScrubTalkOffer(static_cast<EnDns*>(refActor));
     });
 
     COND_HOOK(OnPlayerUpdate, isConnected, [&]() {
@@ -153,7 +176,10 @@ void Anchor::RegisterHooks() {
         SendPacket_PlayerUpdate();
     });
 
-    COND_HOOK(OnGameFrameUpdate, isConnected, [&]() { ProcessIncomingPacketQueue(); });
+    COND_HOOK(OnGameFrameUpdate, isConnected, [&]() {
+        ClearDummyBusinessScrubTalkOffers();
+        ProcessIncomingPacketQueue();
+    });
 
     COND_HOOK(OnActorUpdate, isConnected, [&](void* refActor) {
         if (!IsRoomStable()) {

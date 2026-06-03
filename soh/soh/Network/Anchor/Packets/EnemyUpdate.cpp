@@ -8,6 +8,8 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Shopnuts/z_en_shopnuts.h"
+#include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
+#include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
 #undef this
@@ -66,6 +68,20 @@ void EnDekubaba_Sway(EnDekubaba*, PlayState*);
 void EnDekubaba_PrunedSomersault(EnDekubaba*, PlayState*);
 void EnDekubaba_ShrinkDie(EnDekubaba*, PlayState*);
 void EnDekubaba_DeadStickDrop(EnDekubaba*, PlayState*);
+void EnDekubaba_SetupWait(EnDekubaba* thisx);
+void EnDekubaba_SetupGrow(EnDekubaba* thisx);
+void EnDekubaba_SetupRetract(EnDekubaba* thisx);
+void EnDekubaba_SetupDecideLunge(EnDekubaba* thisx);
+void EnDekubaba_SetupPrepareLunge(EnDekubaba* thisx);
+void EnDekubaba_SetupLunge(EnDekubaba* thisx);
+void EnDekubaba_SetupPullBack(EnDekubaba* thisx);
+void EnDekubaba_SetupRecover(EnDekubaba* thisx);
+void EnDekubaba_SetupHit(EnDekubaba* thisx, s32 arg1);
+void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
+void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
+void EnDekubaba_SetupStunnedVertical(EnDekubaba* thisx);
+void EnDekubaba_SetupSway(EnDekubaba* thisx);
+void EnDekubaba_SetupDeadStickDrop(EnDekubaba* thisx, PlayState* play);
 void EnShopnuts_SetupWait(EnShopnuts* thisx);
 void EnShopnuts_SetupLookAround(EnShopnuts* thisx);
 void EnShopnuts_SetupThrowNut(EnShopnuts* thisx);
@@ -78,6 +94,35 @@ void EnShopnuts_Stand(EnShopnuts* thisx, PlayState* play);
 void EnShopnuts_ThrowNut(EnShopnuts* thisx, PlayState* play);
 void EnShopnuts_Burrow(EnShopnuts* thisx, PlayState* play);
 void EnShopnuts_SpawnSalesman(EnShopnuts* thisx, PlayState* play);
+void EnGoma_Flee(EnGoma* thisx, PlayState* play);
+void EnGoma_EggFallToGround(EnGoma* thisx, PlayState* play);
+void EnGoma_Egg(EnGoma* thisx, PlayState* play);
+void EnGoma_Hatch(EnGoma* thisx, PlayState* play);
+void EnGoma_Hurt(EnGoma* thisx, PlayState* play);
+void EnGoma_Die(EnGoma* thisx, PlayState* play);
+void EnGoma_Dead(EnGoma* thisx, PlayState* play);
+void EnGoma_PrepareJump(EnGoma* thisx, PlayState* play);
+void EnGoma_Land(EnGoma* thisx, PlayState* play);
+void EnGoma_Jump(EnGoma* thisx, PlayState* play);
+void EnGoma_Stand(EnGoma* thisx, PlayState* play);
+void EnGoma_ChasePlayer(EnGoma* thisx, PlayState* play);
+void EnGoma_Stunned(EnGoma* thisx, PlayState* play);
+void EnGoma_Debris(EnGoma* thisx, PlayState* play);
+void EnGoma_BossLimb(EnGoma* thisx, PlayState* play);
+void EnGoma_SetupFlee(EnGoma* thisx);
+void EnGoma_SetupHatch(EnGoma* thisx, PlayState* play);
+void EnGoma_SetupHurt(EnGoma* thisx, PlayState* play);
+void EnGoma_SetupDie(EnGoma* thisx);
+void EnGoma_SetupDead(EnGoma* thisx);
+void EnGoma_SetupStand(EnGoma* thisx);
+void EnGoma_SetupChasePlayer(EnGoma* thisx);
+void EnGoma_SetupPrepareJump(EnGoma* thisx);
+void EnGoma_SetupLand(EnGoma* thisx);
+void EnGoma_SetupJump(EnGoma* thisx);
+void EnGoma_SetupStunned(EnGoma* thisx, PlayState* play);
+void func_80ABBB34(EnNutsball* thisx, PlayState* play);
+void func_80ABBBA8(EnNutsball* thisx, PlayState* play);
+void EnNutsball_Draw(Actor* thisx, PlayState* play);
 }
 
 void EnSt_SetupAction(EnSt* thisx, EnStActionFunc actionFunc);
@@ -193,6 +238,35 @@ static bool IsDekunutsFleeAction(s32 action) {
     return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
 }
 
+struct ActorMotionSnapshot {
+    Vec3f pos;
+    Vec3f prevPos;
+    Vec3s worldRot;
+    Vec3s shapeRot;
+    Vec3f scale;
+    Vec3f velocity;
+    f32 speedXZ;
+    f32 gravity;
+    f32 minVelocityY;
+};
+
+static ActorMotionSnapshot CaptureActorMotion(Actor* actor) {
+    return { actor->world.pos, actor->prevPos, actor->world.rot, actor->shape.rot, actor->scale,
+             actor->velocity, actor->speedXZ, actor->gravity, actor->minVelocityY };
+}
+
+static void RestoreActorMotion(Actor* actor, ActorMotionSnapshot motion) {
+    actor->world.pos = motion.pos;
+    actor->prevPos = motion.prevPos;
+    actor->world.rot = motion.worldRot;
+    actor->shape.rot = motion.shapeRot;
+    actor->scale = motion.scale;
+    actor->velocity = motion.velocity;
+    actor->speedXZ = motion.speedXZ;
+    actor->gravity = motion.gravity;
+    actor->minVelocityY = motion.minVelocityY;
+}
+
 enum ShopnutsAction : s32 {
     SHOPNUTS_ACTION_WAIT = 0,
     SHOPNUTS_ACTION_LOOK_AROUND = 1,
@@ -243,6 +317,137 @@ static void ApplyShopnutsAction(EnShopnuts* shopnuts, s32 action) {
 
 static bool IsShopnutsCaughtAction(s32 action) {
     return action == SHOPNUTS_ACTION_SPAWN_SALESMAN;
+}
+
+enum GomaAction : s32 {
+    GOMA_ACTION_FLEE = 0,
+    GOMA_ACTION_EGG_FALL_TO_GROUND = 1,
+    GOMA_ACTION_EGG = 2,
+    GOMA_ACTION_HATCH = 3,
+    GOMA_ACTION_HURT = 4,
+    GOMA_ACTION_DIE = 5,
+    GOMA_ACTION_DEAD = 6,
+    GOMA_ACTION_PREPARE_JUMP = 7,
+    GOMA_ACTION_LAND = 8,
+    GOMA_ACTION_JUMP = 9,
+    GOMA_ACTION_STAND = 10,
+    GOMA_ACTION_CHASE_PLAYER = 11,
+    GOMA_ACTION_STUNNED = 12,
+    GOMA_ACTION_DEBRIS = 13,
+    GOMA_ACTION_BOSS_LIMB = 14,
+};
+
+static s32 GetGomaActionId(EnGomaActionFunc actionFunc) {
+    if (actionFunc == EnGoma_Flee) return GOMA_ACTION_FLEE;
+    if (actionFunc == EnGoma_EggFallToGround) return GOMA_ACTION_EGG_FALL_TO_GROUND;
+    if (actionFunc == EnGoma_Egg) return GOMA_ACTION_EGG;
+    if (actionFunc == EnGoma_Hatch) return GOMA_ACTION_HATCH;
+    if (actionFunc == EnGoma_Hurt) return GOMA_ACTION_HURT;
+    if (actionFunc == EnGoma_Die) return GOMA_ACTION_DIE;
+    if (actionFunc == EnGoma_Dead) return GOMA_ACTION_DEAD;
+    if (actionFunc == EnGoma_PrepareJump) return GOMA_ACTION_PREPARE_JUMP;
+    if (actionFunc == EnGoma_Land) return GOMA_ACTION_LAND;
+    if (actionFunc == EnGoma_Jump) return GOMA_ACTION_JUMP;
+    if (actionFunc == EnGoma_Stand) return GOMA_ACTION_STAND;
+    if (actionFunc == EnGoma_ChasePlayer) return GOMA_ACTION_CHASE_PLAYER;
+    if (actionFunc == EnGoma_Stunned) return GOMA_ACTION_STUNNED;
+    if (actionFunc == EnGoma_Debris) return GOMA_ACTION_DEBRIS;
+    if (actionFunc == EnGoma_BossLimb) return GOMA_ACTION_BOSS_LIMB;
+    return -1;
+}
+
+static void ApplyGomaAction(EnGoma* goma, s32 action) {
+    if (goma == nullptr || action < 0 || action == GetGomaActionId(goma->actionFunc)) {
+        return;
+    }
+
+    ActorMotionSnapshot motion = CaptureActorMotion(&goma->actor);
+    switch (action) {
+        case GOMA_ACTION_FLEE:
+            EnGoma_SetupFlee(goma);
+            break;
+        case GOMA_ACTION_EGG_FALL_TO_GROUND:
+            goma->actionFunc = EnGoma_EggFallToGround;
+            break;
+        case GOMA_ACTION_EGG:
+            goma->actionFunc = EnGoma_Egg;
+            break;
+        case GOMA_ACTION_HATCH:
+            if (gPlayState != nullptr) {
+                EnGoma_SetupHatch(goma, gPlayState);
+            } else {
+                goma->actionFunc = EnGoma_Hatch;
+            }
+            break;
+        case GOMA_ACTION_HURT:
+            if (gPlayState != nullptr) {
+                EnGoma_SetupHurt(goma, gPlayState);
+            } else {
+                goma->actionFunc = EnGoma_Hurt;
+            }
+            break;
+        case GOMA_ACTION_DIE:
+            EnGoma_SetupDie(goma);
+            break;
+        case GOMA_ACTION_DEAD:
+            EnGoma_SetupDead(goma);
+            break;
+        case GOMA_ACTION_PREPARE_JUMP:
+            EnGoma_SetupPrepareJump(goma);
+            break;
+        case GOMA_ACTION_LAND:
+            EnGoma_SetupLand(goma);
+            break;
+        case GOMA_ACTION_JUMP:
+            EnGoma_SetupJump(goma);
+            break;
+        case GOMA_ACTION_STAND:
+            EnGoma_SetupStand(goma);
+            break;
+        case GOMA_ACTION_CHASE_PLAYER:
+            EnGoma_SetupChasePlayer(goma);
+            break;
+        case GOMA_ACTION_STUNNED:
+            if (gPlayState != nullptr) {
+                EnGoma_SetupStunned(goma, gPlayState);
+            } else {
+                goma->actionFunc = EnGoma_Stunned;
+            }
+            break;
+        case GOMA_ACTION_DEBRIS:
+            goma->actionFunc = EnGoma_Debris;
+            break;
+        case GOMA_ACTION_BOSS_LIMB:
+            goma->actionFunc = EnGoma_BossLimb;
+            break;
+    }
+    RestoreActorMotion(&goma->actor, motion);
+}
+
+enum NutsballAction : s32 {
+    NUTSBALL_ACTION_LOAD_OBJECT = 0,
+    NUTSBALL_ACTION_FLY = 1,
+};
+
+static s32 GetNutsballActionId(EnNutsballActionFunc actionFunc) {
+    if (actionFunc == func_80ABBB34) return NUTSBALL_ACTION_LOAD_OBJECT;
+    if (actionFunc == func_80ABBBA8) return NUTSBALL_ACTION_FLY;
+    return -1;
+}
+
+static void ApplyNutsballAction(EnNutsball* nutsball, s32 action) {
+    if (nutsball == nullptr || action < 0 || action == GetNutsballActionId(nutsball->actionFunc)) {
+        return;
+    }
+
+    switch (action) {
+        case NUTSBALL_ACTION_LOAD_OBJECT:
+            nutsball->actionFunc = func_80ABBB34;
+            break;
+        case NUTSBALL_ACTION_FLY:
+            nutsball->actionFunc = func_80ABBBA8;
+            break;
+    }
 }
 
 enum ObjOshihikiAction : s32 {
@@ -393,6 +598,63 @@ static EnDekubabaActionFunc GetDekubabaActionFunc(s32 actionId) {
         case DEKUBABA_ACTION_DEAD_STICK_DROP: return EnDekubaba_DeadStickDrop;
         default: return nullptr;
     }
+}
+
+static void ApplyDekubabaAction(EnDekubaba* dekubaba, s32 action, nlohmann::json extra) {
+    if (dekubaba == nullptr || action < 0 || action == GetDekubabaActionId(dekubaba->actionFunc)) {
+        return;
+    }
+
+    ActorMotionSnapshot motion = CaptureActorMotion(&dekubaba->actor);
+    switch (action) {
+        case DEKUBABA_ACTION_WAIT:
+            EnDekubaba_SetupWait(dekubaba);
+            break;
+        case DEKUBABA_ACTION_GROW:
+            EnDekubaba_SetupGrow(dekubaba);
+            break;
+        case DEKUBABA_ACTION_RETRACT:
+            EnDekubaba_SetupRetract(dekubaba);
+            break;
+        case DEKUBABA_ACTION_DECIDE_LUNGE:
+            EnDekubaba_SetupDecideLunge(dekubaba);
+            break;
+        case DEKUBABA_ACTION_PREPARE_LUNGE:
+            EnDekubaba_SetupPrepareLunge(dekubaba);
+            break;
+        case DEKUBABA_ACTION_LUNGE:
+            EnDekubaba_SetupLunge(dekubaba);
+            break;
+        case DEKUBABA_ACTION_PULL_BACK:
+            EnDekubaba_SetupPullBack(dekubaba);
+            break;
+        case DEKUBABA_ACTION_RECOVER:
+            EnDekubaba_SetupRecover(dekubaba);
+            break;
+        case DEKUBABA_ACTION_HIT:
+            EnDekubaba_SetupHit(dekubaba, extra.value("timer", (s16)0));
+            break;
+        case DEKUBABA_ACTION_STUNNED_VERTICAL:
+            EnDekubaba_SetupStunnedVertical(dekubaba);
+            break;
+        case DEKUBABA_ACTION_SWAY:
+            EnDekubaba_SetupSway(dekubaba);
+            break;
+        case DEKUBABA_ACTION_PRUNED_SOMERSAULT:
+            EnDekubaba_SetupPrunedSomersault(dekubaba);
+            break;
+        case DEKUBABA_ACTION_SHRINK_DIE:
+            EnDekubaba_SetupShrinkDie(dekubaba);
+            break;
+        case DEKUBABA_ACTION_DEAD_STICK_DROP:
+            if (gPlayState != nullptr) {
+                EnDekubaba_SetupDeadStickDrop(dekubaba, gPlayState);
+            } else {
+                dekubaba->actionFunc = EnDekubaba_DeadStickDrop;
+            }
+            break;
+    }
+    RestoreActorMotion(&dekubaba->actor, motion);
 }
 
 enum EnStAction : s32 {
@@ -958,6 +1220,14 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["size"] = dekubaba->size;
             extra["colliderColType"] = dekubaba->collider.base.colType;
             extra["colliderAcHard"] = (dekubaba->collider.base.acFlags & AC_HARD) != 0;
+            std::vector<f32> bodyPartsPos;
+            bodyPartsPos.reserve(12);
+            for (s32 i = 0; i < 4; i++) {
+                bodyPartsPos.push_back(dekubaba->bodyPartsPos[i].x);
+                bodyPartsPos.push_back(dekubaba->bodyPartsPos[i].y);
+                bodyPartsPos.push_back(dekubaba->bodyPartsPos[i].z);
+            }
+            extra["bodyPartsPos"] = bodyPartsPos;
             AddSkelAnimeState(extra, &dekubaba->skelAnime);
             break;
         }
@@ -1147,6 +1417,48 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["yOffsetStep"] = reeba->yOffsetStep;
             extra["scale"] = reeba->scale;
             AddSkelAnimeState(extra, &reeba->skelanime);
+            break;
+        }
+        case ACTOR_EN_GOMA: {
+            EnGoma* goma = (EnGoma*)actor;
+            extra["kind"] = "EnGoma";
+            extra["action"] = GetGomaActionId(goma->actionFunc);
+            extra["slopePitch"] = goma->slopePitch;
+            extra["slopeRoll"] = goma->slopeRoll;
+            extra["gomaType"] = goma->gomaType;
+            extra["eyePitch"] = goma->eyePitch;
+            extra["eyeYaw"] = goma->eyeYaw;
+            extra["hatchState"] = goma->hatchState;
+            extra["eggTimer"] = goma->eggTimer;
+            extra["hurtTimer"] = goma->hurtTimer;
+            extra["visualState"] = goma->visualState;
+            extra["playerDetectionTimer"] = goma->playerDetectionTimer;
+            extra["spawnNum"] = goma->spawnNum;
+            extra["invincibilityTimer"] = goma->invincibilityTimer;
+            extra["actionTimer"] = goma->actionTimer;
+            extra["eggScale"] = goma->eggScale;
+            extra["eggPitch"] = goma->eggPitch;
+            extra["eggSquishAngle"] = goma->eggSquishAngle;
+            extra["eggSquishAccel"] = goma->eggSquishAccel;
+            extra["eggSquishAmount"] = goma->eggSquishAmount;
+            extra["eggYOffset"] = goma->eggYOffset;
+            extra["unk_2F4"] = goma->unk_2F4;
+            extra["stunTimer"] = goma->stunTimer;
+            extra["eyeEnvColor"] = { goma->eyeEnvColor[0], goma->eyeEnvColor[1], goma->eyeEnvColor[2] };
+            AddVec3fState(extra, "shieldKnockbackVel", goma->shieldKnockbackVel);
+            AddSkelAnimeState(extra, &goma->skelanime);
+            break;
+        }
+        case ACTOR_EN_NUTSBALL: {
+            EnNutsball* nutsball = (EnNutsball*)actor;
+            extra["kind"] = "EnNutsball";
+            extra["action"] = GetNutsballActionId(nutsball->actionFunc);
+            extra["objBankIndex"] = nutsball->objBankIndex;
+            extra["timer"] = nutsball->timer;
+            extra["homeRotZ"] = nutsball->actor.home.rot.z;
+            extra["drawEnabled"] = nutsball->actor.draw != nullptr;
+            extra["colliderAtTypeEnemy"] = (nutsball->collider.base.atFlags & AT_TYPE_ENEMY) != 0;
+            extra["colliderAtTypePlayer"] = (nutsball->collider.base.atFlags & AT_TYPE_PLAYER) != 0;
             break;
         }
         case ACTOR_BOSS_GOMA: {
@@ -1493,13 +1805,7 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     } else if (actor->id == ACTOR_EN_DEKUBABA && kind == "EnDekubaba") {
         EnDekubaba* dekubaba = (EnDekubaba*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
-        s32 localAction = GetDekubabaActionId(dekubaba->actionFunc);
-        if (remoteAction >= 0 && remoteAction != localAction) {
-            EnDekubabaActionFunc remoteFunc = GetDekubabaActionFunc(remoteAction);
-            if (remoteFunc != nullptr) {
-                dekubaba->actionFunc = remoteFunc;
-            }
-        }
+        ApplyDekubabaAction(dekubaba, remoteAction, extra);
         dekubaba->timer = extra.value("timer", dekubaba->timer);
         dekubaba->targetSwayAngle = extra.value("targetSwayAngle", dekubaba->targetSwayAngle);
         std::vector<s16> stemSectionAngle = extra.value("stemSectionAngle", std::vector<s16>{});
@@ -1509,6 +1815,14 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             dekubaba->stemSectionAngle[2] = stemSectionAngle[2];
         }
         dekubaba->size = extra.value("size", dekubaba->size);
+        std::vector<f32> bodyPartsPos = extra.value("bodyPartsPos", std::vector<f32>{});
+        if (bodyPartsPos.size() == 12) {
+            for (s32 i = 0; i < 4; i++) {
+                dekubaba->bodyPartsPos[i].x = bodyPartsPos[(i * 3) + 0];
+                dekubaba->bodyPartsPos[i].y = bodyPartsPos[(i * 3) + 1];
+                dekubaba->bodyPartsPos[i].z = bodyPartsPos[(i * 3) + 2];
+            }
+        }
         dekubaba->collider.base.colType = extra.value("colliderColType", dekubaba->collider.base.colType);
         if (extra.contains("colliderAcHard")) {
             if (extra.value("colliderAcHard", false)) {
@@ -1700,6 +2014,63 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         reeba->yOffsetStep = extra.value("yOffsetStep", reeba->yOffsetStep);
         reeba->scale = extra.value("scale", reeba->scale);
         ApplySkelAnimeState(extra, &reeba->skelanime);
+    } else if (actor->id == ACTOR_EN_GOMA && kind == "EnGoma") {
+        EnGoma* goma = (EnGoma*)actor;
+        ApplyGomaAction(goma, extra.value("action", (s32)-1));
+        goma->slopePitch = extra.value("slopePitch", goma->slopePitch);
+        goma->slopeRoll = extra.value("slopeRoll", goma->slopeRoll);
+        goma->gomaType = extra.value("gomaType", goma->gomaType);
+        goma->eyePitch = extra.value("eyePitch", goma->eyePitch);
+        goma->eyeYaw = extra.value("eyeYaw", goma->eyeYaw);
+        goma->hatchState = extra.value("hatchState", goma->hatchState);
+        goma->eggTimer = extra.value("eggTimer", goma->eggTimer);
+        goma->hurtTimer = extra.value("hurtTimer", goma->hurtTimer);
+        goma->visualState = extra.value("visualState", goma->visualState);
+        goma->playerDetectionTimer = extra.value("playerDetectionTimer", goma->playerDetectionTimer);
+        goma->spawnNum = extra.value("spawnNum", goma->spawnNum);
+        goma->invincibilityTimer = extra.value("invincibilityTimer", goma->invincibilityTimer);
+        goma->actionTimer = extra.value("actionTimer", goma->actionTimer);
+        goma->eggScale = extra.value("eggScale", goma->eggScale);
+        goma->eggPitch = extra.value("eggPitch", goma->eggPitch);
+        goma->eggSquishAngle = extra.value("eggSquishAngle", goma->eggSquishAngle);
+        goma->eggSquishAccel = extra.value("eggSquishAccel", goma->eggSquishAccel);
+        goma->eggSquishAmount = extra.value("eggSquishAmount", goma->eggSquishAmount);
+        goma->eggYOffset = extra.value("eggYOffset", goma->eggYOffset);
+        goma->unk_2F4 = extra.value("unk_2F4", goma->unk_2F4);
+        goma->stunTimer = extra.value("stunTimer", goma->stunTimer);
+        std::vector<f32> eyeEnvColor = extra.value("eyeEnvColor", std::vector<f32>{});
+        if (eyeEnvColor.size() == 3) {
+            goma->eyeEnvColor[0] = eyeEnvColor[0];
+            goma->eyeEnvColor[1] = eyeEnvColor[1];
+            goma->eyeEnvColor[2] = eyeEnvColor[2];
+        }
+        ApplyVec3fState(extra, "shieldKnockbackVel", &goma->shieldKnockbackVel);
+        ApplySkelAnimeState(extra, &goma->skelanime);
+    } else if (actor->id == ACTOR_EN_NUTSBALL && kind == "EnNutsball") {
+        EnNutsball* nutsball = (EnNutsball*)actor;
+        ApplyNutsballAction(nutsball, extra.value("action", (s32)-1));
+        nutsball->objBankIndex = extra.value("objBankIndex", nutsball->objBankIndex);
+        nutsball->timer = extra.value("timer", nutsball->timer);
+        nutsball->actor.home.rot.z = extra.value("homeRotZ", nutsball->actor.home.rot.z);
+        if (extra.value("drawEnabled", nutsball->actor.draw != nullptr)) {
+            nutsball->actor.draw = EnNutsball_Draw;
+        } else {
+            nutsball->actor.draw = nullptr;
+        }
+        if (extra.contains("colliderAtTypeEnemy")) {
+            if (extra.value("colliderAtTypeEnemy", false)) {
+                nutsball->collider.base.atFlags |= AT_TYPE_ENEMY;
+            } else {
+                nutsball->collider.base.atFlags &= ~AT_TYPE_ENEMY;
+            }
+        }
+        if (extra.contains("colliderAtTypePlayer")) {
+            if (extra.value("colliderAtTypePlayer", false)) {
+                nutsball->collider.base.atFlags |= AT_TYPE_PLAYER;
+            } else {
+                nutsball->collider.base.atFlags &= ~AT_TYPE_PLAYER;
+            }
+        }
     } else if (actor->id == ACTOR_BOSS_GOMA && kind == "BossGoma") {
         BossGoma* goma = (BossGoma*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
@@ -2223,6 +2594,11 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
             target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f);
             SetEnemyNetworkId(target, networkIds[i]);
+            if (target == nullptr && !actorParams.empty()) {
+                target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],
+                                     worldRotY[i], worldRotZ[i], actorParams[i]);
+                SetEnemyNetworkId(target, networkIds[i]);
+            }
         } else if (target == nullptr && (actorIds[i] == ACTOR_EN_ITEM00 || actorIds[i] == ACTOR_EN_ELF) &&
                    !actorParams.empty()) {
             spawningNetworkedEnemyDropId = networkIds[i];
