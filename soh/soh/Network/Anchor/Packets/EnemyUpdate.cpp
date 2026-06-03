@@ -276,8 +276,12 @@ static bool IsLocalPlayerPushingObjOshihiki(ObjOshihiki* block) {
     }
 
     Player* player = GET_PLAYER(gPlayState);
-    return player != nullptr && (player->stateFlags2 & PLAYER_STATE2_MOVING_DYNAPOLY) &&
-           player->actor.wallBgId == block->dyna.bgId;
+    if (player == nullptr || player->actor.wallBgId != block->dyna.bgId) {
+        return false;
+    }
+
+    u32 pushStateFlags = PLAYER_STATE2_MOVING_DYNAPOLY | PLAYER_STATE2_GRABBING_DYNAPOLY;
+    return (player->stateFlags2 & pushStateFlags) != 0 || fabsf(block->dyna.unk_150) > 0.001f;
 }
 
 static bool IsObjOshihikiMoving(ObjOshihiki* block) {
