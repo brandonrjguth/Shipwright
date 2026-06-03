@@ -68,20 +68,6 @@ void EnDekubaba_Sway(EnDekubaba*, PlayState*);
 void EnDekubaba_PrunedSomersault(EnDekubaba*, PlayState*);
 void EnDekubaba_ShrinkDie(EnDekubaba*, PlayState*);
 void EnDekubaba_DeadStickDrop(EnDekubaba*, PlayState*);
-void EnDekubaba_SetupWait(EnDekubaba* thisx);
-void EnDekubaba_SetupGrow(EnDekubaba* thisx);
-void EnDekubaba_SetupRetract(EnDekubaba* thisx);
-void EnDekubaba_SetupDecideLunge(EnDekubaba* thisx);
-void EnDekubaba_SetupPrepareLunge(EnDekubaba* thisx);
-void EnDekubaba_SetupLunge(EnDekubaba* thisx);
-void EnDekubaba_SetupPullBack(EnDekubaba* thisx);
-void EnDekubaba_SetupRecover(EnDekubaba* thisx);
-void EnDekubaba_SetupHit(EnDekubaba* thisx, s32 arg1);
-void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
-void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
-void EnDekubaba_SetupStunnedVertical(EnDekubaba* thisx);
-void EnDekubaba_SetupSway(EnDekubaba* thisx);
-void EnDekubaba_SetupDeadStickDrop(EnDekubaba* thisx, PlayState* play);
 void EnShopnuts_SetupWait(EnShopnuts* thisx);
 void EnShopnuts_SetupLookAround(EnShopnuts* thisx);
 void EnShopnuts_SetupThrowNut(EnShopnuts* thisx);
@@ -600,61 +586,15 @@ static EnDekubabaActionFunc GetDekubabaActionFunc(s32 actionId) {
     }
 }
 
-static void ApplyDekubabaAction(EnDekubaba* dekubaba, s32 action, nlohmann::json extra) {
+static void ApplyDekubabaAction(EnDekubaba* dekubaba, s32 action) {
     if (dekubaba == nullptr || action < 0 || action == GetDekubabaActionId(dekubaba->actionFunc)) {
         return;
     }
 
-    ActorMotionSnapshot motion = CaptureActorMotion(&dekubaba->actor);
-    switch (action) {
-        case DEKUBABA_ACTION_WAIT:
-            EnDekubaba_SetupWait(dekubaba);
-            break;
-        case DEKUBABA_ACTION_GROW:
-            EnDekubaba_SetupGrow(dekubaba);
-            break;
-        case DEKUBABA_ACTION_RETRACT:
-            EnDekubaba_SetupRetract(dekubaba);
-            break;
-        case DEKUBABA_ACTION_DECIDE_LUNGE:
-            EnDekubaba_SetupDecideLunge(dekubaba);
-            break;
-        case DEKUBABA_ACTION_PREPARE_LUNGE:
-            EnDekubaba_SetupPrepareLunge(dekubaba);
-            break;
-        case DEKUBABA_ACTION_LUNGE:
-            EnDekubaba_SetupLunge(dekubaba);
-            break;
-        case DEKUBABA_ACTION_PULL_BACK:
-            EnDekubaba_SetupPullBack(dekubaba);
-            break;
-        case DEKUBABA_ACTION_RECOVER:
-            EnDekubaba_SetupRecover(dekubaba);
-            break;
-        case DEKUBABA_ACTION_HIT:
-            EnDekubaba_SetupHit(dekubaba, extra.value("timer", (s16)0));
-            break;
-        case DEKUBABA_ACTION_STUNNED_VERTICAL:
-            EnDekubaba_SetupStunnedVertical(dekubaba);
-            break;
-        case DEKUBABA_ACTION_SWAY:
-            EnDekubaba_SetupSway(dekubaba);
-            break;
-        case DEKUBABA_ACTION_PRUNED_SOMERSAULT:
-            EnDekubaba_SetupPrunedSomersault(dekubaba);
-            break;
-        case DEKUBABA_ACTION_SHRINK_DIE:
-            EnDekubaba_SetupShrinkDie(dekubaba);
-            break;
-        case DEKUBABA_ACTION_DEAD_STICK_DROP:
-            if (gPlayState != nullptr) {
-                EnDekubaba_SetupDeadStickDrop(dekubaba, gPlayState);
-            } else {
-                dekubaba->actionFunc = EnDekubaba_DeadStickDrop;
-            }
-            break;
+    EnDekubabaActionFunc remoteFunc = GetDekubabaActionFunc(action);
+    if (remoteFunc != nullptr) {
+        dekubaba->actionFunc = remoteFunc;
     }
-    RestoreActorMotion(&dekubaba->actor, motion);
 }
 
 enum EnStAction : s32 {
@@ -1805,7 +1745,7 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     } else if (actor->id == ACTOR_EN_DEKUBABA && kind == "EnDekubaba") {
         EnDekubaba* dekubaba = (EnDekubaba*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
-        ApplyDekubabaAction(dekubaba, remoteAction, extra);
+        ApplyDekubabaAction(dekubaba, remoteAction);
         dekubaba->timer = extra.value("timer", dekubaba->timer);
         dekubaba->targetSwayAngle = extra.value("targetSwayAngle", dekubaba->targetSwayAngle);
         std::vector<s16> stemSectionAngle = extra.value("stemSectionAngle", std::vector<s16>{});
