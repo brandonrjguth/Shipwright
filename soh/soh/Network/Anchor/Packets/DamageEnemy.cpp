@@ -379,14 +379,14 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
+    if (payload.value("hintnutsClearRoom", false) && target->id == ACTOR_EN_HINTNUTS) {
+        Flags_SetClear(gPlayState, target->room);
+    }
+
     if (health == 0 && !IsEnemySyncActor(target)) {
         SendPacket_KillEnemy(target);
         enemyKillBuffer.push_back(networkId);
         return;
-    }
-
-    if (payload.value("hintnutsClearRoom", false) && target->id == ACTOR_EN_HINTNUTS) {
-        Flags_SetClear(gPlayState, target->room);
     }
 
     bool hasReportedState = HasReportedEnemyState(payload);

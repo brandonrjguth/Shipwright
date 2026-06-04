@@ -845,7 +845,26 @@ static bool ShouldDeferKillForLocalDialogue(Actor* actor) {
     }
 
     Player* player = GET_PLAYER(gPlayState);
-    return player != nullptr && (player->talkActor == actor || player->actor.parent == actor);
+    if (player == nullptr) {
+        return false;
+    }
+
+    bool playerReferencesActor = player->talkActor == actor || player->focusActor == actor ||
+                                 player->interactRangeActor == actor || player->actor.parent == actor;
+    bool messageReferencesActor = gPlayState->msgCtx.talkActor == actor;
+    bool messageActive = (player->stateFlags1 & PLAYER_STATE1_TALKING) ||
+                         Message_GetState(&gPlayState->msgCtx) != TEXT_STATE_NONE;
+    return messageActive && (playerReferencesActor || messageReferencesActor);
+}
+
+static bool EnemyKillBufferContains(const std::vector<uint64_t>& buffer, uint64_t networkId) {
+    for (uint64_t bufferedId : buffer) {
+        if (bufferedId == networkId) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void Anchor::ProcessActorBuffers() {
@@ -853,18 +872,23 @@ void Anchor::ProcessActorBuffers() {
         return;
     }
 
+    std::vector<uint64_t> deferredKillBuffer;
     while (!enemyKillBuffer.empty()) {
         uint64_t networkId = enemyKillBuffer.front();
         enemyKillBuffer.erase(enemyKillBuffer.begin());
         Actor* actor = FindActorByEnemyNetworkId(networkId);
         if (actor != nullptr && actor->update != nullptr) {
             if (ShouldDeferKillForLocalDialogue(actor)) {
+                if (!EnemyKillBufferContains(deferredKillBuffer, networkId)) {
+                    deferredKillBuffer.push_back(networkId);
+                }
                 continue;
             }
 
             Actor_Kill(actor);
         }
     }
+    enemyKillBuffer.insert(enemyKillBuffer.end(), deferredKillBuffer.begin(), deferredKillBuffer.end());
 
     while (!enemyPruneBuffer.empty()) {
         auto [actor, sceneNum, roomNum] = enemyPruneBuffer.front();
@@ -916,8 +940,9 @@ void Anchor::DetectEnemyDamage() {
     }
 
     for (Actor* act : currentEnemies) {
-        if (IsEnemyMarkedDead(GetEnemyNetworkId(act))) {
-            enemyKillBuffer.push_back(GetEnemyNetworkId(act));
+        uint64_t networkId = GetEnemyNetworkId(act);
+        if (IsEnemyMarkedDead(networkId) && !EnemyKillBufferContains(enemyKillBuffer, networkId)) {
+            enemyKillBuffer.push_back(networkId);
         }
     }
 
