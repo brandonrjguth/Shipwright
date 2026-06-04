@@ -120,7 +120,7 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
 
         for (size_t li = 0; li < localActors.size(); li++) {
             Actor* local = localActors[li];
-            if (local->id != enemiesId[ri]) {
+            if (local->id != enemiesId[ri] || !IsEnemySyncActor(local)) {
                 continue;
             }
             if (IsEnemyMarkedDead(GetEnemyNetworkId(local))) {

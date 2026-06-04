@@ -345,7 +345,7 @@ Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category,
     float closestDist = maxDistSq;
 
     while (currAct != nullptr) {
-        if (currAct->id != actorId) {
+        if (currAct->id != actorId || !IsEnemySyncActor(currAct)) {
             currAct = currAct->next;
             continue;
         }
@@ -420,7 +420,17 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
 }
 
 bool Anchor::IsEnemySyncActor(Actor* actor) {
-    return actor != nullptr && IsEnemySyncActor((ActorCategory)actor->category, actor->id);
+    constexpr s16 DEKUNUTS_FLOWER_PARAM = 10;
+
+    if (actor == nullptr) {
+        return false;
+    }
+
+    if (actor->id == ACTOR_EN_DEKUNUTS && actor->params == DEKUNUTS_FLOWER_PARAM) {
+        return false;
+    }
+
+    return IsEnemySyncActor((ActorCategory)actor->category, actor->id);
 }
 
 Actor* Anchor::FindNearbyDeadEnemyDropSource(Actor* dropActor) {

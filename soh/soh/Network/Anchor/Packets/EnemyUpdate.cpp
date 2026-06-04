@@ -1,13 +1,11 @@
 #include "soh/Network/Anchor/Anchor.h"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
-#include <unordered_map>
 
 extern "C" {
 #include "variables.h"
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.h"
-#include "objects/object_dekunuts/object_dekunuts.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Shopnuts/z_en_shopnuts.h"
 #include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
@@ -248,21 +246,6 @@ struct ActorMotionSnapshot {
     f32 minVelocityY;
 };
 
-struct SkelAnimeVisualSnapshot {
-    u8 mode;
-    void* animation;
-    f32 startFrame;
-    f32 endFrame;
-    f32 animLength;
-    f32 curFrame;
-    f32 playSpeed;
-    f32 morphWeight;
-    f32 morphRate;
-    s32 (*update)(SkelAnime*);
-};
-
-static std::unordered_map<Actor*, SkelAnimeVisualSnapshot> dekunutsVisualSnapshots;
-
 static ActorMotionSnapshot CaptureActorMotion(Actor* actor) {
     return { actor->world.pos, actor->prevPos, actor->world.rot, actor->shape.rot, actor->scale,
              actor->velocity, actor->speedXZ, actor->gravity, actor->minVelocityY };
@@ -278,25 +261,6 @@ static void RestoreActorMotion(Actor* actor, ActorMotionSnapshot motion) {
     actor->speedXZ = motion.speedXZ;
     actor->gravity = motion.gravity;
     actor->minVelocityY = motion.minVelocityY;
-}
-
-static SkelAnimeVisualSnapshot CaptureSkelAnimeVisualState(SkelAnime* skelAnime) {
-    return { skelAnime->mode,        skelAnime->animation,    skelAnime->startFrame,  skelAnime->endFrame,
-             skelAnime->animLength,  skelAnime->curFrame,     skelAnime->playSpeed,   skelAnime->morphWeight,
-             skelAnime->morphRate,   skelAnime->update.normal };
-}
-
-static void RestoreSkelAnimeVisualState(SkelAnime* skelAnime, SkelAnimeVisualSnapshot snapshot) {
-    skelAnime->mode = snapshot.mode;
-    skelAnime->animation = snapshot.animation;
-    skelAnime->startFrame = snapshot.startFrame;
-    skelAnime->endFrame = snapshot.endFrame;
-    skelAnime->animLength = snapshot.animLength;
-    skelAnime->curFrame = snapshot.curFrame;
-    skelAnime->playSpeed = snapshot.playSpeed;
-    skelAnime->morphWeight = snapshot.morphWeight;
-    skelAnime->morphRate = snapshot.morphRate;
-    skelAnime->update.normal = snapshot.update;
 }
 
 static void ApplyDekunutsAction(EnDekunuts* dekunuts, s32 action) {
@@ -345,26 +309,6 @@ static void ApplyDekunutsAction(EnDekunuts* dekunuts, s32 action) {
             break;
     }
     RestoreActorMotion(&dekunuts->actor, motion);
-}
-
-static void ApplyDekunutsVisualAnimation(EnDekunuts* dekunuts, s32 action) {
-    if (dekunuts == nullptr) {
-        return;
-    }
-
-    switch (action) {
-        case DEKUNUTS_ACTION_BEGIN_RUN:
-            Animation_MorphToPlayOnce(&dekunuts->skelAnime, (AnimationHeader*)gDekuNutsUnburrowAnim, -3.0f);
-            break;
-        case DEKUNUTS_ACTION_RUN:
-            Animation_PlayLoop(&dekunuts->skelAnime, (AnimationHeader*)gDekuNutsRunAnim);
-            break;
-        case DEKUNUTS_ACTION_GASP:
-            Animation_PlayLoop(&dekunuts->skelAnime, (AnimationHeader*)gDekuNutsGaspAnim);
-            break;
-        default:
-            break;
-    }
 }
 
 enum ShopnutsAction : s32 {
@@ -2459,40 +2403,6 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         objects->timer = extra.value("timer", objects->timer);
         objects->cameraSetting = extra.value("cameraSetting", objects->cameraSetting);
     }
-}
-
-void ApplyPreservedEnemyVisualState(Actor* actor, nlohmann::json extra) {
-    if (actor == nullptr || !extra.is_object()) {
-        return;
-    }
-
-    std::string kind = extra.value("kind", "");
-    if (actor->id != ACTOR_EN_DEKUNUTS || kind != "EnDekunuts") {
-        return;
-    }
-
-    EnDekunuts* dekunuts = (EnDekunuts*)actor;
-    s32 localAction = GetDekunutsActionId(dekunuts->actionFunc);
-    s32 remoteAction = extra.value("action", (s32)-1);
-    if (!IsDekunutsFleeAction(localAction) || !IsDekunutsFleeAction(remoteAction)) {
-        return;
-    }
-
-    if (!dekunutsVisualSnapshots.contains(actor)) {
-        dekunutsVisualSnapshots[actor] = CaptureSkelAnimeVisualState(&dekunuts->skelAnime);
-    }
-    ApplyDekunutsVisualAnimation(dekunuts, remoteAction);
-    ApplySkelAnimeState(extra, &dekunuts->skelAnime);
-}
-
-void RestorePreservedEnemyVisualState(Actor* actor) {
-    if (actor == nullptr || actor->id != ACTOR_EN_DEKUNUTS || !dekunutsVisualSnapshots.contains(actor)) {
-        return;
-    }
-
-    EnDekunuts* dekunuts = (EnDekunuts*)actor;
-    RestoreSkelAnimeVisualState(&dekunuts->skelAnime, dekunutsVisualSnapshots[actor]);
-    dekunutsVisualSnapshots.erase(actor);
 }
 
 void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {

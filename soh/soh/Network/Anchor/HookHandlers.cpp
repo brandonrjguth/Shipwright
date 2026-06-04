@@ -60,8 +60,6 @@ float OTRGetDimensionFromRightEdge(float v);
 }
 
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
-extern void ApplyPreservedEnemyVisualState(Actor* actor, nlohmann::json extra);
-extern void RestorePreservedEnemyVisualState(Actor* actor);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
 
 static void ClearDummyBusinessScrubTalkOffer(EnDns* scrub) {
@@ -211,9 +209,6 @@ void Anchor::RegisterHooks() {
         if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
             ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
         }
-        if (enemyExtraStates.contains(networkId) && hasPendingLocalExtraState) {
-            ApplyPreservedEnemyVisualState(actor, enemyExtraStates[networkId]);
-        }
         if ((actor->id == ACTOR_OBJ_OSHIHIKI || actor->id == ACTOR_EN_DEKUNUTS ||
              actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL) &&
             hasPendingLocalExtraState) {
@@ -302,7 +297,6 @@ void Anchor::RegisterHooks() {
         }
 
         if (!HasEnemySyncAuthority()) {
-            RestorePreservedEnemyVisualState(actor);
             bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
                                           actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
             nlohmann::json authorityExtra =
