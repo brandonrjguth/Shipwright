@@ -343,10 +343,6 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
-    if (target->id == ACTOR_EN_NUTSBALL) {
-        return;
-    }
-
     if (health == 0 && !IsEnemySyncActor(target)) {
         SendPacket_KillEnemy(target);
         enemyKillBuffer.push_back(networkId);
