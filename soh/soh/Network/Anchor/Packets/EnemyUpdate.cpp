@@ -1040,6 +1040,35 @@ static bool IsPuzzleActorActive(Actor* actor) {
     }
 }
 
+static std::string GetPuzzleActorStateKind(Actor* actor) {
+    if (actor == nullptr) {
+        return "";
+    }
+
+    switch (actor->id) {
+        case ACTOR_OBJ_HSBLOCK: return "ObjHsblock";
+        case ACTOR_OBJ_ELEVATOR: return "ObjElevator";
+        case ACTOR_OBJ_LIFT: return "ObjLift";
+        case ACTOR_OBJ_TIMEBLOCK: return "ObjTimeblock";
+        case ACTOR_BG_MIZU_WATER: return "BgMizuWater";
+        case ACTOR_BG_MIZU_MOVEBG: return "BgMizuMovebg";
+        case ACTOR_BG_MIZU_SHUTTER: return "BgMizuShutter";
+        case ACTOR_BG_HIDAN_FSLIFT: return "BgHidanFslift";
+        case ACTOR_BG_JYA_COBRA: return "BgJyaCobra";
+        case ACTOR_BG_JYA_BIGMIRROR: return "BgJyaBigmirror";
+        case ACTOR_BG_HAKA_SHIP: return "BgHakaShip";
+        case ACTOR_BG_HAKA_WATER: return "BgHakaWater";
+        case ACTOR_BG_HAKA_GATE: return "BgHakaGate";
+        case ACTOR_BG_BDAN_OBJECTS: return "BgBdanObjects";
+        default: return "";
+    }
+}
+
+static bool IsAuthorityReportingExtraState(nlohmann::json authorityExtra, const std::string& kind) {
+    return authorityExtra.is_object() && authorityExtra.value("kind", std::string("")) == kind &&
+           authorityExtra.value("reportActive", false);
+}
+
 static void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime) {
     if (skelAnime == nullptr) {
         return;
@@ -1194,14 +1223,14 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
     if (actor->id == ACTOR_EN_NUTSBALL) {
         EnNutsball* nutsball = (EnNutsball*)actor;
         bool localReflected = (nutsball->collider.base.atFlags & AT_TYPE_PLAYER) != 0;
-        bool authorityReflected = authorityExtra.value("kind", std::string("")) == "EnNutsball" &&
-                                  authorityExtra.value("colliderAtTypePlayer", false);
+        bool authorityReflected = IsAuthorityReportingExtraState(authorityExtra, "EnNutsball") ||
+                                  (authorityExtra.value("kind", std::string("")) == "EnNutsball" &&
+                                   authorityExtra.value("colliderAtTypePlayer", false));
         return localReflected && !authorityReflected;
     }
 
     if (actor->id == ACTOR_EN_DEKUNUTS) {
-        if (authorityExtra.value("kind", std::string("")) == "EnDekunuts" &&
-            IsDekunutsFleeAction(authorityExtra.value("action", (s32)-1))) {
+        if (IsAuthorityReportingExtraState(authorityExtra, "EnDekunuts")) {
             return false;
         }
 
@@ -1213,10 +1242,15 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
     }
 
     if (actor->id == ACTOR_EN_SHOPNUTS) {
-        return true;
+        return !IsAuthorityReportingExtraState(authorityExtra, "EnShopnuts");
     }
 
-    return true;
+    std::string puzzleKind = GetPuzzleActorStateKind(actor);
+    if (!puzzleKind.empty() && IsPuzzleActorActive(actor)) {
+        return !IsAuthorityReportingExtraState(authorityExtra, puzzleKind);
+    }
+
+    return !authorityExtra.value("reportActive", false);
 }
 
 nlohmann::json GetEnemyExtraState(Actor* actor) {
@@ -1794,6 +1828,10 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["cameraSetting"] = objects->cameraSetting;
             break;
         }
+    }
+
+    if (extra.is_object() && !extra.value("kind", std::string("")).empty()) {
+        extra["reportActive"] = ShouldReportEnemyExtraState(actor);
     }
 
     return extra;

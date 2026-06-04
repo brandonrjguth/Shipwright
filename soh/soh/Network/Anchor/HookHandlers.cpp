@@ -91,6 +91,42 @@ static void ClearDummyBusinessScrubTalkOffers() {
     }
 }
 
+static void ClearKilledBusinessScrubDialog(Actor* actor) {
+    if (actor == nullptr || actor->id != ACTOR_EN_DNS || gPlayState == nullptr) {
+        return;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    if (player == nullptr) {
+        return;
+    }
+
+    if (player->talkActor != actor && player->focusActor != actor && player->interactRangeActor != actor &&
+        player->actor.parent != actor) {
+        return;
+    }
+
+    Message_CloseTextbox(gPlayState);
+    if (player->talkActor == actor) {
+        player->talkActor = nullptr;
+        player->talkActorDistance = 0.0f;
+    }
+    if (player->focusActor == actor) {
+        player->focusActor = nullptr;
+    }
+    if (player->interactRangeActor == actor) {
+        player->interactRangeActor = nullptr;
+    }
+    if (player->actor.parent == actor) {
+        player->actor.parent = nullptr;
+    }
+    player->stateFlags1 &= ~(PLAYER_STATE1_TALKING | PLAYER_STATE1_GETTING_ITEM | PLAYER_STATE1_CARRYING_ACTOR |
+                             PLAYER_STATE1_IN_ITEM_CS | PLAYER_STATE1_IN_CUTSCENE);
+    player->stateFlags2 &= ~PLAYER_STATE2_CAN_ACCEPT_TALK_OFFER;
+    player->getItemId = GI_NONE;
+    player->getItemEntry = (GetItemEntry)GET_ITEM_NONE;
+}
+
 void Anchor::RegisterHooks() {
 
     // #region Hooks that are required for basic Anchor functionality
@@ -268,6 +304,7 @@ void Anchor::RegisterHooks() {
             return;
         }
         Actor* actor = (Actor*)refActor;
+        ClearKilledBusinessScrubDialog(actor);
         uint64_t networkId = GetEnemyNetworkId(actor);
         if (networkId == 0 || IsEnemyMarkedDead(networkId)) {
             return;
