@@ -839,6 +839,15 @@ bool Anchor::IsEnemyMarkedDead(s16 sceneNum, s8 roomNum, uint64_t networkId) {
     return deadEnemyLedger.contains(roomKey) && deadEnemyLedger[roomKey].contains(networkId);
 }
 
+static bool ShouldDeferKillForLocalDialogue(Actor* actor) {
+    if (actor == nullptr || actor->id != ACTOR_EN_HINTNUTS || gPlayState == nullptr) {
+        return false;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    return player != nullptr && (player->talkActor == actor || player->actor.parent == actor);
+}
+
 void Anchor::ProcessActorBuffers() {
     if (!IsSaveLoaded()) {
         return;
@@ -849,6 +858,10 @@ void Anchor::ProcessActorBuffers() {
         enemyKillBuffer.erase(enemyKillBuffer.begin());
         Actor* actor = FindActorByEnemyNetworkId(networkId);
         if (actor != nullptr && actor->update != nullptr) {
+            if (ShouldDeferKillForLocalDialogue(actor)) {
+                continue;
+            }
+
             Actor_Kill(actor);
         }
     }
