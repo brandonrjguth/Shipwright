@@ -124,7 +124,8 @@ static void ClearKilledBusinessScrubDialog(Actor* actor) {
                              PLAYER_STATE1_IN_ITEM_CS | PLAYER_STATE1_IN_CUTSCENE);
     player->stateFlags2 &= ~PLAYER_STATE2_CAN_ACCEPT_TALK_OFFER;
     player->getItemId = GI_NONE;
-    player->getItemEntry = (GetItemEntry)GET_ITEM_NONE;
+    GetItemEntry noneEntry = GET_ITEM_NONE;
+    player->getItemEntry = noneEntry;
 }
 
 void Anchor::RegisterHooks() {
