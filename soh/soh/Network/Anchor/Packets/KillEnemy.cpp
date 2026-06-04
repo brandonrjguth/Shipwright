@@ -19,7 +19,9 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
         return;
     }
 
-    MarkEnemyDead(networkId);
+    if (actor->id != ACTOR_EN_NUTSBALL) {
+        MarkEnemyDead(networkId);
+    }
 
     nlohmann::json payload;
     payload["type"] = KILL_ENEMY;
@@ -54,11 +56,16 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
         return;
     }
 
-    if (IsEnemyMarkedDead(sceneNum, roomNum, networkId)) {
+    s16 actorId = payload.value("actorId", (s16)0);
+    bool isTransientProjectile = actorId == ACTOR_EN_NUTSBALL;
+
+    if (!isTransientProjectile && IsEnemyMarkedDead(sceneNum, roomNum, networkId)) {
         return;
     }
 
-    MarkEnemyDead(sceneNum, roomNum, networkId);
+    if (!isTransientProjectile) {
+        MarkEnemyDead(sceneNum, roomNum, networkId);
+    }
 
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target != nullptr) {
