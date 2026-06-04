@@ -274,7 +274,9 @@ void Anchor::RegisterHooks() {
         if (HasEnemySyncAuthority()) {
             SendPacket_KillEnemy(actor);
         } else {
-            SendPacket_ReportEnemyDamage(actor, 0);
+            if (actor->id != ACTOR_EN_NUTSBALL) {
+                SendPacket_ReportEnemyDamage(actor, 0);
+            }
         }
     });
 
