@@ -309,10 +309,17 @@ static EnHintnutsActionFunc GetHintnutsActionFunc(s32 actionId) {
     }
 }
 
-static bool IsHintnutsReportAction(s32 action) {
+static bool IsHintnutsNetworkAction(s32 action) {
     return action == HINTNUTS_ACTION_BEGIN_RUN || action == HINTNUTS_ACTION_BEGIN_FREEZE ||
-           action == HINTNUTS_ACTION_RUN || action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE ||
-           action == HINTNUTS_ACTION_FREEZE;
+           action == HINTNUTS_ACTION_RUN || action == HINTNUTS_ACTION_FREEZE;
+}
+
+static bool IsHintnutsReportAction(s32 action) {
+    return IsHintnutsNetworkAction(action);
+}
+
+static bool IsHintnutsLocalDialogueAction(s32 action) {
+    return action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE;
 }
 
 struct ActorMotionSnapshot {
@@ -393,7 +400,7 @@ static void ApplyDekunutsAction(EnDekunuts* dekunuts, s32 action) {
 }
 
 static void ApplyHintnutsAction(EnHintnuts* hintnuts, s32 action) {
-    if (hintnuts == nullptr || action < 0 || action == GetHintnutsActionId(hintnuts->actionFunc)) {
+    if (hintnuts == nullptr || !IsHintnutsNetworkAction(action) || action == GetHintnutsActionId(hintnuts->actionFunc)) {
         return;
     }
 
@@ -441,16 +448,6 @@ static void ApplyHintnutsAction(EnHintnuts* hintnuts, s32 action) {
             break;
         case HINTNUTS_ACTION_RUN:
             EnHintnuts_SetupRun(hintnuts);
-            break;
-        case HINTNUTS_ACTION_TALK:
-            EnHintnuts_SetupTalk(hintnuts);
-            break;
-        case HINTNUTS_ACTION_LEAVE:
-            if (gPlayState != nullptr) {
-                EnHintnuts_SetupLeave(hintnuts, gPlayState);
-            } else {
-                hintnuts->actionFunc = EnHintnuts_Leave;
-            }
             break;
         case HINTNUTS_ACTION_FREEZE:
             EnHintnuts_SetupFreeze(hintnuts);
@@ -1398,6 +1395,11 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
     }
 
     if (actor->id == ACTOR_EN_HINTNUTS) {
+        EnHintnuts* hintnuts = (EnHintnuts*)actor;
+        if (IsHintnutsLocalDialogueAction(GetHintnutsActionId(hintnuts->actionFunc))) {
+            return true;
+        }
+
         if (IsAuthorityReportingExtraState(authorityExtra, "EnHintnuts")) {
             return false;
         }
@@ -1442,8 +1444,12 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         }
         case ACTOR_EN_HINTNUTS: {
             EnHintnuts* hintnuts = (EnHintnuts*)actor;
+            s32 action = GetHintnutsActionId(hintnuts->actionFunc);
+            if (!IsHintnutsNetworkAction(action)) {
+                break;
+            }
             extra["kind"] = "EnHintnuts";
-            extra["action"] = GetHintnutsActionId(hintnuts->actionFunc);
+            extra["action"] = action;
             extra["animFlagAndTimer"] = hintnuts->animFlagAndTimer;
             extra["runDirection"] = hintnuts->unk_196;
             extra["textIdCopy"] = hintnuts->textIdCopy;
@@ -2048,8 +2054,12 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplySkelAnimeState(extra, &dekunuts->skelAnime);
     } else if (actor->id == ACTOR_EN_HINTNUTS && kind == "EnHintnuts") {
         EnHintnuts* hintnuts = (EnHintnuts*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        if (!IsHintnutsNetworkAction(remoteAction)) {
+            return;
+        }
         s32 remoteCategory = extra.value("actorCategory", hintnuts->actor.category);
-        ApplyHintnutsAction(hintnuts, extra.value("action", (s32)-1));
+        ApplyHintnutsAction(hintnuts, remoteAction);
         if (gPlayState != nullptr && remoteCategory >= ACTORCAT_SWITCH && remoteCategory < ACTORCAT_MAX &&
             hintnuts->actor.category != remoteCategory) {
             Actor_ChangeCategory(gPlayState, &gPlayState->actorCtx, &hintnuts->actor, (ActorCategory)remoteCategory);

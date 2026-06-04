@@ -13,6 +13,7 @@ extern PlayState* gPlayState;
 }
 
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
+extern bool ShouldReportEnemyExtraState(Actor* actor);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
 
 extern "C" bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos) {
@@ -935,7 +936,7 @@ void Anchor::DetectEnemyDamage() {
                     SendPacket_ReportEnemyDamage(act, currentHealth);
                 }
             } else if (!HasEnemySyncAuthority() && currentHealth == lastHealth &&
-                       ShouldPreserveLocalEnemyExtraState(act, authorityExtra)) {
+                       ShouldPreserveLocalEnemyExtraState(act, authorityExtra) && ShouldReportEnemyExtraState(act)) {
                 SendPacket_ReportEnemyDamage(act, currentHealth);
             }
         }

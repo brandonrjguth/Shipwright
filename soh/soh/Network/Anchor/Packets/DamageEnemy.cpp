@@ -64,13 +64,10 @@ static bool IsReportedHintnutsState(Actor* target, nlohmann::json payload) {
     constexpr s32 HINTNUTS_ACTION_BEGIN_RUN = 5;
     constexpr s32 HINTNUTS_ACTION_BEGIN_FREEZE = 6;
     constexpr s32 HINTNUTS_ACTION_RUN = 7;
-    constexpr s32 HINTNUTS_ACTION_TALK = 8;
-    constexpr s32 HINTNUTS_ACTION_LEAVE = 9;
     constexpr s32 HINTNUTS_ACTION_FREEZE = 10;
     s32 action = extraState.value("action", (s32)-1);
     return action == HINTNUTS_ACTION_BEGIN_RUN || action == HINTNUTS_ACTION_BEGIN_FREEZE ||
-           action == HINTNUTS_ACTION_RUN || action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE ||
-           action == HINTNUTS_ACTION_FREEZE;
+           action == HINTNUTS_ACTION_RUN || action == HINTNUTS_ACTION_FREEZE;
 }
 
 static bool IsReportedShopnutsCaughtState(Actor* target, nlohmann::json payload) {
