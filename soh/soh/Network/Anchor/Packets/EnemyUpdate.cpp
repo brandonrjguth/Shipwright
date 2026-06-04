@@ -1199,12 +1199,17 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
         return localReflected && !authorityReflected;
     }
 
-    if (!ShouldReportEnemyExtraState(actor)) {
-        return false;
+    if (actor->id == ACTOR_EN_DEKUNUTS) {
+        if (authorityExtra.value("kind", std::string("")) == "EnDekunuts" &&
+            IsDekunutsFleeAction(authorityExtra.value("action", (s32)-1))) {
+            return false;
+        }
+
+        return ShouldReportEnemyExtraState(actor);
     }
 
-    if (actor->id == ACTOR_EN_DEKUNUTS) {
-        return true;
+    if (!ShouldReportEnemyExtraState(actor)) {
+        return false;
     }
 
     if (actor->id == ACTOR_EN_SHOPNUTS) {
