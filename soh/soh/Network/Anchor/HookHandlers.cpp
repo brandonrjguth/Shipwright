@@ -26,6 +26,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_Door_Shutter/z_door_shutter.h"
 #include "src/overlays/actors/ovl_En_Dns/z_en_dns.h"
 #include "src/overlays/actors/ovl_En_Door/z_en_door.h"
+#include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #include "src/overlays/actors/ovl_En_Si/z_en_si.h"
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
 #include "src/overlays/actors/ovl_Item_B_Heart/z_item_b_heart.h"
@@ -72,6 +73,18 @@ static void ClearDummyBusinessScrubTalkOffer(EnDns* scrub) {
         scrub->collider.base.oc = nullptr;
         scrub->collider.base.ocFlags1 &= ~OC1_HIT;
         scrub->actor.flags &= ~ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED;
+    }
+}
+
+static void ClearDummyNutsballCollision(EnNutsball* nutsball) {
+    if (nutsball == nullptr) {
+        return;
+    }
+
+    Actor* collidedActor = nutsball->collider.base.oc;
+    if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update) {
+        nutsball->collider.base.oc = nullptr;
+        nutsball->collider.base.ocFlags1 &= ~OC1_HIT;
     }
 }
 
@@ -194,6 +207,10 @@ void Anchor::RegisterHooks() {
 
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_DNS, isConnected, [&](void* refActor, bool* should) {
         ClearDummyBusinessScrubTalkOffer(static_cast<EnDns*>(refActor));
+    });
+
+    COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_NUTSBALL, isConnected, [&](void* refActor, bool* should) {
+        ClearDummyNutsballCollision(static_cast<EnNutsball*>(refActor));
     });
 
     COND_HOOK(OnPlayerUpdate, isConnected, [&]() {

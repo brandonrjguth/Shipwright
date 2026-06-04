@@ -334,6 +334,9 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
     payload["category"] = actor->category;
+    if (actor->id == ACTOR_EN_HINTNUTS && health == 0 && actor->params == 3) {
+        payload["hintnutsClearRoom"] = true;
+    }
     AddReportedEnemyContextPayload(actor, payload);
     payload["quiet"] = true;
 
@@ -380,6 +383,10 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         SendPacket_KillEnemy(target);
         enemyKillBuffer.push_back(networkId);
         return;
+    }
+
+    if (payload.value("hintnutsClearRoom", false) && target->id == ACTOR_EN_HINTNUTS) {
+        Flags_SetClear(gPlayState, target->room);
     }
 
     bool hasReportedState = HasReportedEnemyState(payload);

@@ -322,6 +322,57 @@ static bool IsHintnutsLocalDialogueAction(s32 action) {
     return action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE;
 }
 
+static bool IsHintnutsFrozenAction(s32 action) {
+    return action == HINTNUTS_ACTION_BEGIN_FREEZE || action == HINTNUTS_ACTION_FREEZE;
+}
+
+static bool ArePriorHintnutsPuzzleScrubsFrozen() {
+    if (gPlayState == nullptr) {
+        return false;
+    }
+
+    bool firstFrozen = false;
+    bool secondFrozen = false;
+    for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
+        Actor* actor = gPlayState->actorCtx.actorLists[category].head;
+        while (actor != nullptr) {
+            if (actor->id == ACTOR_EN_HINTNUTS && actor->params >= 1 && actor->params <= 2) {
+                EnHintnuts* hintnuts = (EnHintnuts*)actor;
+                bool frozen = IsHintnutsFrozenAction(GetHintnutsActionId(hintnuts->actionFunc));
+                if (actor->params == 1) {
+                    firstFrozen = firstFrozen || frozen;
+                } else {
+                    secondFrozen = secondFrozen || frozen;
+                }
+            }
+            actor = actor->next;
+        }
+    }
+
+    return firstFrozen && secondFrozen;
+}
+
+static bool ShouldPromoteFinalHintnutsScrub(EnHintnuts* hintnuts) {
+    return hintnuts != nullptr && hintnuts->actor.params == 3 && ArePriorHintnutsPuzzleScrubsFrozen();
+}
+
+static void ApplyFinalHintnutsScrubRun(EnHintnuts* hintnuts) {
+    if (hintnuts == nullptr) {
+        return;
+    }
+
+    Animation_MorphToPlayOnce(&hintnuts->skelAnime, (AnimationHeader*)gHintNutsUnburrowAnim, -3.0f);
+    hintnuts->collider.dim.height = 37;
+    hintnuts->collider.base.acFlags &= ~AC_ON;
+    hintnuts->actor.colorFilterTimer = 0;
+    hintnuts->actor.flags &= ~(ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED);
+    hintnuts->actor.flags |= ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_FRIENDLY;
+    if (gPlayState != nullptr && hintnuts->actor.category != ACTORCAT_BG) {
+        Actor_ChangeCategory(gPlayState, &gPlayState->actorCtx, &hintnuts->actor, ACTORCAT_BG);
+    }
+    hintnuts->actionFunc = EnHintnuts_BeginRun;
+}
+
 struct ActorMotionSnapshot {
     Vec3f pos;
     Vec3f prevPos;
@@ -400,7 +451,15 @@ static void ApplyDekunutsAction(EnDekunuts* dekunuts, s32 action) {
 }
 
 static void ApplyHintnutsAction(EnHintnuts* hintnuts, s32 action) {
-    if (hintnuts == nullptr || !IsHintnutsNetworkAction(action) || action == GetHintnutsActionId(hintnuts->actionFunc)) {
+    if (hintnuts == nullptr || !IsHintnutsNetworkAction(action)) {
+        return;
+    }
+
+    if (action == HINTNUTS_ACTION_BEGIN_FREEZE && ShouldPromoteFinalHintnutsScrub(hintnuts)) {
+        action = HINTNUTS_ACTION_BEGIN_RUN;
+    }
+
+    if (action == GetHintnutsActionId(hintnuts->actionFunc)) {
         return;
     }
 
@@ -422,6 +481,10 @@ static void ApplyHintnutsAction(EnHintnuts* hintnuts, s32 action) {
             EnHintnuts_SetupBurrow(hintnuts);
             break;
         case HINTNUTS_ACTION_BEGIN_RUN:
+            if (ShouldPromoteFinalHintnutsScrub(hintnuts)) {
+                ApplyFinalHintnutsScrubRun(hintnuts);
+                break;
+            }
             if (gPlayState != nullptr) {
                 EnHintnuts_HitByScrubProjectile1(hintnuts, gPlayState);
             }
@@ -1273,9 +1336,19 @@ static void EnsureEnStDeathState(EnSt* st) {
         return;
     }
     if (action == ENST_ACTION_FINISH_BOUNCING) {
+        if (st->deathTimer <= 0) {
+            st->actor.velocity = { 0.0f, 0.0f, 0.0f };
+            st->actor.speedXZ = 0.0f;
+            EnSt_SetupAction(st, EnSt_Die);
+        }
         return;
     }
     if (action == ENST_ACTION_DIE) {
+        st->actor.velocity = { 0.0f, 0.0f, 0.0f };
+        st->actor.speedXZ = 0.0f;
+        st->actor.gravity = 0.0f;
+        st->takeDamageSpinTimer = 0;
+        st->gaveDamageSpinTimer = 0;
         return;
     }
 
@@ -1445,6 +1518,10 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         case ACTOR_EN_HINTNUTS: {
             EnHintnuts* hintnuts = (EnHintnuts*)actor;
             s32 action = GetHintnutsActionId(hintnuts->actionFunc);
+            if (IsHintnutsFrozenAction(action) && ShouldPromoteFinalHintnutsScrub(hintnuts)) {
+                ApplyFinalHintnutsScrubRun(hintnuts);
+                action = GetHintnutsActionId(hintnuts->actionFunc);
+            }
             if (!IsHintnutsNetworkAction(action)) {
                 break;
             }
