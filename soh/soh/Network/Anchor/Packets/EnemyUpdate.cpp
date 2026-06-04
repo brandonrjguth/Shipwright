@@ -1166,6 +1166,11 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return IsShopnutsCaughtAction(GetShopnutsActionId(shopnuts->actionFunc));
     }
 
+    if (actor->id == ACTOR_EN_NUTSBALL) {
+        EnNutsball* nutsball = (EnNutsball*)actor;
+        return (nutsball->collider.base.atFlags & AT_TYPE_PLAYER) != 0;
+    }
+
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
         return IsObjOshihikiMoving((ObjOshihiki*)actor);
     }

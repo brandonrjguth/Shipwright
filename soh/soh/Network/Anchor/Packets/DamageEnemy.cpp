@@ -56,6 +56,16 @@ static bool IsReportedShopnutsCaughtState(Actor* target, nlohmann::json payload)
            extraState.value("action", (s32)-1) == SHOPNUTS_ACTION_SPAWN_SALESMAN;
 }
 
+static bool IsReportedNutsballReflectedState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_EN_NUTSBALL || !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    nlohmann::json extraState = payload["extraState"];
+    return extraState.value("kind", std::string("")) == "EnNutsball" &&
+           extraState.value("colliderAtTypePlayer", false);
+}
+
 static bool IsReportedMovableBlockState(Actor* target, nlohmann::json payload) {
     if (target == nullptr || target->id != ACTOR_OBJ_OSHIHIKI || !HasReportedEnemyState(payload)) {
         return false;
@@ -180,8 +190,8 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
 
     ApplyEnemyExtraState(target, extraState);
 
-    if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_SHOPNUTS || target->id == ACTOR_OBJ_OSHIHIKI ||
-        IsReportedPuzzleActorState(target, payload)) {
+    if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_SHOPNUTS || target->id == ACTOR_EN_NUTSBALL ||
+        target->id == ACTOR_OBJ_OSHIHIKI || IsReportedPuzzleActorState(target, payload)) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;
     }
@@ -351,10 +361,11 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     bool hasReportedState = HasReportedEnemyState(payload);
     bool hasReportedNonDamageState = health == target->colChkInfo.health &&
-                                      (IsReportedDekunutsFleeState(target, payload) ||
-                                       IsReportedShopnutsCaughtState(target, payload) ||
-                                       IsReportedMovableBlockState(target, payload) ||
-                                       IsReportedPuzzleActorState(target, payload));
+                                       (IsReportedDekunutsFleeState(target, payload) ||
+                                        IsReportedShopnutsCaughtState(target, payload) ||
+                                        IsReportedNutsballReflectedState(target, payload) ||
+                                        IsReportedMovableBlockState(target, payload) ||
+                                        IsReportedPuzzleActorState(target, payload));
 
     if (hasReportedNonDamageState) {
         ApplyReportedEnemyState(target, payload);
