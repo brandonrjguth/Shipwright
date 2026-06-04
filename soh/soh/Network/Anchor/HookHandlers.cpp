@@ -92,7 +92,7 @@ static void ClearDummyBusinessScrubTalkOffers() {
 }
 
 static void ClearKilledBusinessScrubDialog(Actor* actor) {
-    if (actor == nullptr || actor->id != ACTOR_EN_DNS || gPlayState == nullptr) {
+    if (actor == nullptr || (actor->id != ACTOR_EN_DNS && actor->id != ACTOR_EN_HINTNUTS) || gPlayState == nullptr) {
         return;
     }
 

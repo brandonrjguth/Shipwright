@@ -29,7 +29,7 @@ static bool HasReportedEnemyState(nlohmann::json payload) {
            !payload["extraState"].value("kind", std::string("")).empty();
 }
 
-static bool IsReportedDekunutsFleeState(Actor* target, nlohmann::json payload) {
+static bool IsReportedDekunutsState(Actor* target, nlohmann::json payload) {
     if (target == nullptr || target->id != ACTOR_EN_DEKUNUTS || !HasReportedEnemyState(payload)) {
         return false;
     }
@@ -42,8 +42,35 @@ static bool IsReportedDekunutsFleeState(Actor* target, nlohmann::json payload) {
     constexpr s32 DEKUNUTS_ACTION_BEGIN_RUN = 5;
     constexpr s32 DEKUNUTS_ACTION_RUN = 6;
     constexpr s32 DEKUNUTS_ACTION_GASP = 7;
+    constexpr s32 DEKUNUTS_ACTION_BE_DAMAGED = 8;
+    constexpr s32 DEKUNUTS_ACTION_BE_STUNNED = 9;
+    constexpr s32 DEKUNUTS_ACTION_DIE = 10;
     s32 action = extraState.value("action", (s32)-1);
-    return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
+    return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP ||
+           action == DEKUNUTS_ACTION_BE_DAMAGED || action == DEKUNUTS_ACTION_BE_STUNNED ||
+           action == DEKUNUTS_ACTION_DIE;
+}
+
+static bool IsReportedHintnutsState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_EN_HINTNUTS || !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    nlohmann::json extraState = payload["extraState"];
+    if (extraState.value("kind", std::string("")) != "EnHintnuts") {
+        return false;
+    }
+
+    constexpr s32 HINTNUTS_ACTION_BEGIN_RUN = 5;
+    constexpr s32 HINTNUTS_ACTION_BEGIN_FREEZE = 6;
+    constexpr s32 HINTNUTS_ACTION_RUN = 7;
+    constexpr s32 HINTNUTS_ACTION_TALK = 8;
+    constexpr s32 HINTNUTS_ACTION_LEAVE = 9;
+    constexpr s32 HINTNUTS_ACTION_FREEZE = 10;
+    s32 action = extraState.value("action", (s32)-1);
+    return action == HINTNUTS_ACTION_BEGIN_RUN || action == HINTNUTS_ACTION_BEGIN_FREEZE ||
+           action == HINTNUTS_ACTION_RUN || action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE ||
+           action == HINTNUTS_ACTION_FREEZE;
 }
 
 static bool IsReportedShopnutsCaughtState(Actor* target, nlohmann::json payload) {
@@ -163,9 +190,6 @@ static bool ApplyReportedEnStDeathState(Actor* target, nlohmann::json extraState
 
     switch (extraState.value("action", (s32)-1)) {
         case REPORTED_ENST_ACTION_DIE:
-            if (st->finishDeathTimer <= 0) {
-                st->finishDeathTimer = 8;
-            }
             EnSt_SetupAction(st, EnSt_Die);
             return true;
         case REPORTED_ENST_ACTION_FINISH_BOUNCING:
@@ -173,10 +197,8 @@ static bool ApplyReportedEnStDeathState(Actor* target, nlohmann::json extraState
             return true;
         case REPORTED_ENST_ACTION_BOUNCE_AROUND:
             if (st->groundBounces <= 0) {
-                st->groundBounces = 3;
-            }
-            if (st->deathTimer <= 0) {
-                st->deathTimer = 20;
+                EnSt_SetupAction(st, EnSt_FinishBouncing);
+                return true;
             }
             if (target->gravity == 0.0f) {
                 target->gravity = -1.0f;
@@ -193,8 +215,9 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
 
     ApplyEnemyExtraState(target, extraState);
 
-    if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_SHOPNUTS || target->id == ACTOR_EN_NUTSBALL ||
-        target->id == ACTOR_OBJ_OSHIHIKI || IsReportedPuzzleActorState(target, payload)) {
+    if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_HINTNUTS || target->id == ACTOR_EN_SHOPNUTS ||
+        target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_OBJ_OSHIHIKI ||
+        IsReportedPuzzleActorState(target, payload)) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;
     }
@@ -364,7 +387,8 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     bool hasReportedState = HasReportedEnemyState(payload);
     bool hasReportedNonDamageState = health == target->colChkInfo.health &&
-                                       (IsReportedDekunutsFleeState(target, payload) ||
+                                       (IsReportedDekunutsState(target, payload) ||
+                                        IsReportedHintnutsState(target, payload) ||
                                         IsReportedShopnutsCaughtState(target, payload) ||
                                         IsReportedNutsballReflectedState(target, payload) ||
                                         IsReportedMovableBlockState(target, payload) ||

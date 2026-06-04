@@ -426,7 +426,8 @@ bool Anchor::IsEnemySyncActor(Actor* actor) {
         return false;
     }
 
-    if (actor->id == ACTOR_EN_DEKUNUTS && actor->params == DEKUNUTS_FLOWER_PARAM) {
+    if ((actor->id == ACTOR_EN_DEKUNUTS || actor->id == ACTOR_EN_HINTNUTS) &&
+        actor->params == DEKUNUTS_FLOWER_PARAM) {
         return false;
     }
 

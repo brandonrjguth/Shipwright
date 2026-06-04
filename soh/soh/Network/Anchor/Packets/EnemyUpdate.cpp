@@ -6,6 +6,8 @@ extern "C" {
 #include "variables.h"
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.h"
+#include "src/overlays/actors/ovl_En_Hintnuts/z_en_hintnuts.h"
+#include "objects/object_hintnuts/object_hintnuts.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Shopnuts/z_en_shopnuts.h"
 #include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
@@ -64,6 +66,28 @@ void EnDekunuts_SetupRun(EnDekunuts* thisx);
 void EnDekunuts_SetupGasp(EnDekunuts* thisx);
 void EnDekunuts_SetupBeStunned(EnDekunuts* thisx);
 void EnDekunuts_SetupDie(EnDekunuts* thisx);
+void EnHintnuts_Wait(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_LookAround(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_Stand(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_ThrowNut(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_Burrow(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_BeginRun(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_BeginFreeze(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_Run(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_Talk(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_Leave(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_Freeze(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_SetupWait(EnHintnuts* thisx);
+void EnHintnuts_SetupLookAround(EnHintnuts* thisx);
+void EnHintnuts_SetupThrowScrubProjectile(EnHintnuts* thisx);
+void EnHintnuts_SetupStand(EnHintnuts* thisx);
+void EnHintnuts_SetupBurrow(EnHintnuts* thisx);
+void EnHintnuts_SetupRun(EnHintnuts* thisx);
+void EnHintnuts_SetupTalk(EnHintnuts* thisx);
+void EnHintnuts_SetupLeave(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_SetupFreeze(EnHintnuts* thisx);
+void EnHintnuts_HitByScrubProjectile1(EnHintnuts* thisx, PlayState* play);
+void EnHintnuts_HitByScrubProjectile2(EnHintnuts* thisx);
 void EnDekubaba_Wait(EnDekubaba*, PlayState*);
 void EnDekubaba_Grow(EnDekubaba*, PlayState*);
 void EnDekubaba_Retract(EnDekubaba*, PlayState*);
@@ -234,6 +258,63 @@ static bool IsDekunutsFleeAction(s32 action) {
     return action == DEKUNUTS_ACTION_BEGIN_RUN || action == DEKUNUTS_ACTION_RUN || action == DEKUNUTS_ACTION_GASP;
 }
 
+static bool IsDekunutsReportAction(s32 action) {
+    return IsDekunutsFleeAction(action) || action == DEKUNUTS_ACTION_BE_DAMAGED ||
+           action == DEKUNUTS_ACTION_BE_STUNNED || action == DEKUNUTS_ACTION_DIE;
+}
+
+enum HintnutsAction : s32 {
+    HINTNUTS_ACTION_WAIT = 0,
+    HINTNUTS_ACTION_LOOK_AROUND = 1,
+    HINTNUTS_ACTION_STAND = 2,
+    HINTNUTS_ACTION_THROW_NUT = 3,
+    HINTNUTS_ACTION_BURROW = 4,
+    HINTNUTS_ACTION_BEGIN_RUN = 5,
+    HINTNUTS_ACTION_BEGIN_FREEZE = 6,
+    HINTNUTS_ACTION_RUN = 7,
+    HINTNUTS_ACTION_TALK = 8,
+    HINTNUTS_ACTION_LEAVE = 9,
+    HINTNUTS_ACTION_FREEZE = 10,
+};
+
+static s32 GetHintnutsActionId(EnHintnutsActionFunc actionFunc) {
+    if (actionFunc == EnHintnuts_Wait) return HINTNUTS_ACTION_WAIT;
+    if (actionFunc == EnHintnuts_LookAround) return HINTNUTS_ACTION_LOOK_AROUND;
+    if (actionFunc == EnHintnuts_Stand) return HINTNUTS_ACTION_STAND;
+    if (actionFunc == EnHintnuts_ThrowNut) return HINTNUTS_ACTION_THROW_NUT;
+    if (actionFunc == EnHintnuts_Burrow) return HINTNUTS_ACTION_BURROW;
+    if (actionFunc == EnHintnuts_BeginRun) return HINTNUTS_ACTION_BEGIN_RUN;
+    if (actionFunc == EnHintnuts_BeginFreeze) return HINTNUTS_ACTION_BEGIN_FREEZE;
+    if (actionFunc == EnHintnuts_Run) return HINTNUTS_ACTION_RUN;
+    if (actionFunc == EnHintnuts_Talk) return HINTNUTS_ACTION_TALK;
+    if (actionFunc == EnHintnuts_Leave) return HINTNUTS_ACTION_LEAVE;
+    if (actionFunc == EnHintnuts_Freeze) return HINTNUTS_ACTION_FREEZE;
+    return -1;
+}
+
+static EnHintnutsActionFunc GetHintnutsActionFunc(s32 actionId) {
+    switch (actionId) {
+        case HINTNUTS_ACTION_WAIT: return EnHintnuts_Wait;
+        case HINTNUTS_ACTION_LOOK_AROUND: return EnHintnuts_LookAround;
+        case HINTNUTS_ACTION_STAND: return EnHintnuts_Stand;
+        case HINTNUTS_ACTION_THROW_NUT: return EnHintnuts_ThrowNut;
+        case HINTNUTS_ACTION_BURROW: return EnHintnuts_Burrow;
+        case HINTNUTS_ACTION_BEGIN_RUN: return EnHintnuts_BeginRun;
+        case HINTNUTS_ACTION_BEGIN_FREEZE: return EnHintnuts_BeginFreeze;
+        case HINTNUTS_ACTION_RUN: return EnHintnuts_Run;
+        case HINTNUTS_ACTION_TALK: return EnHintnuts_Talk;
+        case HINTNUTS_ACTION_LEAVE: return EnHintnuts_Leave;
+        case HINTNUTS_ACTION_FREEZE: return EnHintnuts_Freeze;
+        default: return nullptr;
+    }
+}
+
+static bool IsHintnutsReportAction(s32 action) {
+    return action == HINTNUTS_ACTION_BEGIN_RUN || action == HINTNUTS_ACTION_BEGIN_FREEZE ||
+           action == HINTNUTS_ACTION_RUN || action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE ||
+           action == HINTNUTS_ACTION_FREEZE;
+}
+
 struct ActorMotionSnapshot {
     Vec3f pos;
     Vec3f prevPos;
@@ -309,6 +390,80 @@ static void ApplyDekunutsAction(EnDekunuts* dekunuts, s32 action) {
             break;
     }
     RestoreActorMotion(&dekunuts->actor, motion);
+}
+
+static void ApplyHintnutsAction(EnHintnuts* hintnuts, s32 action) {
+    if (hintnuts == nullptr || action < 0 || action == GetHintnutsActionId(hintnuts->actionFunc)) {
+        return;
+    }
+
+    ActorMotionSnapshot motion = CaptureActorMotion(&hintnuts->actor);
+    switch (action) {
+        case HINTNUTS_ACTION_WAIT:
+            EnHintnuts_SetupWait(hintnuts);
+            break;
+        case HINTNUTS_ACTION_LOOK_AROUND:
+            EnHintnuts_SetupLookAround(hintnuts);
+            break;
+        case HINTNUTS_ACTION_STAND:
+            EnHintnuts_SetupStand(hintnuts);
+            break;
+        case HINTNUTS_ACTION_THROW_NUT:
+            EnHintnuts_SetupThrowScrubProjectile(hintnuts);
+            break;
+        case HINTNUTS_ACTION_BURROW:
+            EnHintnuts_SetupBurrow(hintnuts);
+            break;
+        case HINTNUTS_ACTION_BEGIN_RUN:
+            if (gPlayState != nullptr) {
+                EnHintnuts_HitByScrubProjectile1(hintnuts, gPlayState);
+            }
+            EnHintnuts_HitByScrubProjectile2(hintnuts);
+            if (GetHintnutsActionId(hintnuts->actionFunc) != action) {
+                Animation_MorphToPlayOnce(&hintnuts->skelAnime, (AnimationHeader*)gHintNutsUnburrowAnim, -3.0f);
+                hintnuts->collider.dim.height = 37;
+                hintnuts->collider.base.acFlags &= ~AC_ON;
+                hintnuts->actionFunc = EnHintnuts_BeginRun;
+            }
+            break;
+        case HINTNUTS_ACTION_BEGIN_FREEZE:
+            if (gPlayState != nullptr) {
+                EnHintnuts_HitByScrubProjectile1(hintnuts, gPlayState);
+            }
+            EnHintnuts_HitByScrubProjectile2(hintnuts);
+            if (GetHintnutsActionId(hintnuts->actionFunc) != action) {
+                Animation_MorphToPlayOnce(&hintnuts->skelAnime, (AnimationHeader*)gHintNutsUnburrowAnim, -3.0f);
+                hintnuts->collider.dim.height = 37;
+                hintnuts->collider.base.acFlags &= ~AC_ON;
+                hintnuts->actor.flags |= ACTOR_FLAG_UPDATE_CULLING_DISABLED;
+                hintnuts->actionFunc = EnHintnuts_BeginFreeze;
+            }
+            break;
+        case HINTNUTS_ACTION_RUN:
+            EnHintnuts_SetupRun(hintnuts);
+            break;
+        case HINTNUTS_ACTION_TALK:
+            EnHintnuts_SetupTalk(hintnuts);
+            break;
+        case HINTNUTS_ACTION_LEAVE:
+            if (gPlayState != nullptr) {
+                EnHintnuts_SetupLeave(hintnuts, gPlayState);
+            } else {
+                hintnuts->actionFunc = EnHintnuts_Leave;
+            }
+            break;
+        case HINTNUTS_ACTION_FREEZE:
+            EnHintnuts_SetupFreeze(hintnuts);
+            break;
+        default: {
+            EnHintnutsActionFunc remoteFunc = GetHintnutsActionFunc(action);
+            if (remoteFunc != nullptr) {
+                hintnuts->actionFunc = remoteFunc;
+            }
+            break;
+        }
+    }
+    RestoreActorMotion(&hintnuts->actor, motion);
 }
 
 enum ShopnutsAction : s32 {
@@ -1187,7 +1342,12 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
 
     if (actor->id == ACTOR_EN_DEKUNUTS) {
         EnDekunuts* dekunuts = (EnDekunuts*)actor;
-        return IsDekunutsFleeAction(GetDekunutsActionId(dekunuts->actionFunc));
+        return IsDekunutsReportAction(GetDekunutsActionId(dekunuts->actionFunc));
+    }
+
+    if (actor->id == ACTOR_EN_HINTNUTS) {
+        EnHintnuts* hintnuts = (EnHintnuts*)actor;
+        return IsHintnutsReportAction(GetHintnutsActionId(hintnuts->actionFunc));
     }
 
     if (actor->id == ACTOR_EN_SHOPNUTS) {
@@ -1237,6 +1397,14 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
         return ShouldReportEnemyExtraState(actor);
     }
 
+    if (actor->id == ACTOR_EN_HINTNUTS) {
+        if (IsAuthorityReportingExtraState(authorityExtra, "EnHintnuts")) {
+            return false;
+        }
+
+        return ShouldReportEnemyExtraState(actor);
+    }
+
     if (!ShouldReportEnemyExtraState(actor)) {
         return false;
     }
@@ -1270,6 +1438,21 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["colliderHeight"] = dekunuts->collider.dim.height;
             extra["mass"] = dekunuts->actor.colChkInfo.mass;
             AddSkelAnimeState(extra, &dekunuts->skelAnime);
+            break;
+        }
+        case ACTOR_EN_HINTNUTS: {
+            EnHintnuts* hintnuts = (EnHintnuts*)actor;
+            extra["kind"] = "EnHintnuts";
+            extra["action"] = GetHintnutsActionId(hintnuts->actionFunc);
+            extra["animFlagAndTimer"] = hintnuts->animFlagAndTimer;
+            extra["runDirection"] = hintnuts->unk_196;
+            extra["textIdCopy"] = hintnuts->textIdCopy;
+            extra["actorCategory"] = hintnuts->actor.category;
+            extra["actorFlags"] = hintnuts->actor.flags;
+            extra["colliderAcOn"] = (hintnuts->collider.base.acFlags & AC_ON) != 0;
+            extra["colliderOcOn"] = (hintnuts->collider.base.ocFlags1 & OC1_ON) != 0;
+            extra["colliderHeight"] = hintnuts->collider.dim.height;
+            AddSkelAnimeState(extra, &hintnuts->skelAnime);
             break;
         }
         case ACTOR_EN_DEKUBABA: {
@@ -1863,6 +2046,39 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             }
         }
         ApplySkelAnimeState(extra, &dekunuts->skelAnime);
+    } else if (actor->id == ACTOR_EN_HINTNUTS && kind == "EnHintnuts") {
+        EnHintnuts* hintnuts = (EnHintnuts*)actor;
+        s32 remoteCategory = extra.value("actorCategory", hintnuts->actor.category);
+        ApplyHintnutsAction(hintnuts, extra.value("action", (s32)-1));
+        if (gPlayState != nullptr && remoteCategory >= ACTORCAT_SWITCH && remoteCategory < ACTORCAT_MAX &&
+            hintnuts->actor.category != remoteCategory) {
+            Actor_ChangeCategory(gPlayState, &gPlayState->actorCtx, &hintnuts->actor, (ActorCategory)remoteCategory);
+        }
+        hintnuts->animFlagAndTimer = extra.value("animFlagAndTimer", hintnuts->animFlagAndTimer);
+        hintnuts->unk_196 = extra.value("runDirection", hintnuts->unk_196);
+        hintnuts->textIdCopy = extra.value("textIdCopy", hintnuts->textIdCopy);
+        hintnuts->collider.dim.height = extra.value("colliderHeight", hintnuts->collider.dim.height);
+        if (extra.contains("actorFlags")) {
+            u32 syncedFlags = ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_FRIENDLY |
+                              ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED | ACTOR_FLAG_UPDATE_CULLING_DISABLED;
+            u32 remoteFlags = extra.value("actorFlags", hintnuts->actor.flags);
+            hintnuts->actor.flags = (hintnuts->actor.flags & ~syncedFlags) | (remoteFlags & syncedFlags);
+        }
+        if (extra.contains("colliderAcOn")) {
+            if (extra.value("colliderAcOn", false)) {
+                hintnuts->collider.base.acFlags |= AC_ON;
+            } else {
+                hintnuts->collider.base.acFlags &= ~AC_ON;
+            }
+        }
+        if (extra.contains("colliderOcOn")) {
+            if (extra.value("colliderOcOn", false)) {
+                hintnuts->collider.base.ocFlags1 |= OC1_ON;
+            } else {
+                hintnuts->collider.base.ocFlags1 &= ~OC1_ON;
+            }
+        }
+        ApplySkelAnimeState(extra, &hintnuts->skelAnime);
     } else if (actor->id == ACTOR_EN_DEKUBABA && kind == "EnDekubaba") {
         EnDekubaba* dekubaba = (EnDekubaba*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
