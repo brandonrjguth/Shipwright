@@ -1191,6 +1191,14 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
         return ShouldPreserveLocalObjOshihiki((ObjOshihiki*)actor, authorityExtra);
     }
 
+    if (actor->id == ACTOR_EN_NUTSBALL) {
+        EnNutsball* nutsball = (EnNutsball*)actor;
+        bool localReflected = (nutsball->collider.base.atFlags & AT_TYPE_PLAYER) != 0;
+        bool authorityReflected = authorityExtra.value("kind", std::string("")) == "EnNutsball" &&
+                                  authorityExtra.value("colliderAtTypePlayer", false);
+        return localReflected && !authorityReflected;
+    }
+
     if (!ShouldReportEnemyExtraState(actor)) {
         return false;
     }

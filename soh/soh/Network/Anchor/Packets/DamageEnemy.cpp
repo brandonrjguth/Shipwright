@@ -7,6 +7,7 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
 #undef this
@@ -62,8 +63,10 @@ static bool IsReportedNutsballReflectedState(Actor* target, nlohmann::json paylo
     }
 
     nlohmann::json extraState = payload["extraState"];
+    EnNutsball* nutsball = (EnNutsball*)target;
     return extraState.value("kind", std::string("")) == "EnNutsball" &&
-           extraState.value("colliderAtTypePlayer", false);
+           extraState.value("colliderAtTypePlayer", false) &&
+           ((nutsball->collider.base.atFlags & AT_TYPE_PLAYER) == 0);
 }
 
 static bool IsReportedMovableBlockState(Actor* target, nlohmann::json payload) {
