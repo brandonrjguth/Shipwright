@@ -322,41 +322,7 @@ static bool IsHintnutsLocalDialogueAction(s32 action) {
     return action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE;
 }
 
-static bool IsHintnutsFrozenAction(s32 action) {
-    return action == HINTNUTS_ACTION_BEGIN_FREEZE || action == HINTNUTS_ACTION_FREEZE;
-}
-
-static bool ArePriorHintnutsPuzzleScrubsFrozen() {
-    if (gPlayState == nullptr) {
-        return false;
-    }
-
-    bool firstFrozen = false;
-    bool secondFrozen = false;
-    for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
-        Actor* actor = gPlayState->actorCtx.actorLists[category].head;
-        while (actor != nullptr) {
-            if (actor->id == ACTOR_EN_HINTNUTS && actor->params >= 1 && actor->params <= 2) {
-                EnHintnuts* hintnuts = (EnHintnuts*)actor;
-                bool frozen = IsHintnutsFrozenAction(GetHintnutsActionId(hintnuts->actionFunc));
-                if (actor->params == 1) {
-                    firstFrozen = firstFrozen || frozen;
-                } else {
-                    secondFrozen = secondFrozen || frozen;
-                }
-            }
-            actor = actor->next;
-        }
-    }
-
-    return firstFrozen && secondFrozen;
-}
-
-static bool ShouldPromoteFinalHintnutsScrub(EnHintnuts* hintnuts) {
-    return hintnuts != nullptr && hintnuts->actor.params == 3 && ArePriorHintnutsPuzzleScrubsFrozen();
-}
-
-static void ApplyFinalHintnutsScrubRun(EnHintnuts* hintnuts) {
+static void ApplyHintnutsFriendlyRun(EnHintnuts* hintnuts) {
     if (hintnuts == nullptr) {
         return;
     }
@@ -488,11 +454,11 @@ static void ApplyHintnutsAction(EnHintnuts* hintnuts, s32 action) {
         return;
     }
 
-    if (action == HINTNUTS_ACTION_BEGIN_FREEZE && ShouldPromoteFinalHintnutsScrub(hintnuts)) {
-        action = HINTNUTS_ACTION_BEGIN_RUN;
-    }
-
     if (action == GetHintnutsActionId(hintnuts->actionFunc)) {
+        if (action == HINTNUTS_ACTION_BEGIN_RUN && (hintnuts->actor.params == 0 || hintnuts->actor.params == 3) &&
+            hintnuts->actor.category != ACTORCAT_BG) {
+            ApplyHintnutsFriendlyRun(hintnuts);
+        }
         return;
     }
 
@@ -514,8 +480,8 @@ static void ApplyHintnutsAction(EnHintnuts* hintnuts, s32 action) {
             EnHintnuts_SetupBurrow(hintnuts);
             break;
         case HINTNUTS_ACTION_BEGIN_RUN:
-            if (ShouldPromoteFinalHintnutsScrub(hintnuts)) {
-                ApplyFinalHintnutsScrubRun(hintnuts);
+            if (hintnuts->actor.params == 0 || hintnuts->actor.params == 3) {
+                ApplyHintnutsFriendlyRun(hintnuts);
                 break;
             }
             if (gPlayState != nullptr) {
@@ -1572,10 +1538,6 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         case ACTOR_EN_HINTNUTS: {
             EnHintnuts* hintnuts = (EnHintnuts*)actor;
             s32 action = GetHintnutsActionId(hintnuts->actionFunc);
-            if (IsHintnutsFrozenAction(action) && ShouldPromoteFinalHintnutsScrub(hintnuts)) {
-                ApplyFinalHintnutsScrubRun(hintnuts);
-                action = GetHintnutsActionId(hintnuts->actionFunc);
-            }
             if (!IsHintnutsNetworkAction(action)) {
                 break;
             }

@@ -28,6 +28,7 @@ void EnHintnuts_Run(EnHintnuts* this, PlayState* play);
 void EnHintnuts_Talk(EnHintnuts* this, PlayState* play);
 void EnHintnuts_Leave(EnHintnuts* this, PlayState* play);
 void EnHintnuts_Freeze(EnHintnuts* this, PlayState* play);
+bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos);
 
 const ActorInit En_Hintnuts_InitVars = {
     ACTOR_EN_HINTNUTS,
@@ -225,6 +226,16 @@ void EnHintnuts_SetupFreeze(EnHintnuts* this) {
     this->actionFunc = EnHintnuts_Freeze;
 }
 
+s16 EnHintnuts_GetTargetYaw(EnHintnuts* this) {
+    Vec3f targetPos;
+
+    if (Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos)) {
+        return Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos);
+    }
+
+    return this->actor.yawTowardsPlayer;
+}
+
 void EnHintnuts_Wait(EnHintnuts* this, PlayState* play) {
     s32 hasSlowPlaybackSpeed = false;
 
@@ -274,7 +285,7 @@ void EnHintnuts_Stand(EnHintnuts* this, PlayState* play) {
         this->animFlagAndTimer--;
     }
     if (!(this->animFlagAndTimer & 0x1000)) {
-        Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 2, 0xE38);
+        Math_ApproachS(&this->actor.shape.rot.y, EnHintnuts_GetTargetYaw(this), 2, 0xE38);
     }
     if (this->actor.xzDistToPlayer < 120.0f || this->animFlagAndTimer == 0x1000) {
         EnHintnuts_SetupBurrow(this);
@@ -286,7 +297,7 @@ void EnHintnuts_Stand(EnHintnuts* this, PlayState* play) {
 void EnHintnuts_ThrowNut(EnHintnuts* this, PlayState* play) {
     Vec3f nutPos;
 
-    Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 2, 0xE38);
+    Math_ApproachS(&this->actor.shape.rot.y, EnHintnuts_GetTargetYaw(this), 2, 0xE38);
     if (this->actor.xzDistToPlayer < 120.0f) {
         EnHintnuts_SetupBurrow(this);
     } else if (SkelAnime_Update(&this->skelAnime)) {
