@@ -267,6 +267,9 @@ void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
     payload["category"] = actor->category;
+    if (health == 0) {
+        AddReportedEnemyContextPayload(actor, payload);
+    }
     payload["quiet"] = true;
 
     SendJsonToRemote(payload);
@@ -298,6 +301,9 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
         if (health == 0) {
             target->colChkInfo.health = 0;
             enemyHealthTracker[target] = 0;
+            if (HasReportedEnemyState(payload)) {
+                ApplyReportedEnemyState(target, payload);
+            }
             return;
         }
 
