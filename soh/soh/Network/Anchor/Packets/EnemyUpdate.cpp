@@ -373,41 +373,6 @@ static void ApplyFinalHintnutsScrubRun(EnHintnuts* hintnuts) {
     hintnuts->actionFunc = EnHintnuts_BeginRun;
 }
 
-bool KeepHintnutsAvailableForLocalDialogue(Actor* actor) {
-    if (actor == nullptr || actor->id != ACTOR_EN_HINTNUTS || actor->update == nullptr || gPlayState == nullptr) {
-        return false;
-    }
-
-    EnHintnuts* hintnuts = (EnHintnuts*)actor;
-    if (actor->params != 0 && actor->params != 3) {
-        return false;
-    }
-
-    if (IsHintnutsLocalDialogueAction(GetHintnutsActionId(hintnuts->actionFunc))) {
-        return true;
-    }
-
-    if (hintnuts->textIdCopy != 0) {
-        actor->textId = hintnuts->textIdCopy;
-    }
-    if (actor->category != ACTORCAT_BG) {
-        Actor_ChangeCategory(gPlayState, &gPlayState->actorCtx, actor, ACTORCAT_BG);
-    }
-
-    actor->flags &= ~(ACTOR_FLAG_HOSTILE | ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED);
-    actor->flags |= ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_FRIENDLY | ACTOR_FLAG_UPDATE_CULLING_DISABLED;
-    actor->colChkInfo.health = 1;
-    actor->colorFilterTimer = 0;
-    hintnuts->collider.base.acFlags &= ~AC_ON;
-    hintnuts->collider.base.ocFlags1 |= OC1_ON;
-    hintnuts->collider.dim.height = 37;
-
-    EnHintnuts_SetupRun(hintnuts);
-    hintnuts->animFlagAndTimer = 30000;
-    hintnuts->unk_196 = actor->yawTowardsPlayer + 0x8000;
-    return true;
-}
-
 static bool IsHintnutsPuzzleResetState(EnHintnuts* hintnuts, s32 action) {
     return hintnuts != nullptr && hintnuts->actor.params >= 1 && hintnuts->actor.params <= 3 &&
            action == HINTNUTS_ACTION_FREEZE && hintnuts->animFlagAndTimer == 2;

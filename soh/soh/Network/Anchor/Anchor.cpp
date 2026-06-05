@@ -15,7 +15,6 @@ extern PlayState* gPlayState;
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 extern bool ShouldReportEnemyExtraState(Actor* actor);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
-extern "C" bool KeepHintnutsAvailableForLocalDialogue(Actor* actor);
 
 extern "C" bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos) {
     if (Anchor::Instance == nullptr || actor == nullptr || outPos == nullptr || !Anchor::Instance->IsSaveLoaded()) {
@@ -881,12 +880,6 @@ void Anchor::ProcessActorBuffers() {
         enemyKillBuffer.erase(enemyKillBuffer.begin());
         Actor* actor = FindActorByEnemyNetworkId(networkId);
         if (actor != nullptr && actor->update != nullptr) {
-            if (KeepHintnutsAvailableForLocalDialogue(actor)) {
-                enemyAuthorityTargets.erase(networkId);
-                enemyExtraStates.erase(networkId);
-                continue;
-            }
-
             if (ShouldDeferKillForLocalDialogue(actor)) {
                 if (!EnemyKillBufferContains(deferredKillBuffer, networkId)) {
                     deferredKillBuffer.push_back(networkId);
