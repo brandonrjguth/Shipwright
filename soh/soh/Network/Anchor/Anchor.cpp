@@ -849,12 +849,9 @@ static bool ShouldDeferKillForLocalDialogue(Actor* actor) {
         return false;
     }
 
-    bool playerReferencesActor = player->talkActor == actor || player->focusActor == actor ||
-                                 player->interactRangeActor == actor || player->actor.parent == actor;
-    bool messageReferencesActor = gPlayState->msgCtx.talkActor == actor;
     bool messageActive = (player->stateFlags1 & PLAYER_STATE1_TALKING) ||
                          Message_GetState(&gPlayState->msgCtx) != TEXT_STATE_NONE;
-    return messageActive && (playerReferencesActor || messageReferencesActor);
+    return messageActive;
 }
 
 static bool EnemyKillBufferContains(const std::vector<uint64_t>& buffer, uint64_t networkId) {
