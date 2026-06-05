@@ -66,6 +66,10 @@ static CollisionCheckInfoInit sColChkInfoInit = { 1, 18, 32, MASS_HEAVY };
 
 static s16 sPuzzleCounter = 0;
 
+void EnHintnuts_ResetPuzzleCounter(void) {
+    sPuzzleCounter = 0;
+}
+
 static InitChainEntry sInitChain[] = {
     ICHAIN_F32(gravity, -1, ICHAIN_CONTINUE),
     ICHAIN_S8(naviEnemyId, 0x0A, ICHAIN_CONTINUE),

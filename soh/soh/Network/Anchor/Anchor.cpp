@@ -337,7 +337,8 @@ Actor* Anchor::FindClosestActorByCategoryAndId(ActorCategory category, s16 actor
     return closestAct;
 }
 
-Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos, float maxDistSq) {
+Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos, float maxDistSq,
+                                                         s16 actorParams) {
     if (gPlayState == nullptr) {
         return nullptr;
     }
@@ -348,6 +349,10 @@ Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category,
 
     while (currAct != nullptr) {
         if (currAct->id != actorId || !IsEnemySyncActor(currAct)) {
+            currAct = currAct->next;
+            continue;
+        }
+        if (actorParams != (s16)-0x8000 && currAct->params != actorParams) {
             currAct = currAct->next;
             continue;
         }

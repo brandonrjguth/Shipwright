@@ -408,6 +408,39 @@ bool KeepHintnutsAvailableForLocalDialogue(Actor* actor) {
     return true;
 }
 
+static bool IsHintnutsPuzzleResetState(EnHintnuts* hintnuts, s32 action) {
+    return hintnuts != nullptr && hintnuts->actor.params >= 1 && hintnuts->actor.params <= 3 &&
+           action == HINTNUTS_ACTION_FREEZE && hintnuts->animFlagAndTimer == 2;
+}
+
+static void ResetHintnutsPuzzleScrubs(void) {
+    if (gPlayState == nullptr) {
+        return;
+    }
+
+    EnHintnuts_ResetPuzzleCounter();
+    for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
+        Actor* actor = gPlayState->actorCtx.actorLists[category].head;
+        while (actor != nullptr) {
+            Actor* next = actor->next;
+            if (actor->id == ACTOR_EN_HINTNUTS && actor->params >= 1 && actor->params <= 3 && actor->update != nullptr) {
+                EnHintnuts* hintnuts = (EnHintnuts*)actor;
+                if (actor->category != ACTORCAT_ENEMY) {
+                    Actor_ChangeCategory(gPlayState, &gPlayState->actorCtx, actor, ACTORCAT_ENEMY);
+                }
+                actor->flags &= ~(ACTOR_FLAG_FRIENDLY | ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED |
+                                  ACTOR_FLAG_UPDATE_CULLING_DISABLED);
+                actor->flags |= ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE;
+                actor->colChkInfo.health = 1;
+                actor->colorFilterTimer = 0;
+                hintnuts->collider.base.ocFlags1 |= OC1_ON;
+                EnHintnuts_SetupWait(hintnuts);
+            }
+            actor = next;
+        }
+    }
+}
+
 struct ActorMotionSnapshot {
     Vec3f pos;
     Vec3f prevPos;
@@ -896,14 +929,32 @@ static EnDekubabaActionFunc GetDekubabaActionFunc(s32 actionId) {
     }
 }
 
+static bool IsDekubabaDeathAction(s32 action) {
+    return action == DEKUBABA_ACTION_PRUNED_SOMERSAULT || action == DEKUBABA_ACTION_SHRINK_DIE ||
+           action == DEKUBABA_ACTION_DEAD_STICK_DROP;
+}
+
+static f32 GetDekubabaNativeSize(Actor* actor) {
+    return actor != nullptr && actor->params == DEKUBABA_BIG ? 2.5f : 1.0f;
+}
+
+static void ClampDekubabaDeathScale(EnDekubaba* dekubaba, s32 action) {
+    if (dekubaba == nullptr || action == DEKUBABA_ACTION_DEAD_STICK_DROP) {
+        return;
+    }
+
+    f32 maxScale = GetDekubabaNativeSize(&dekubaba->actor) * 0.01f;
+    dekubaba->actor.scale.x = CLAMP_MAX(dekubaba->actor.scale.x, maxScale);
+    dekubaba->actor.scale.y = CLAMP_MAX(dekubaba->actor.scale.y, maxScale);
+    dekubaba->actor.scale.z = CLAMP_MAX(dekubaba->actor.scale.z, maxScale);
+}
+
 static void ApplyDekubabaAction(EnDekubaba* dekubaba, s32 action) {
     if (dekubaba == nullptr || action < 0 || action == GetDekubabaActionId(dekubaba->actionFunc)) {
         return;
     }
 
-    bool isDeathAction = action == DEKUBABA_ACTION_PRUNED_SOMERSAULT ||
-                         action == DEKUBABA_ACTION_SHRINK_DIE ||
-                         action == DEKUBABA_ACTION_DEAD_STICK_DROP;
+    bool isDeathAction = IsDekubabaDeathAction(action);
 
     if (isDeathAction) {
         dekubaba->collider.base.acFlags &= ~AC_ON;
@@ -1573,6 +1624,9 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["colliderAcOn"] = (hintnuts->collider.base.acFlags & AC_ON) != 0;
             extra["colliderOcOn"] = (hintnuts->collider.base.ocFlags1 & OC1_ON) != 0;
             extra["colliderHeight"] = hintnuts->collider.dim.height;
+            if (IsHintnutsPuzzleResetState(hintnuts, action)) {
+                extra["puzzleReset"] = true;
+            }
             AddSkelAnimeState(extra, &hintnuts->skelAnime);
             break;
         }
@@ -2173,6 +2227,10 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         if (!IsHintnutsNetworkAction(remoteAction)) {
             return;
         }
+        if (extra.value("puzzleReset", false)) {
+            ResetHintnutsPuzzleScrubs();
+            return;
+        }
         s32 remoteCategory = extra.value("actorCategory", hintnuts->actor.category);
         ApplyHintnutsAction(hintnuts, remoteAction);
         if (gPlayState != nullptr && remoteCategory >= ACTORCAT_SWITCH && remoteCategory < ACTORCAT_MAX &&
@@ -2207,7 +2265,15 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     } else if (actor->id == ACTOR_EN_DEKUBABA && kind == "EnDekubaba") {
         EnDekubaba* dekubaba = (EnDekubaba*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
+        s32 localAction = GetDekubabaActionId(dekubaba->actionFunc);
+        bool isDeathState = actor->colChkInfo.health == 0 || IsDekubabaDeathAction(remoteAction) ||
+                            IsDekubabaDeathAction(localAction);
         ApplyDekubabaAction(dekubaba, remoteAction);
+        dekubaba->size = GetDekubabaNativeSize(actor);
+        if (isDeathState) {
+            ClampDekubabaDeathScale(dekubaba, remoteAction);
+            return;
+        }
         dekubaba->timer = extra.value("timer", dekubaba->timer);
         dekubaba->targetSwayAngle = extra.value("targetSwayAngle", dekubaba->targetSwayAngle);
         std::vector<s16> stemSectionAngle = extra.value("stemSectionAngle", std::vector<s16>{});
@@ -2216,7 +2282,6 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             dekubaba->stemSectionAngle[1] = stemSectionAngle[1];
             dekubaba->stemSectionAngle[2] = stemSectionAngle[2];
         }
-        dekubaba->size = extra.value("size", dekubaba->size);
         std::vector<f32> bodyPartsPos = extra.value("bodyPartsPos", std::vector<f32>{});
         if (bodyPartsPos.size() == 12) {
             for (s32 i = 0; i < 4; i++) {
@@ -3068,7 +3133,8 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
-            target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f);
+            target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f,
+                                                              actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
             SetEnemyNetworkId(target, networkIds[i]);
             if (target == nullptr && !actorParams.empty()) {
                 target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],

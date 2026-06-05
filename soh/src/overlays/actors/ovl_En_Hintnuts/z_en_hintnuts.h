@@ -20,4 +20,6 @@ typedef struct EnHintnuts {
     /* 0x0214 */ ColliderCylinder collider;
 } EnHintnuts; // size = 0x0260
 
+void EnHintnuts_ResetPuzzleCounter(void);
+
 #endif
