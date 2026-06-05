@@ -342,34 +342,38 @@ Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category,
         return nullptr;
     }
 
-    Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
     Actor* closestAct = nullptr;
     float closestDist = maxDistSq;
+    s32 startCategory = actorId == ACTOR_EN_HINTNUTS ? ACTORCAT_SWITCH : category;
+    s32 endCategory = actorId == ACTOR_EN_HINTNUTS ? ACTORCAT_MAX : category + 1;
 
-    while (currAct != nullptr) {
-        if (currAct->id != actorId || !IsEnemySyncActor(currAct)) {
-            currAct = currAct->next;
-            continue;
-        }
-        if (actorParams != (s16)-0x8000 && currAct->params != actorParams) {
-            currAct = currAct->next;
-            continue;
-        }
-        if (GetEnemyNetworkId(currAct) != 0) {
-            currAct = currAct->next;
-            continue;
-        }
+    for (s32 currCategory = startCategory; currCategory < endCategory; currCategory++) {
+        Actor* currAct = gPlayState->actorCtx.actorLists[currCategory].head;
+        while (currAct != nullptr) {
+            if (currAct->id != actorId || !IsEnemySyncActor(currAct)) {
+                currAct = currAct->next;
+                continue;
+            }
+            if (actorParams != (s16)-0x8000 && currAct->params != actorParams) {
+                currAct = currAct->next;
+                continue;
+            }
+            if (GetEnemyNetworkId(currAct) != 0) {
+                currAct = currAct->next;
+                continue;
+            }
 
-        float dx = currAct->world.pos.x - pos.x;
-        float dy = currAct->world.pos.y - pos.y;
-        float dz = currAct->world.pos.z - pos.z;
-        float distance = dx * dx + dy * dy + dz * dz;
-        if (distance < closestDist) {
-            closestAct = currAct;
-            closestDist = distance;
-        }
+            float dx = currAct->world.pos.x - pos.x;
+            float dy = currAct->world.pos.y - pos.y;
+            float dz = currAct->world.pos.z - pos.z;
+            float distance = dx * dx + dy * dy + dz * dz;
+            if (distance < closestDist) {
+                closestAct = currAct;
+                closestDist = distance;
+            }
 
-        currAct = currAct->next;
+            currAct = currAct->next;
+        }
     }
 
     return closestAct;
@@ -416,7 +420,8 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
 }
 
 bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
-    return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_SW ||
+    return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_HINTNUTS ||
+           actorId == ACTOR_EN_SW ||
            actorId == ACTOR_OBJ_OSHIHIKI || actorId == ACTOR_OBJ_HSBLOCK ||
            actorId == ACTOR_OBJ_ELEVATOR || actorId == ACTOR_OBJ_LIFT || actorId == ACTOR_OBJ_TIMEBLOCK ||
            actorId == ACTOR_BG_MIZU_WATER || actorId == ACTOR_BG_MIZU_MOVEBG || actorId == ACTOR_BG_MIZU_SHUTTER ||

@@ -142,6 +142,11 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
             }
         }
 
+        if (closestActor == nullptr && enemiesId[ri] == ACTOR_EN_HINTNUTS) {
+            closestActor = FindClosestUnassignedActorByCategoryAndId(category, enemiesId[ri], remotePos, 100000.0f,
+                                                                    enemiesParams.empty() ? (s16)-0x8000 : enemiesParams[ri]);
+        }
+
         if (closestActor != nullptr) {
             SetEnemyNetworkId(closestActor, enemiesNetworkId[ri]);
         }
