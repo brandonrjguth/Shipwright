@@ -921,6 +921,10 @@ static EnStActionFunc GetEnStActionFunc(s32 actionId) {
     }
 }
 
+static bool IsEnStDeathAction(s32 action) {
+    return action == ENST_ACTION_BOUNCE_AROUND || action == ENST_ACTION_FINISH_BOUNCING || action == ENST_ACTION_DIE;
+}
+
 enum EnSwAction : s32 {
     ENSW_ACTION_SPAWN_START = 0,
     ENSW_ACTION_SPAWN_RISE = 1,
@@ -1318,8 +1322,7 @@ static void EnsureEnStDeathState(EnSt* st) {
     }
 
     s32 action = GetEnStActionId(st->actionFunc);
-    bool isDeathAction = action == ENST_ACTION_BOUNCE_AROUND || action == ENST_ACTION_FINISH_BOUNCING ||
-                         action == ENST_ACTION_DIE;
+    bool isDeathAction = IsEnStDeathAction(action);
 
     if (st->actor.colChkInfo.health != 0 && !isDeathAction) {
         return;
@@ -2220,6 +2223,80 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         EnSt* st = (EnSt*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
         s32 localAction = GetEnStActionId(st->actionFunc);
+
+        if (actor->colChkInfo.health == 0 || IsEnStDeathAction(localAction) || IsEnStDeathAction(remoteAction)) {
+            actor->flags &= ~(ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_ATTACHED_TO_ARROW);
+
+            if (!IsEnStDeathAction(localAction)) {
+                st->swayTimer = 0;
+                st->stunTimer = 0;
+                st->takeDamageSpinTimer = 0;
+                st->gaveDamageSpinTimer = 0;
+
+                if (remoteAction == ENST_ACTION_DIE) {
+                    if (st->finishDeathTimer <= 0) {
+                        st->finishDeathTimer = extra.value("finishDeathTimer", (s16)8);
+                    }
+                    EnSt_SetupAction(st, EnSt_Die);
+                } else if (remoteAction == ENST_ACTION_FINISH_BOUNCING) {
+                    if (st->deathTimer <= 0) {
+                        st->deathTimer = extra.value("deathTimer", (s16)20);
+                    }
+                    if (st->setTargetYawTimer <= 0) {
+                        st->setTargetYawTimer = extra.value("setTargetYawTimer", (s16)8);
+                    }
+                    st->groundBounces = 2;
+                    if (actor->gravity == 0.0f) {
+                        actor->gravity = -2.0f;
+                    }
+                    EnSt_SetupAction(st, EnSt_FinishBouncing);
+                } else {
+                    st->groundBounces = extra.value("groundBounces", (s16)3);
+                    if (st->groundBounces <= 0) {
+                        st->groundBounces = 3;
+                    }
+                    st->deathTimer = extra.value("deathTimer", (s16)20);
+                    if (st->deathTimer <= 0) {
+                        st->deathTimer = 20;
+                    }
+                    if (actor->gravity == 0.0f) {
+                        actor->gravity = -1.0f;
+                    }
+                    EnSt_SetupAction(st, EnSt_BounceAround);
+                }
+            } else if (remoteAction == ENST_ACTION_DIE && localAction != ENST_ACTION_DIE) {
+                if (st->finishDeathTimer <= 0) {
+                    st->finishDeathTimer = extra.value("finishDeathTimer", (s16)8);
+                }
+                EnSt_SetupAction(st, EnSt_Die);
+            } else if (remoteAction == ENST_ACTION_FINISH_BOUNCING && localAction == ENST_ACTION_BOUNCE_AROUND) {
+                if (st->deathTimer <= 0) {
+                    st->deathTimer = extra.value("deathTimer", (s16)20);
+                }
+                if (st->setTargetYawTimer <= 0) {
+                    st->setTargetYawTimer = extra.value("setTargetYawTimer", (s16)8);
+                }
+                st->groundBounces = 2;
+                if (actor->gravity == 0.0f) {
+                    actor->gravity = -2.0f;
+                }
+                EnSt_SetupAction(st, EnSt_FinishBouncing);
+            }
+
+            s32 currentAction = GetEnStActionId(st->actionFunc);
+            if (currentAction == ENST_ACTION_BOUNCE_AROUND && actor->gravity == 0.0f) {
+                actor->gravity = -1.0f;
+            } else if (currentAction == ENST_ACTION_FINISH_BOUNCING && actor->gravity == 0.0f) {
+                actor->gravity = -2.0f;
+            } else if (currentAction == ENST_ACTION_DIE) {
+                actor->velocity = { 0.0f, 0.0f, 0.0f };
+                actor->speedXZ = 0.0f;
+                actor->gravity = 0.0f;
+            }
+
+            return;
+        }
+
         if (remoteAction >= 0 && remoteAction != localAction) {
             EnStActionFunc remoteFunc = GetEnStActionFunc(remoteAction);
             if (remoteFunc != nullptr) {

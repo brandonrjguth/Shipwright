@@ -236,7 +236,6 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     }
 
     if (ApplyReportedEnStDeathState(target, extraState)) {
-        ApplyReportedEnemyDeathMotion(target, payload);
         return;
     }
 
