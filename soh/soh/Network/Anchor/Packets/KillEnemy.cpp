@@ -9,6 +9,8 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
+extern "C" bool KeepHintnutsAvailableForLocalDialogue(Actor* actor);
+
 void Anchor::SendPacket_KillEnemy(Actor* actor) {
     if (!IsSaveLoaded()) {
         return;
@@ -59,6 +61,13 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
     s16 actorId = payload.value("actorId", (s16)0);
     bool isTransientProjectile = actorId == ACTOR_EN_NUTSBALL;
 
+    Actor* target = FindActorByEnemyNetworkId(networkId);
+    if (target != nullptr && actorId == ACTOR_EN_HINTNUTS && KeepHintnutsAvailableForLocalDialogue(target)) {
+        enemyAuthorityTargets.erase(networkId);
+        enemyExtraStates.erase(networkId);
+        return;
+    }
+
     if (!isTransientProjectile && IsEnemyMarkedDead(sceneNum, roomNum, networkId)) {
         return;
     }
@@ -67,7 +76,6 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
         MarkEnemyDead(sceneNum, roomNum, networkId);
     }
 
-    Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target != nullptr) {
         enemyKillBuffer.push_back(networkId);
     }
