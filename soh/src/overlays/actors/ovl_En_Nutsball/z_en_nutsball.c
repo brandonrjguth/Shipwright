@@ -106,7 +106,6 @@ void func_80ABBB34(EnNutsball* this, PlayState* play) {
 }
 
 void func_80ABBBA8(EnNutsball* this, PlayState* play) {
-    Player* player = GET_PLAYER(play);
     Vec3s sp4C;
     Vec3f sp40;
 
@@ -122,9 +121,12 @@ void func_80ABBBA8(EnNutsball* this, PlayState* play) {
         (this->collider.base.acFlags & AC_HIT) || (this->collider.base.ocFlags1 & OC1_HIT)) {
         // Checking if the player is using a shield that reflects projectiles
         // And if so, reflects the projectile on impact
-        if ((player->currentShield == PLAYER_SHIELD_DEKU) ||
-            ((player->currentShield == PLAYER_SHIELD_HYLIAN) && LINK_IS_ADULT)) {
-            if ((this->collider.base.atFlags & AT_HIT) && (this->collider.base.atFlags & AT_TYPE_ENEMY) &&
+        if ((this->collider.base.at != NULL) && (this->collider.base.at->id == ACTOR_PLAYER)) {
+            Player* player = (Player*)this->collider.base.at;
+
+            if (((player->currentShield == PLAYER_SHIELD_DEKU) ||
+                 ((player->currentShield == PLAYER_SHIELD_HYLIAN) && LINK_IS_ADULT)) &&
+                (this->collider.base.atFlags & AT_HIT) && (this->collider.base.atFlags & AT_TYPE_ENEMY) &&
                 (this->collider.base.atFlags & AT_BOUNCED)) {
                 this->collider.base.atFlags &= ~AT_TYPE_ENEMY & ~AT_BOUNCED & ~AT_HIT;
                 this->collider.base.atFlags |= AT_TYPE_PLAYER;
