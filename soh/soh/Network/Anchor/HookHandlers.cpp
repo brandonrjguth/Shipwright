@@ -248,7 +248,12 @@ void Anchor::RegisterHooks() {
     });
 
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_NUTSBALL, isConnected, [&](void* refActor, bool* should) {
-        ClearDummyNutsballCollision(static_cast<EnNutsball*>(refActor));
+        EnNutsball* nutsball = static_cast<EnNutsball*>(refActor);
+        ClearDummyNutsballCollision(nutsball);
+        if (IsRoomStable() && !HasEnemySyncAuthority() && GetEnemyNetworkId(&nutsball->actor) == 0) {
+            Actor_Kill(&nutsball->actor);
+            *should = false;
+        }
     });
 
     COND_HOOK(OnPlayerUpdate, isConnected, [&]() {

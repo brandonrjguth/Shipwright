@@ -3102,9 +3102,11 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
-            target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f,
-                                                              actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
-            SetEnemyNetworkId(target, networkIds[i]);
+            if (actorIds[i] != ACTOR_EN_NUTSBALL) {
+                target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f,
+                                                                  actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
+                SetEnemyNetworkId(target, networkIds[i]);
+            }
             if (target == nullptr && !actorParams.empty()) {
                 target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],
                                      worldRotY[i], worldRotZ[i], actorParams[i]);
