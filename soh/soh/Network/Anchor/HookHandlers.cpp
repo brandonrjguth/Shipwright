@@ -238,50 +238,6 @@ void Anchor::RegisterHooks() {
         }
     };
 
-    auto applyNearestCoopEnemyTarget = [&](Actor* actor) {
-        if (actor == nullptr || gPlayState == nullptr) {
-            return;
-        }
-
-        Player* player = GET_PLAYER(gPlayState);
-        if (player == nullptr) {
-            return;
-        }
-
-        Vec3f bestPos = player->actor.world.pos;
-        f32 dx = bestPos.x - actor->world.pos.x;
-        f32 dz = bestPos.z - actor->world.pos.z;
-        f32 bestXZDist = sqrtf(SQ(dx) + SQ(dz));
-        f32 bestYDist = bestPos.y - actor->world.pos.y;
-        f32 bestXYZDistSq = SQ(bestXZDist) + SQ(bestYDist);
-
-        for (auto& [clientId, client] : clients) {
-            if (!client.online || client.self || !client.isSaveLoaded) {
-                continue;
-            }
-            if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
-                continue;
-            }
-
-            dx = client.posRot.pos.x - actor->world.pos.x;
-            dz = client.posRot.pos.z - actor->world.pos.z;
-            f32 xzDist = sqrtf(SQ(dx) + SQ(dz));
-            f32 yDist = client.posRot.pos.y - actor->world.pos.y;
-            f32 xyzDistSq = SQ(xzDist) + SQ(yDist);
-            if (xyzDistSq < bestXYZDistSq) {
-                bestPos = client.posRot.pos;
-                bestXZDist = xzDist;
-                bestYDist = yDist;
-                bestXYZDistSq = xyzDistSq;
-            }
-        }
-
-        actor->xzDistToPlayer = bestXZDist;
-        actor->yDistToPlayer = bestYDist;
-        actor->xyzDistToPlayerSq = bestXYZDistSq;
-        actor->yawTowardsPlayer = Math_Vec3f_Yaw(&actor->world.pos, &bestPos);
-    };
-
     COND_ID_HOOK(ShouldActorInit, ACTOR_EN_ITEM00, isConnected, suppressReplicaEnemyDrop);
     COND_ID_HOOK(ShouldActorInit, ACTOR_EN_ELF, isConnected, suppressReplicaEnemyDrop);
     COND_ID_HOOK(OnActorInit, ACTOR_EN_ITEM00, isConnected, markAuthorityEnemyDrop);
@@ -469,8 +425,25 @@ void Anchor::RegisterHooks() {
             return;
         }
 
-        if (actor->flags & ACTOR_FLAG_HOSTILE) {
-            applyNearestCoopEnemyTarget(actor);
+        for (auto& [clientId, client] : clients) {
+            if (!client.online || client.self || !client.isSaveLoaded) {
+                continue;
+            }
+            if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+                continue;
+            }
+
+            f32 dx = client.posRot.pos.x - actor->world.pos.x;
+            f32 dz = client.posRot.pos.z - actor->world.pos.z;
+            f32 xzDist = sqrtf(SQ(dx) + SQ(dz));
+            f32 yDist = client.posRot.pos.y - actor->world.pos.y;
+            f32 xyzDistSq = SQ(xzDist) + SQ(yDist);
+            if (xyzDistSq < actor->xyzDistToPlayerSq) {
+                actor->xzDistToPlayer = xzDist;
+                actor->yDistToPlayer = yDist;
+                actor->xyzDistToPlayerSq = xyzDistSq;
+                actor->yawTowardsPlayer = Math_Vec3f_Yaw(&actor->world.pos, &client.posRot.pos);
+            }
         }
     });
 

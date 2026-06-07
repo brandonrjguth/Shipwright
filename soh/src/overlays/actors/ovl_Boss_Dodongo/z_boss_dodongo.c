@@ -11,8 +11,6 @@
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy
 
-bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos);
-
 #define FLAGS                                                                                 \
     (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_UPDATE_CULLING_DISABLED | \
      ACTOR_FLAG_DRAW_CULLING_DISABLED)
@@ -1402,11 +1400,10 @@ f32 func_808C4F6C(BossDodongo* this, PlayState* play) {
     s32 pad;
     f32 temp_f2;
     f32 rotation;
-    Vec3f targetPos = GET_PLAYER(play)->actor.world.pos;
+    Player* player = GET_PLAYER(play);
 
-    Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
-    xDiff = targetPos.x - this->actor.world.pos.x;
-    zDiff = targetPos.z - this->actor.world.pos.z;
+    xDiff = player->actor.world.pos.x - this->actor.world.pos.x;
+    zDiff = player->actor.world.pos.z - this->actor.world.pos.z;
 
     rotation = Math_CosS(-this->actor.world.rot.y);
     sp2C = (Math_SinS(-this->actor.world.rot.y) * zDiff) + (rotation * xDiff);
@@ -1426,11 +1423,10 @@ f32 func_808C50A8(BossDodongo* this, PlayState* play) {
     s32 pad;
     f32 temp_f2;
     f32 rotation;
-    Vec3f targetPos = GET_PLAYER(play)->actor.world.pos;
+    Player* player = GET_PLAYER(play);
 
-    Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
-    xDiff = targetPos.x - this->actor.world.pos.x;
-    zDiff = targetPos.z - this->actor.world.pos.z;
+    xDiff = player->actor.world.pos.x - this->actor.world.pos.x;
+    zDiff = player->actor.world.pos.z - this->actor.world.pos.z;
 
     rotation = Math_CosS(-0x8000 - this->actor.world.rot.y);
     sp2C = (Math_SinS(-0x8000 - this->actor.world.rot.y) * zDiff) + (rotation * xDiff);
@@ -1445,9 +1441,7 @@ f32 func_808C50A8(BossDodongo* this, PlayState* play) {
 }
 
 void BossDodongo_PlayerYawCheck(BossDodongo* this, PlayState* play) {
-    Vec3f targetPos = GET_PLAYER(play)->actor.world.pos;
-    Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
-    s16 yawDiff = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos) - this->actor.world.rot.y;
+    s16 yawDiff = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.world.rot.y;
 
     if ((yawDiff < 0x38E3) && (-0x38E3 < yawDiff)) {
         this->playerYawInRange = true;
