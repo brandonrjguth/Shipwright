@@ -1490,7 +1490,7 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
 
     if (actor->id == ACTOR_EN_GOMA) {
         EnGoma* goma = (EnGoma*)actor;
-        return IsGomaReportAction(GetGomaActionId(goma->actionFunc));
+        return (s8)actor->colChkInfo.health <= 0 || IsGomaReportAction(GetGomaActionId(goma->actionFunc));
     }
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
