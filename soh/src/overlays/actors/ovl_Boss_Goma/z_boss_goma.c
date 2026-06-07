@@ -386,6 +386,17 @@ void BossGoma_PlayEffectsAndSfx(BossGoma* this, PlayState* play, s16 arg2, s16 a
     }
 }
 
+static void BossGoma_ReturnToMainCamera(BossGoma* this, PlayState* play) {
+    if (this->subCameraId >= SUBCAM_FIRST && this->subCameraId < NUM_CAMS &&
+        Play_GetCamera(play, this->subCameraId) != NULL) {
+        func_800C08AC(play, this->subCameraId, 0);
+    } else if (Play_GetCamera(play, MAIN_CAM) != NULL) {
+        Play_ChangeCameraStatus(play, MAIN_CAM, CAM_STAT_ACTIVE);
+    }
+
+    this->subCameraId = MAIN_CAM;
+}
+
 void BossGoma_Destroy(Actor* thisx, PlayState* play) {
     BossGoma* this = (BossGoma*)thisx;
 
@@ -772,8 +783,7 @@ void BossGoma_Encounter(BossGoma* this, PlayState* play) {
                 cam->eye = this->subCameraEye;
                 cam->eyeNext = this->subCameraEye;
                 cam->at = this->subCameraAt;
-                func_800C08AC(play, this->subCameraId, 0);
-                this->subCameraId = 0;
+                BossGoma_ReturnToMainCamera(this, play);
                 func_80064534(play, &play->csCtx);
                 Player_SetCsActionWithHaltedActors(play, &this->actor, 7);
                 this->actionState = 3;
@@ -950,7 +960,10 @@ void BossGoma_Encounter(BossGoma* this, PlayState* play) {
             if (this->framesUntilNextAction == 0) {
                 this->framesUntilNextAction = 30;
                 this->actionState = 150;
-                Play_ChangeCameraStatus(play, 0, 3);
+                if (this->subCameraId >= SUBCAM_FIRST && this->subCameraId < NUM_CAMS &&
+                    Play_GetCamera(play, this->subCameraId) != NULL) {
+                    Play_ChangeCameraStatus(play, MAIN_CAM, CAM_STAT_UNK3);
+                }
             }
             break;
 
@@ -965,8 +978,7 @@ void BossGoma_Encounter(BossGoma* this, PlayState* play) {
                 cam->eye = this->subCameraEye;
                 cam->eyeNext = this->subCameraEye;
                 cam->at = this->subCameraAt;
-                func_800C08AC(play, this->subCameraId, 0);
-                this->subCameraId = 0;
+                BossGoma_ReturnToMainCamera(this, play);
                 BossGoma_SetupFloorMain(this);
                 this->disableGameplayLogic = false;
                 this->patienceTimer = 200;
