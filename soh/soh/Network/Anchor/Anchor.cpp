@@ -423,7 +423,7 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
 
 bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
     return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_HINTNUTS ||
-           actorId == ACTOR_EN_SW ||
+           actorId == ACTOR_EN_SW || actorId == ACTOR_EN_NUTSBALL ||
            actorId == ACTOR_OBJ_OSHIHIKI || actorId == ACTOR_OBJ_HSBLOCK ||
            actorId == ACTOR_OBJ_ELEVATOR || actorId == ACTOR_OBJ_LIFT || actorId == ACTOR_OBJ_TIMEBLOCK ||
            actorId == ACTOR_BG_MIZU_WATER || actorId == ACTOR_BG_MIZU_MOVEBG || actorId == ACTOR_BG_MIZU_SHUTTER ||
@@ -542,12 +542,22 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
             hashValue((uint16_t)homeX);
             hashValue((uint16_t)homeY);
             hashValue((uint16_t)homeZ);
-            hashValue(occurrence);
+            if (actor->id == ACTOR_EN_NUTSBALL) {
+                hashValue(ownClientId);
+                hashValue(GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num));
+                hashValue(transientEnemyCounter++);
+            } else {
+                hashValue(occurrence);
+            }
             networkId = hash;
-            occurrence++;
+            if (actor->id != ACTOR_EN_NUTSBALL) {
+                occurrence++;
+            }
         } while (usedNetworkIds.contains(networkId));
 
-        nextOccurrence[counterKey] = occurrence;
+        if (actor->id != ACTOR_EN_NUTSBALL) {
+            nextOccurrence[counterKey] = occurrence;
+        }
         usedNetworkIds.insert(networkId);
         ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
     }
@@ -561,6 +571,8 @@ void Anchor::ResetEnemyRoomTransientState() {
     enemyAuthorityTargets.clear();
     enemyExtraStates.clear();
     enemyDropCounters.clear();
+    transientEnemyCounter = 0;
+    suppressedTransientProjectileKills.clear();
     hintnutsDialogueActive.clear();
     enemyTransformFrameCounter = 0;
 }
@@ -637,7 +649,7 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
 
     float distSq = AnchorVec3fDistSq(actor->world.pos, state.pos);
     float correction = 0.2f;
-    if (immediate || distSq > 250000.0f) {
+    if (actor->id == ACTOR_EN_NUTSBALL || immediate || distSq > 250000.0f) {
         correction = 1.0f;
     } else if (distSq > 40000.0f) {
         correction = 0.75f;
@@ -897,6 +909,9 @@ void Anchor::ProcessActorBuffers() {
                 continue;
             }
 
+            if (actor->id == ACTOR_EN_NUTSBALL) {
+                suppressedTransientProjectileKills.insert(networkId);
+            }
             Actor_Kill(actor);
         }
     }

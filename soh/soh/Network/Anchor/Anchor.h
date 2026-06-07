@@ -117,6 +117,8 @@ class Anchor : public Network {
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
     std::unordered_map<uint64_t, uint16_t> enemyDropCounters;
+    uint32_t transientEnemyCounter = 0;
+    std::unordered_set<uint64_t> suppressedTransientProjectileKills;
     std::unordered_set<uint64_t> hintnutsDialogueActive;
     s16 enemySyncSceneNum = SCENE_ID_MAX;
     s8 enemySyncRoomNum = -1;

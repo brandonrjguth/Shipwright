@@ -368,12 +368,13 @@ void Anchor::RegisterHooks() {
         if (networkId == 0 || IsEnemyMarkedDead(networkId)) {
             return;
         }
+        if (actor->id == ACTOR_EN_NUTSBALL && suppressedTransientProjectileKills.erase(networkId) > 0) {
+            return;
+        }
         if (HasEnemySyncAuthority()) {
             SendPacket_KillEnemy(actor);
         } else {
-            if (actor->id != ACTOR_EN_NUTSBALL) {
-                SendPacket_ReportEnemyDamage(actor, 0);
-            }
+            SendPacket_ReportEnemyDamage(actor, 0);
         }
     });
 

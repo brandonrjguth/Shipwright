@@ -342,6 +342,13 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     if (actor->id == ACTOR_EN_HINTNUTS && health == 0 && actor->params == 3) {
         payload["hintnutsClearRoom"] = true;
     }
+    if (actor->id == ACTOR_EN_NUTSBALL && health == 0) {
+        EnNutsball* nutsball = (EnNutsball*)actor;
+        payload["projectileKilled"] = (actor->bgCheckFlags & (1 | 8)) ||
+                                      (nutsball->collider.base.atFlags & AT_HIT) ||
+                                      (nutsball->collider.base.acFlags & AC_HIT) ||
+                                      (nutsball->collider.base.ocFlags1 & OC1_HIT);
+    }
     AddReportedEnemyContextPayload(actor, payload);
     payload["quiet"] = true;
 
@@ -395,6 +402,14 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     bool hasReportedState = HasReportedEnemyState(payload);
+    if (target->id == ACTOR_EN_NUTSBALL && health == 0 && hasReportedState &&
+        payload.value("projectileKilled", false)) {
+        ApplyReportedEnemyState(target, payload);
+        SendPacket_KillEnemy(target);
+        enemyKillBuffer.push_back(networkId);
+        return;
+    }
+
     bool hasReportedNonDamageState = health == target->colChkInfo.health &&
                                        (IsReportedDekunutsState(target, payload) ||
                                         IsReportedHintnutsState(target, payload) ||
