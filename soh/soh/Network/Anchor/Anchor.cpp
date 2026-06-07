@@ -9,6 +9,7 @@
 extern "C" {
 #include "variables.h"
 #include "functions.h"
+#include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
 extern PlayState* gPlayState;
 }
 
@@ -918,6 +919,35 @@ static bool ShouldDeferKillForLocalDialogue(Actor* actor) {
     return player->talkActor == actor || gPlayState->msgCtx.talkActor == actor;
 }
 
+static void ReleaseLocalGohmaDefeatCutsceneBeforeKill(Actor* actor) {
+    if (actor == nullptr || actor->id != ACTOR_BOSS_GOMA || gPlayState == nullptr) {
+        return;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    if (player == nullptr || player->csActor != actor) {
+        return;
+    }
+
+    BossGoma* goma = (BossGoma*)actor;
+    if (goma->subCameraId >= SUBCAM_FIRST && goma->subCameraId < NUM_CAMS &&
+        Play_GetCamera(gPlayState, goma->subCameraId) != nullptr) {
+        Camera* mainCamera = Play_GetCamera(gPlayState, MAIN_CAM);
+        if (mainCamera != nullptr) {
+            mainCamera->eye = goma->subCameraEye;
+            mainCamera->eyeNext = goma->subCameraEye;
+            mainCamera->at = goma->subCameraAt;
+        }
+        func_800C08AC(gPlayState, goma->subCameraId, 0);
+    } else if (Play_GetCamera(gPlayState, MAIN_CAM) != nullptr) {
+        Play_ChangeCameraStatus(gPlayState, MAIN_CAM, CAM_STAT_ACTIVE);
+    }
+
+    goma->subCameraId = 0;
+    func_80064534(gPlayState, &gPlayState->csCtx);
+    Player_SetCsActionWithHaltedActors(gPlayState, actor, 7);
+}
+
 static bool EnemyKillBufferContains(const std::vector<uint64_t>& buffer, uint64_t networkId) {
     for (uint64_t bufferedId : buffer) {
         if (bufferedId == networkId) {
@@ -949,6 +979,7 @@ void Anchor::ProcessActorBuffers() {
             if (actor->id == ACTOR_EN_NUTSBALL) {
                 suppressedTransientProjectileKills.insert(networkId);
             }
+            ReleaseLocalGohmaDefeatCutsceneBeforeKill(actor);
             Actor_Kill(actor);
         }
     }

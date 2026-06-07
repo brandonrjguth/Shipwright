@@ -179,6 +179,16 @@ static void ClearKilledBusinessScrubDialog(Actor* actor) {
     player->getItemEntry = noneEntry;
 }
 
+static bool IsLocalBossHeartGetItemActive(ItemBHeart* heart) {
+    if (heart == nullptr || gPlayState == nullptr) {
+        return false;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    return player != nullptr && player->interactRangeActor == &heart->actor &&
+           (player->stateFlags1 & PLAYER_STATE1_GETTING_ITEM) && player->getItemId == GI_HEART_CONTAINER_2;
+}
+
 void Anchor::RegisterHooks() {
 
     // #region Hooks that are required for basic Anchor functionality
@@ -660,6 +670,10 @@ void Anchor::RegisterHooks() {
 
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_ITEM_B_HEART, isConnected, [&](void* refActor, bool* should) {
         ItemBHeart* actor = static_cast<ItemBHeart*>(refActor);
+
+        if (IsLocalBossHeartGetItemActive(actor)) {
+            return;
+        }
 
         if (Flags_GetCollectible(gPlayState, 0x1F)) {
             Actor_Kill(&actor->actor);
