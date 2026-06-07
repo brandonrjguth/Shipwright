@@ -631,6 +631,10 @@ enum GomaAction : s32 {
     GOMA_ACTION_BOSS_LIMB = 14,
 };
 
+static bool IsGomaReportAction(s32 action) {
+    return action == GOMA_ACTION_HURT || action == GOMA_ACTION_DIE || action == GOMA_ACTION_DEAD;
+}
+
 static s32 GetGomaActionId(EnGomaActionFunc actionFunc) {
     if (actionFunc == EnGoma_Flee) return GOMA_ACTION_FLEE;
     if (actionFunc == EnGoma_EggFallToGround) return GOMA_ACTION_EGG_FALL_TO_GROUND;
@@ -1482,6 +1486,11 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
     if (actor->id == ACTOR_EN_NUTSBALL) {
         EnNutsball* nutsball = (EnNutsball*)actor;
         return (nutsball->collider.base.atFlags & AT_TYPE_PLAYER) != 0;
+    }
+
+    if (actor->id == ACTOR_EN_GOMA) {
+        EnGoma* goma = (EnGoma*)actor;
+        return IsGomaReportAction(GetGomaActionId(goma->actionFunc));
     }
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {

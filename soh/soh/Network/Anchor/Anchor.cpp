@@ -988,6 +988,9 @@ void Anchor::DetectEnemyDamage() {
 
     for (Actor* act : currentEnemies) {
         u8 currentHealth = act->colChkInfo.health;
+        if (act->id == ACTOR_EN_GOMA && (s8)act->colChkInfo.health <= 0) {
+            currentHealth = 0;
+        }
 
         if (enemyHealthTracker.contains(act)) {
             u8 lastHealth = enemyHealthTracker[act];

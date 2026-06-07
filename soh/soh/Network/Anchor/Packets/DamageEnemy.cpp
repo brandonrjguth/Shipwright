@@ -7,6 +7,7 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
@@ -15,6 +16,10 @@ extern PlayState* gPlayState;
 
 void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
 void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
+void EnGoma_Hurt(EnGoma* thisx, PlayState* play);
+void EnGoma_Die(EnGoma* thisx, PlayState* play);
+void EnGoma_Dead(EnGoma* thisx, PlayState* play);
+void EnGoma_SetupDie(EnGoma* thisx);
 void EnSt_SetupAction(EnSt* thisx, EnStActionFunc actionFunc);
 void EnSt_BounceAround(EnSt* thisx, PlayState* play);
 void EnSt_FinishBouncing(EnSt* thisx, PlayState* play);
@@ -171,6 +176,19 @@ static void ApplyReportedEnemyDeathMotion(Actor* target, nlohmann::json payload)
     target->flags = (target->flags & ~deathMotionFlags) | (reportedFlags & deathMotionFlags);
 }
 
+static void EnsureReportedGohmaLarvaDeathState(Actor* target) {
+    if (target == nullptr || target->id != ACTOR_EN_GOMA || target->colChkInfo.health != 0) {
+        return;
+    }
+
+    EnGoma* goma = (EnGoma*)target;
+    if (goma->actionFunc == EnGoma_Hurt || goma->actionFunc == EnGoma_Die || goma->actionFunc == EnGoma_Dead) {
+        return;
+    }
+
+    EnGoma_SetupDie(goma);
+}
+
 enum ReportedEnStAction : s32 {
     REPORTED_ENST_ACTION_BOUNCE_AROUND = 6,
     REPORTED_ENST_ACTION_FINISH_BOUNCING = 7,
@@ -211,6 +229,7 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     nlohmann::json extraState = payload["extraState"];
 
     ApplyEnemyExtraState(target, extraState);
+    EnsureReportedGohmaLarvaDeathState(target);
 
     if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_HINTNUTS || target->id == ACTOR_EN_SHOPNUTS ||
         target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_OBJ_OSHIHIKI ||
@@ -323,6 +342,10 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
 
     if (GetEnemyNetworkId(actor) == 0) {
         return;
+    }
+
+    if (actor->id == ACTOR_EN_GOMA && (s8)actor->colChkInfo.health <= 0) {
+        health = 0;
     }
 
     nlohmann::json payload;

@@ -131,6 +131,14 @@ static void ClearDummyScrubTalkOffers() {
     }
 }
 
+static u8 GetReportedEnemyHealth(Actor* actor) {
+    if (actor != nullptr && actor->id == ACTOR_EN_GOMA && (s8)actor->colChkInfo.health <= 0) {
+        return 0;
+    }
+
+    return actor != nullptr ? actor->colChkInfo.health : 0;
+}
+
 static void ClearKilledBusinessScrubDialog(Actor* actor) {
     if (actor == nullptr || actor->id != ACTOR_EN_DNS || gPlayState == nullptr) {
         return;
@@ -307,9 +315,9 @@ void Anchor::RegisterHooks() {
             ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
         }
         if ((actor->id == ACTOR_OBJ_OSHIHIKI || actor->id == ACTOR_EN_DEKUNUTS ||
-             actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL) &&
+             actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL || actor->id == ACTOR_EN_GOMA) &&
             hasPendingLocalExtraState) {
-            SendPacket_ReportEnemyDamage(actor, actor->colChkInfo.health);
+            SendPacket_ReportEnemyDamage(actor, GetReportedEnemyHealth(actor));
         }
     });
 
