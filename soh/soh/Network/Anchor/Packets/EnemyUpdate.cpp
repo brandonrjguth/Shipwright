@@ -365,6 +365,19 @@ static bool IsHintnutsPuzzleResetState(EnHintnuts* hintnuts, s32 action) {
            action == HINTNUTS_ACTION_FREEZE && hintnuts->animFlagAndTimer == 2;
 }
 
+static bool IsHintnutsPuzzleClearState(EnHintnuts* hintnuts, s32 action) {
+    return hintnuts != nullptr && hintnuts->actor.params >= 1 && hintnuts->actor.params <= 3 &&
+           action == HINTNUTS_ACTION_FREEZE && hintnuts->animFlagAndTimer == 1;
+}
+
+static void SetHintnutsPuzzleClear(Actor* actor) {
+    if (actor == nullptr || gPlayState == nullptr) {
+        return;
+    }
+
+    Flags_SetClear(gPlayState, actor->room);
+}
+
 static void ResetHintnutsPuzzleScrubs(void) {
     if (gPlayState == nullptr) {
         return;
@@ -1576,6 +1589,10 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             if (IsHintnutsPuzzleResetState(hintnuts, action)) {
                 extra["puzzleReset"] = true;
             }
+            if (IsHintnutsPuzzleClearState(hintnuts, action)) {
+                extra["puzzleClear"] = true;
+                SetHintnutsPuzzleClear(actor);
+            }
             AddSkelAnimeState(extra, &hintnuts->skelAnime);
             break;
         }
@@ -2179,6 +2196,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         if (extra.value("puzzleReset", false)) {
             ResetHintnutsPuzzleScrubs();
             return;
+        }
+        if (extra.value("puzzleClear", false)) {
+            SetHintnutsPuzzleClear(actor);
         }
         s32 remoteCategory = extra.value("actorCategory", hintnuts->actor.category);
         ApplyHintnutsAction(hintnuts, remoteAction);
