@@ -322,6 +322,27 @@ static bool IsHintnutsLocalDialogueAction(s32 action) {
     return action == HINTNUTS_ACTION_TALK || action == HINTNUTS_ACTION_LEAVE;
 }
 
+static bool IsHintnutsLocalDialogueActor(EnHintnuts* hintnuts) {
+    if (hintnuts == nullptr || gPlayState == nullptr) {
+        return false;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    if (player == nullptr) {
+        return false;
+    }
+
+    Actor* actor = &hintnuts->actor;
+    bool hasPendingTalkRequest = (actor->flags & ACTOR_FLAG_TALK) != 0;
+    bool messageActive = (player->stateFlags1 & PLAYER_STATE1_TALKING) ||
+                         Message_GetState(&gPlayState->msgCtx) != TEXT_STATE_NONE;
+    if (!hasPendingTalkRequest && !messageActive) {
+        return false;
+    }
+
+    return hasPendingTalkRequest || player->talkActor == actor || gPlayState->msgCtx.talkActor == actor;
+}
+
 static void ApplyHintnutsFriendlyRun(EnHintnuts* hintnuts) {
     if (hintnuts == nullptr) {
         return;
@@ -1489,7 +1510,8 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
 
     if (actor->id == ACTOR_EN_HINTNUTS) {
         EnHintnuts* hintnuts = (EnHintnuts*)actor;
-        if (IsHintnutsLocalDialogueAction(GetHintnutsActionId(hintnuts->actionFunc))) {
+        if (IsHintnutsLocalDialogueActor(hintnuts) ||
+            IsHintnutsLocalDialogueAction(GetHintnutsActionId(hintnuts->actionFunc))) {
             return true;
         }
 
