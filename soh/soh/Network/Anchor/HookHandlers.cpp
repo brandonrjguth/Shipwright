@@ -26,6 +26,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_Door_Shutter/z_door_shutter.h"
 #include "src/overlays/actors/ovl_En_Dns/z_en_dns.h"
 #include "src/overlays/actors/ovl_En_Door/z_en_door.h"
+#include "src/overlays/actors/ovl_En_Hintnuts/z_en_hintnuts.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #include "src/overlays/actors/ovl_En_Si/z_en_si.h"
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
@@ -76,6 +77,19 @@ static void ClearDummyBusinessScrubTalkOffer(EnDns* scrub) {
     }
 }
 
+static void ClearDummyHintnutsTalkOffer(EnHintnuts* scrub) {
+    if (scrub == nullptr) {
+        return;
+    }
+
+    Actor* collidedActor = scrub->collider.base.oc;
+    if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update) {
+        scrub->collider.base.oc = nullptr;
+        scrub->collider.base.ocFlags1 &= ~OC1_HIT;
+        scrub->actor.flags &= ~ACTOR_FLAG_TALK_OFFER_AUTO_ACCEPTED;
+    }
+}
+
 static void ClearDummyNutsballCollision(EnNutsball* nutsball) {
     if (nutsball == nullptr) {
         return;
@@ -88,7 +102,7 @@ static void ClearDummyNutsballCollision(EnNutsball* nutsball) {
     }
 }
 
-static void ClearDummyBusinessScrubTalkOffers() {
+static void ClearDummyScrubTalkOffers() {
     if (gPlayState == nullptr) {
         return;
     }
@@ -98,14 +112,16 @@ static void ClearDummyBusinessScrubTalkOffers() {
         while (actor != nullptr) {
             if (actor->id == ACTOR_EN_DNS) {
                 ClearDummyBusinessScrubTalkOffer((EnDns*)actor);
+            } else if (actor->id == ACTOR_EN_HINTNUTS) {
+                ClearDummyHintnutsTalkOffer((EnHintnuts*)actor);
             }
             actor = actor->next;
         }
     }
 }
 
-static void ClearKilledBusinessScrubDialog(Actor* actor) {
-    if (actor == nullptr || actor->id != ACTOR_EN_DNS || gPlayState == nullptr) {
+static void ClearKilledScrubDialog(Actor* actor) {
+    if (actor == nullptr || (actor->id != ACTOR_EN_DNS && actor->id != ACTOR_EN_HINTNUTS) || gPlayState == nullptr) {
         return;
     }
 
@@ -114,12 +130,22 @@ static void ClearKilledBusinessScrubDialog(Actor* actor) {
         return;
     }
 
+    bool messageActive = (player->stateFlags1 & PLAYER_STATE1_TALKING) ||
+                         Message_GetState(&gPlayState->msgCtx) != TEXT_STATE_NONE;
+    bool messageReferencesActor = player->talkActor == actor || gPlayState->msgCtx.talkActor == actor;
+    if (actor->id == ACTOR_EN_HINTNUTS && !messageActive && !messageReferencesActor) {
+        return;
+    }
+
     if (player->talkActor != actor && player->focusActor != actor && player->interactRangeActor != actor &&
-        player->actor.parent != actor) {
+        player->actor.parent != actor && gPlayState->msgCtx.talkActor != actor) {
         return;
     }
 
     Message_CloseTextbox(gPlayState);
+    if (gPlayState->msgCtx.talkActor == actor) {
+        gPlayState->msgCtx.talkActor = nullptr;
+    }
     if (player->talkActor == actor) {
         player->talkActor = nullptr;
         player->talkActorDistance = 0.0f;
@@ -231,7 +257,7 @@ void Anchor::RegisterHooks() {
     });
 
     COND_HOOK(OnGameFrameUpdate, isConnected, [&]() {
-        ClearDummyBusinessScrubTalkOffers();
+        ClearDummyScrubTalkOffers();
         ProcessIncomingPacketQueue();
     });
 
@@ -322,7 +348,7 @@ void Anchor::RegisterHooks() {
             return;
         }
         Actor* actor = (Actor*)refActor;
-        ClearKilledBusinessScrubDialog(actor);
+        ClearKilledScrubDialog(actor);
         uint64_t networkId = GetEnemyNetworkId(actor);
         if (networkId == 0 || IsEnemyMarkedDead(networkId)) {
             return;
