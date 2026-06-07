@@ -369,7 +369,12 @@ void Anchor::RegisterHooks() {
     COND_HOOK(OnOcarinaNote, isConnected,
               [&](uint8_t note, float modulator, int8_t bend) { SendPacket_OcarinaSfx(note, modulator, bend); });
 
-    COND_HOOK(OnLoadGame, isConnected, [&](s16 fileNum) { justLoadedSave = true; });
+    COND_HOOK(OnLoadGame, isConnected, [&](s16 fileNum) {
+        for (auto& [clientId, client] : clients) {
+            client.player = nullptr;
+        }
+        justLoadedSave = true;
+    });
 
     COND_HOOK(OnSaveFile, isConnected, [&](s16 fileNum, int sectionID) {
         if (sectionID == 0) {

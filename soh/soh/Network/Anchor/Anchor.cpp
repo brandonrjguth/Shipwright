@@ -16,6 +16,8 @@ extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 extern bool ShouldReportEnemyExtraState(Actor* actor);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
 
+static bool AnchorIsActorInCurrentLists(Actor* actor);
+
 extern "C" bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos) {
     if (Anchor::Instance == nullptr || actor == nullptr || outPos == nullptr || !Anchor::Instance->IsSaveLoaded()) {
         return false;
@@ -72,6 +74,11 @@ extern "C" Player* Anchor_GetNearestEnemyTargetPlayer(Actor* actor) {
 
     for (auto& [clientId, client] : Anchor::Instance->clients) {
         if (!client.online || client.self || !client.isSaveLoaded || client.player == nullptr) {
+            continue;
+        }
+        Actor* clientActor = &client.player->actor;
+        if (!AnchorIsActorInCurrentLists(clientActor) || clientActor->id != ACTOR_EN_OE2 ||
+            clientActor->update != DummyPlayer_Update) {
             continue;
         }
         if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
@@ -298,6 +305,10 @@ void Anchor::SetDummyPlayerClientId(const Actor* actor, uint32_t clientId) {
 }
 
 void Anchor::RefreshClientActors() {
+    for (auto& [clientId, client] : clients) {
+        client.player = nullptr;
+    }
+
     if (!IsSaveLoaded()) {
         return;
     }

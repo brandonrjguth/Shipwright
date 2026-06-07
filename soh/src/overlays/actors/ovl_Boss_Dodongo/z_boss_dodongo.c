@@ -1402,7 +1402,13 @@ f32 func_808C4F6C(BossDodongo* this, PlayState* play) {
     s32 pad;
     f32 temp_f2;
     f32 rotation;
-    Vec3f targetPos = GET_PLAYER(play)->actor.world.pos;
+    Player* player = GET_PLAYER(play);
+
+    if (player == NULL) {
+        return -1.0f;
+    }
+
+    Vec3f targetPos = player->actor.world.pos;
 
     Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
     xDiff = targetPos.x - this->actor.world.pos.x;
@@ -1426,7 +1432,13 @@ f32 func_808C50A8(BossDodongo* this, PlayState* play) {
     s32 pad;
     f32 temp_f2;
     f32 rotation;
-    Vec3f targetPos = GET_PLAYER(play)->actor.world.pos;
+    Player* player = GET_PLAYER(play);
+
+    if (player == NULL) {
+        return -1.0f;
+    }
+
+    Vec3f targetPos = player->actor.world.pos;
 
     Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
     xDiff = targetPos.x - this->actor.world.pos.x;
@@ -1445,7 +1457,14 @@ f32 func_808C50A8(BossDodongo* this, PlayState* play) {
 }
 
 void BossDodongo_PlayerYawCheck(BossDodongo* this, PlayState* play) {
-    Vec3f targetPos = GET_PLAYER(play)->actor.world.pos;
+    Player* player = GET_PLAYER(play);
+
+    if (player == NULL) {
+        this->playerYawInRange = false;
+        return;
+    }
+
+    Vec3f targetPos = player->actor.world.pos;
     Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos);
     s16 yawDiff = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos) - this->actor.world.rot.y;
 
