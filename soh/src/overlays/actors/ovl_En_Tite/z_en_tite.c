@@ -12,6 +12,8 @@
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/ResourceManagerHelpers.h"
 
+bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos);
+
 #define FLAGS (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_UPDATE_CULLING_DISABLED)
 
 // EnTite_Idle
@@ -372,14 +374,16 @@ void EnTite_Attack(EnTite* this, PlayState* play) {
                 CollisionCheck_SetAT(play, &play->colChkCtx, &this->collider.base);
             } else {
                 Player* player = GET_PLAYER(play);
+                if ((this->collider.base.at != NULL) && (this->collider.base.at->id == ACTOR_PLAYER)) {
+                    player = (Player*)this->collider.base.at;
+                }
+
                 this->collider.base.atFlags &= ~AT_HIT;
                 Animation_MorphToLoop(&this->skelAnime, &object_tite_Anim_0012E4, 4.0f);
                 this->actor.speedXZ = -6.0f;
                 this->actor.world.rot.y = this->actor.yawTowardsPlayer;
-                if (&player->actor == this->collider.base.at) {
-                    if (!(this->collider.base.atFlags & AT_BOUNCED)) {
-                        Audio_PlayActorSound2(&player->actor, NA_SE_PL_BODY_HIT);
-                    }
+                if (!(this->collider.base.atFlags & AT_BOUNCED)) {
+                    Audio_PlayActorSound2(&player->actor, NA_SE_PL_BODY_HIT);
                 }
                 EnTite_SetupAction(this, EnTite_Recoil);
             }
@@ -440,6 +444,7 @@ void EnTite_SetupTurnTowardPlayer(EnTite* this) {
 void EnTite_TurnTowardPlayer(EnTite* this, PlayState* play) {
     s16 angleToPlayer;
     s16 turnVelocity;
+    Vec3f targetPos;
 
     if (((this->actor.bgCheckFlags & 3) ||
          ((this->actor.params == TEKTITE_BLUE) && (this->actor.bgCheckFlags & 0x20))) &&
@@ -452,7 +457,11 @@ void EnTite_TurnTowardPlayer(EnTite* this, PlayState* play) {
     if ((this->actor.params == TEKTITE_BLUE) && (this->actor.bgCheckFlags & 0x20)) {
         this->actor.world.pos.y += this->actor.yDistToWater;
     }
-    angleToPlayer = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.world.rot.y;
+    if (Anchor_GetNearestEnemyTargetPos(&this->actor, &targetPos)) {
+        angleToPlayer = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos) - this->actor.world.rot.y;
+    } else {
+        angleToPlayer = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.world.rot.y;
+    }
     if (angleToPlayer > 0) {
         turnVelocity = (angleToPlayer / 42.0f) + 10.0f;
         this->actor.world.rot.y += (turnVelocity * 2);

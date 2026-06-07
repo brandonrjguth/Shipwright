@@ -6,6 +6,9 @@
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/ResourceManagerHelpers.h"
 
+bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos);
+Player* Anchor_GetNearestEnemyTargetPlayer(Actor* actor);
+
 #define FLAGS                                                                                 \
     (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_UPDATE_CULLING_DISABLED | \
      ACTOR_FLAG_DRAW_CULLING_DISABLED)
@@ -199,11 +202,39 @@ void EnGoma_SetupFlee(EnGoma* this) {
     }
 }
 
+static bool EnGoma_GetTargetPos(EnGoma* this, PlayState* play, Vec3f* targetPos) {
+    if (Anchor_GetNearestEnemyTargetPos(&this->actor, targetPos)) {
+        return true;
+    }
+
+    Player* player = GET_PLAYER(play);
+    if (player == NULL) {
+        return false;
+    }
+
+    *targetPos = player->actor.world.pos;
+    return true;
+}
+
+static Player* EnGoma_GetCollisionPlayer(EnGoma* this, PlayState* play) {
+    Actor* hitActor = this->colCyl2.base.ac;
+
+    if ((hitActor != NULL) && (hitActor->id == ACTOR_PLAYER)) {
+        return (Player*)hitActor;
+    }
+
+    return GET_PLAYER(play);
+}
+
 void EnGoma_Flee(EnGoma* this, PlayState* play) {
+    Vec3f targetPos;
+
     SkelAnime_Update(&this->skelanime);
     Math_ApproachF(&this->actor.speedXZ, 20.0f / 3.0f, 0.5f, 2.0f);
-    Math_ApproachS(&this->actor.world.rot.y, Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor) + 0x8000,
-                   3, 2000);
+    if (EnGoma_GetTargetPos(this, play, &targetPos)) {
+        Math_ApproachS(&this->actor.world.rot.y, Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos) + 0x8000, 3,
+                       2000);
+    }
     Math_ApproachS(&this->actor.shape.rot.y, this->actor.world.rot.y, 2, 3000);
 
     if (this->actionTimer == 0) {
@@ -274,13 +305,13 @@ void EnGoma_EggFallToGround(EnGoma* this, PlayState* play) {
 }
 
 void EnGoma_Egg(EnGoma* this, PlayState* play) {
-    Player* player = GET_PLAYER(play);
+    Vec3f targetPos;
     s32 i;
 
     this->eggSquishAngle += 1.0f;
     Math_ApproachF(&this->eggSquishAmount, 0.1f, 1.0f, 0.005f);
-    if (fabsf(this->actor.world.pos.x - player->actor.world.pos.x) < 100.0f &&
-        fabsf(this->actor.world.pos.z - player->actor.world.pos.z) < 100.0f) {
+    if (EnGoma_GetTargetPos(this, play, &targetPos) && fabsf(this->actor.world.pos.x - targetPos.x) < 100.0f &&
+        fabsf(this->actor.world.pos.z - targetPos.z) < 100.0f) {
         if (++this->playerDetectionTimer > 9) {
             this->actionFunc = EnGoma_EggFallToGround;
         }
@@ -304,13 +335,17 @@ void EnGoma_Egg(EnGoma* this, PlayState* play) {
 }
 
 void EnGoma_SetupHatch(EnGoma* this, PlayState* play) {
+    Vec3f targetPos;
+
     Animation_Change(&this->skelanime, &gObjectGolJumpHeadbuttAnim, 1.0f, 0.0f,
                      Animation_GetLastFrame(&gObjectGolJumpHeadbuttAnim), ANIMMODE_ONCE, 0.0f);
     this->actionFunc = EnGoma_Hatch;
     Actor_SetScale(&this->actor, 0.005f);
     this->gomaType = ENGOMA_NORMAL;
     this->actionTimer = 5;
-    this->actor.shape.rot.y = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor);
+    if (EnGoma_GetTargetPos(this, play, &targetPos)) {
+        this->actor.shape.rot.y = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos);
+    }
     this->actor.world.rot.y = this->actor.shape.rot.y;
     EnGoma_SpawnHatchDebris(this, play);
     this->eggScale = 1.0f;
@@ -460,12 +495,17 @@ void EnGoma_SetupPrepareJump(EnGoma* this) {
 }
 
 void EnGoma_PrepareJump(EnGoma* this, PlayState* play) {
+    Vec3f targetPos;
     s16 targetAngle;
 
     SkelAnime_Update(&this->skelanime);
     Math_ApproachZeroF(&this->actor.speedXZ, 0.5f, 2.0f);
 
-    targetAngle = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor);
+    if (EnGoma_GetTargetPos(this, play, &targetPos)) {
+        targetAngle = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos);
+    } else {
+        targetAngle = this->actor.world.rot.y;
+    }
     Math_ApproachS(&this->actor.world.rot.y, targetAngle, 2, 4000);
     Math_ApproachS(&this->actor.shape.rot.y, targetAngle, 2, 3000);
 
@@ -523,10 +563,13 @@ void EnGoma_Jump(EnGoma* this, PlayState* play) {
 }
 
 void EnGoma_Stand(EnGoma* this, PlayState* play) {
+    Vec3f targetPos;
+
     SkelAnime_Update(&this->skelanime);
     Math_ApproachZeroF(&this->actor.speedXZ, 0.5f, 2.0f);
-    Math_ApproachS(&this->actor.shape.rot.y, Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor), 2,
-                   3000);
+    if (EnGoma_GetTargetPos(this, play, &targetPos)) {
+        Math_ApproachS(&this->actor.shape.rot.y, Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos), 2, 3000);
+    }
 
     if (this->actionTimer == 0) {
         EnGoma_SetupChasePlayer(this);
@@ -596,11 +639,16 @@ void EnGoma_Stunned(EnGoma* this, PlayState* play) {
 }
 
 void EnGoma_LookAtPlayer(EnGoma* this, PlayState* play) {
+    Vec3f targetPos;
     s16 eyePitch;
     s16 eyeYaw;
 
-    eyeYaw = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.shape.rot.y;
-    eyePitch = Actor_WorldPitchTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.shape.rot.x;
+    if (!EnGoma_GetTargetPos(this, play, &targetPos)) {
+        return;
+    }
+
+    eyeYaw = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos) - this->actor.shape.rot.y;
+    eyePitch = Math_Vec3f_Pitch(&this->actor.world.pos, &targetPos) - this->actor.shape.rot.x;
 
     if (eyeYaw > 6000) {
         eyeYaw = 6000;
@@ -614,7 +662,7 @@ void EnGoma_LookAtPlayer(EnGoma* this, PlayState* play) {
 
 void EnGoma_UpdateHit(EnGoma* this, PlayState* play) {
     static Vec3f sShieldKnockbackVel = { 0.0f, 0.0f, 20.0f };
-    Player* player = GET_PLAYER(play);
+    Player* player = EnGoma_GetCollisionPlayer(this, play);
 
     if (this->hurtTimer != 0) {
         this->hurtTimer--;
@@ -709,7 +757,11 @@ void EnGoma_SetFloorRot(EnGoma* this) {
 void EnGoma_Update(Actor* thisx, PlayState* play) {
     EnGoma* this = (EnGoma*)thisx;
     s32 pad;
-    Player* player = GET_PLAYER(play);
+    Player* player = Anchor_GetNearestEnemyTargetPlayer(&this->actor);
+
+    if (player == NULL) {
+        player = GET_PLAYER(play);
+    }
 
     if (this->actionTimer != 0) {
         this->actionTimer--;

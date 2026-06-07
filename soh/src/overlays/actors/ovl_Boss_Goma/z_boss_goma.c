@@ -8,6 +8,8 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
+bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos);
+
 #define FLAGS                                                                                 \
     (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_UPDATE_CULLING_DISABLED | \
      ACTOR_FLAG_DRAW_CULLING_DISABLED)
@@ -54,6 +56,20 @@ void BossGoma_FloorMain(BossGoma* this, PlayState* play);
 void BossGoma_WallClimb(BossGoma* this, PlayState* play);
 void BossGoma_CeilingMoveToCenter(BossGoma* this, PlayState* play);
 void BossGoma_SpawnChildGohma(BossGoma* this, PlayState* play, s16 i);
+
+static bool BossGoma_GetTargetPos(BossGoma* this, PlayState* play, Vec3f* targetPos) {
+    if (Anchor_GetNearestEnemyTargetPos(&this->actor, targetPos)) {
+        return true;
+    }
+
+    Player* player = GET_PLAYER(play);
+    if (player == NULL) {
+        return false;
+    }
+
+    *targetPos = player->actor.world.pos;
+    return true;
+}
 
 const ActorInit Boss_Goma_InitVars = {
     ACTOR_BOSS_GOMA,
@@ -1277,12 +1293,15 @@ void BossGoma_Defeated(BossGoma* this, PlayState* play) {
  * If the player backs off, cancel the attack, or attack.
  */
 void BossGoma_FloorAttackPosture(BossGoma* this, PlayState* play) {
+    Vec3f targetPos;
+
     SkelAnime_Update(&this->skelanime);
     Math_ApproachZeroF(&this->actor.speedXZ, 0.5f, 2.0f);
 
     if (this->skelanime.curFrame >= (19.0f + 1.0f / 3.0f) && this->skelanime.curFrame <= 30.0f) {
-        Math_ApproachS(&this->actor.world.rot.y, Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor), 3,
-                       0xBB8);
+        if (BossGoma_GetTargetPos(this, play, &targetPos)) {
+            Math_ApproachS(&this->actor.world.rot.y, Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos), 3, 0xBB8);
+        }
     }
 
     if (Animation_OnFrame(&this->skelanime, Animation_GetLastFrame(&gGohmaPrepareAttackAnim))) {
@@ -1448,10 +1467,13 @@ void BossGoma_FloorStunned(BossGoma* this, PlayState* play) {
  * Gohma goes back to the floor after the player killed the three gohmas it spawned
  */
 void BossGoma_FallJump(BossGoma* this, PlayState* play) {
+    Vec3f targetPos;
+
     SkelAnime_Update(&this->skelanime);
     Math_ApproachS(&this->actor.shape.rot.x, 0, 2, 0xBB8);
-    Math_ApproachS(&this->actor.world.rot.y, Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor), 2,
-                   0x7D0);
+    if (BossGoma_GetTargetPos(this, play, &targetPos)) {
+        Math_ApproachS(&this->actor.world.rot.y, Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos), 2, 0x7D0);
+    }
 
     if (this->actor.bgCheckFlags & 1) {
         BossGoma_SetupFloorLand(this);
@@ -1465,10 +1487,13 @@ void BossGoma_FallJump(BossGoma* this, PlayState* play) {
  * Gohma falls to the floor after the player hit it
  */
 void BossGoma_FallStruckDown(BossGoma* this, PlayState* play) {
+    Vec3f targetPos;
+
     SkelAnime_Update(&this->skelanime);
     Math_ApproachS(&this->actor.shape.rot.x, 0, 2, 0xBB8);
-    Math_ApproachS(&this->actor.world.rot.y, Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor), 3,
-                   0x7D0);
+    if (BossGoma_GetTargetPos(this, play, &targetPos)) {
+        Math_ApproachS(&this->actor.world.rot.y, Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos), 3, 0x7D0);
+    }
 
     if (this->actor.bgCheckFlags & 1) {
         BossGoma_SetupFloorLandStruckDown(this);
@@ -1609,6 +1634,7 @@ void BossGoma_CeilingIdle(BossGoma* this, PlayState* play) {
  */
 void BossGoma_FloorMain(BossGoma* this, PlayState* play) {
     s16 rot;
+    Vec3f targetPos;
 
     SkelAnime_Update(&this->skelanime);
 
@@ -1633,7 +1659,11 @@ void BossGoma_FloorMain(BossGoma* this, PlayState* play) {
     }
 
     if (!this->doNotMoveThisFrame) {
-        rot = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor);
+        if (BossGoma_GetTargetPos(this, play, &targetPos)) {
+            rot = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos);
+        } else {
+            rot = this->actor.world.rot.y;
+        }
 
         if (this->patienceTimer != 0) {
             this->patienceTimer--;
@@ -1745,6 +1775,7 @@ void BossGoma_CeilingMoveToCenter(BossGoma* this, PlayState* play) {
 void BossGoma_UpdateEye(BossGoma* this, PlayState* play) {
     s16 targetEyeIrisRotX;
     s16 targetEyeIrisRotY;
+    Vec3f targetPos;
 
     if (!this->disableGameplayLogic) {
         Player* player = GET_PLAYER(play);
@@ -1777,10 +1808,13 @@ void BossGoma_UpdateEye(BossGoma* this, PlayState* play) {
         }
 
         if (this->eyeState != EYESTATE_IRIS_NO_FOLLOW_NO_IFRAMES) {
-            targetEyeIrisRotY =
-                Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.shape.rot.y;
-            targetEyeIrisRotX =
-                Actor_WorldPitchTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.shape.rot.x;
+            if (BossGoma_GetTargetPos(this, play, &targetPos)) {
+                targetEyeIrisRotY = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos) - this->actor.shape.rot.y;
+                targetEyeIrisRotX = Math_Vec3f_Pitch(&this->actor.world.pos, &targetPos) - this->actor.shape.rot.x;
+            } else {
+                targetEyeIrisRotY = 0;
+                targetEyeIrisRotX = 0;
+            }
 
             if (this->actor.shape.rot.x > 0x4000 || this->actor.shape.rot.x < -0x4000) {
                 targetEyeIrisRotY = -(s16)(targetEyeIrisRotY + 0x8000);

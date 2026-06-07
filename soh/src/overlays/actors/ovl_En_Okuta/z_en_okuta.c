@@ -493,14 +493,20 @@ void EnOkuta_ProjectileFly(EnOkuta* this, PlayState* play) {
     if ((this->actor.bgCheckFlags & 8) || (this->actor.bgCheckFlags & 1) || (this->collider.base.atFlags & AT_HIT) ||
         this->collider.base.acFlags & AC_HIT || this->collider.base.ocFlags1 & OC1_HIT ||
         this->actor.floorHeight == BGCHECK_Y_MIN) {
-        if ((player->currentShield == PLAYER_SHIELD_DEKU ||
-             (player->currentShield == PLAYER_SHIELD_HYLIAN && LINK_IS_ADULT)) &&
+        Player* hitPlayer = player;
+
+        if ((this->collider.base.at != NULL) && (this->collider.base.at->id == ACTOR_PLAYER)) {
+            hitPlayer = (Player*)this->collider.base.at;
+        }
+
+        if ((hitPlayer->currentShield == PLAYER_SHIELD_DEKU ||
+             (hitPlayer->currentShield == PLAYER_SHIELD_HYLIAN && LINK_IS_ADULT)) &&
             this->collider.base.atFlags & AT_HIT && this->collider.base.atFlags & AT_TYPE_ENEMY &&
             this->collider.base.atFlags & AT_BOUNCED) {
             this->collider.base.atFlags &= ~(AT_HIT | AT_BOUNCED | AT_TYPE_ENEMY);
             this->collider.base.atFlags |= AT_TYPE_PLAYER;
             this->collider.info.toucher.dmgFlags = 2;
-            Matrix_MtxFToYXZRotS(&player->shieldMf, &sp40, 0);
+            Matrix_MtxFToYXZRotS(&hitPlayer->shieldMf, &sp40, 0);
             this->actor.world.rot.y = sp40.y + 0x8000;
             this->timer = 30;
         } else {
