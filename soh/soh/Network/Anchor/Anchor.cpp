@@ -226,6 +226,8 @@ void Anchor::ProcessIncomingPacketQueue() {
                 HandlePacket_EnemyEvent(payload);
             else if (packetType == REPORT_ENEMY_DAMAGE)
                 HandlePacket_ReportEnemyDamage(payload);
+            else if (packetType == HINTNUTS_DIALOGUE)
+                HandlePacket_HintnutsDialogue(payload);
         } catch (const std::exception& e) {
             SPDLOG_ERROR("[Anchor] Exception while processing incoming packet {}", e.what());
             SPDLOG_ERROR("[Anchor] Packet: {}", payload.dump());
@@ -559,6 +561,7 @@ void Anchor::ResetEnemyRoomTransientState() {
     enemyAuthorityTargets.clear();
     enemyExtraStates.clear();
     enemyDropCounters.clear();
+    hintnutsDialogueActive.clear();
     enemyTransformFrameCounter = 0;
 }
 

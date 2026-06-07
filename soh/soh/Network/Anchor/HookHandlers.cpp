@@ -90,6 +90,17 @@ static void ClearDummyHintnutsTalkOffer(EnHintnuts* scrub) {
     }
 }
 
+static bool IsLocalHintnutsDialogueActive(EnHintnuts* scrub) {
+    if (scrub == nullptr || gPlayState == nullptr) {
+        return false;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    Actor* actor = &scrub->actor;
+    return (actor->flags & ACTOR_FLAG_TALK) || gPlayState->msgCtx.talkActor == actor ||
+           (player != nullptr && player->talkActor == actor);
+}
+
 static void ClearDummyNutsballCollision(EnNutsball* nutsball) {
     if (nutsball == nullptr) {
         return;
@@ -229,7 +240,11 @@ void Anchor::RegisterHooks() {
     });
 
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_HINTNUTS, isConnected, [&](void* refActor, bool* should) {
-        ClearDummyHintnutsTalkOffer(static_cast<EnHintnuts*>(refActor));
+        EnHintnuts* scrub = static_cast<EnHintnuts*>(refActor);
+        ClearDummyHintnutsTalkOffer(scrub);
+        if (IsLocalHintnutsDialogueActive(scrub)) {
+            SendPacket_HintnutsDialogue(&scrub->actor, "start");
+        }
     });
 
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_NUTSBALL, isConnected, [&](void* refActor, bool* should) {
@@ -345,6 +360,9 @@ void Anchor::RegisterHooks() {
             return;
         }
         Actor* actor = (Actor*)refActor;
+        if (actor->id == ACTOR_EN_HINTNUTS) {
+            SendPacket_HintnutsDialogue(actor, "end");
+        }
         ClearKilledBusinessScrubDialog(actor);
         uint64_t networkId = GetEnemyNetworkId(actor);
         if (networkId == 0 || IsEnemyMarkedDead(networkId)) {

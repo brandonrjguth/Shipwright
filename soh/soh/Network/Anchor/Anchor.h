@@ -117,6 +117,7 @@ class Anchor : public Network {
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
     std::unordered_map<uint64_t, uint16_t> enemyDropCounters;
+    std::unordered_set<uint64_t> hintnutsDialogueActive;
     s16 enemySyncSceneNum = SCENE_ID_MAX;
     s8 enemySyncRoomNum = -1;
     bool enemyRoomSyncPending = true;
@@ -187,6 +188,7 @@ class Anchor : public Network {
     void HandlePacket_EnemyUpdate(nlohmann::json payload);
     void HandlePacket_EnemyEvent(nlohmann::json payload);
     void HandlePacket_ReportEnemyDamage(nlohmann::json payload);
+    void HandlePacket_HintnutsDialogue(nlohmann::json payload);
 
   public:
     uint32_t ownClientId;
@@ -222,6 +224,7 @@ class Anchor : public Network {
     inline static const std::string ENEMY_UPDATE = "ENEMY_UPDATE";
     inline static const std::string ENEMY_EVENT = "ENEMY_EVENT";
     inline static const std::string REPORT_ENEMY_DAMAGE = "REPORT_ENEMY_DAMAGE";
+    inline static const std::string HINTNUTS_DIALOGUE = "HINTNUTS_DIALOGUE";
 
     static Anchor* Instance;
     std::map<uint32_t, AnchorClient> clients;
@@ -267,6 +270,7 @@ class Anchor : public Network {
     void SendPacket_EnemyUpdate(std::vector<Actor*> actors);
     void SendPacket_EnemyEvent(Actor* actor, std::string eventType, nlohmann::json eventData);
     void SendPacket_ReportEnemyDamage(Actor* actor, u8 health);
+    void SendPacket_HintnutsDialogue(Actor* actor, std::string phase);
 };
 
 typedef enum {
