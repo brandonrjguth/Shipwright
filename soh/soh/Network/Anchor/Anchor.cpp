@@ -902,7 +902,7 @@ bool Anchor::IsEnemyMarkedDead(s16 sceneNum, s8 roomNum, uint64_t networkId) {
 }
 
 static bool ShouldDeferKillForLocalDialogue(Actor* actor) {
-    if (actor == nullptr || actor->id != ACTOR_EN_HINTNUTS || gPlayState == nullptr) {
+    if (actor == nullptr || gPlayState == nullptr) {
         return false;
     }
 
