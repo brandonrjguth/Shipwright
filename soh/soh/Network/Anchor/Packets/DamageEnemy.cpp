@@ -131,6 +131,25 @@ static bool IsReportedPuzzleActorState(Actor* target, nlohmann::json payload) {
     }
 }
 
+static bool IsReportedBossGomaState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_BOSS_GOMA || !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    nlohmann::json extraState = payload["extraState"];
+    if (extraState.value("kind", std::string("")) != "BossGoma") {
+        return false;
+    }
+
+    constexpr s32 BOSSGOMA_ACTION_FLOOR_DAMAGED = 5;
+    constexpr s32 BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN = 6;
+    constexpr s32 BOSSGOMA_ACTION_FLOOR_STUNNED = 8;
+    constexpr s32 BOSSGOMA_ACTION_FALL_STRUCK_DOWN = 10;
+    s32 action = extraState.value("action", (s32)-1);
+    return action == BOSSGOMA_ACTION_FLOOR_DAMAGED || action == BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN ||
+           action == BOSSGOMA_ACTION_FLOOR_STUNNED || action == BOSSGOMA_ACTION_FALL_STRUCK_DOWN;
+}
+
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
     nlohmann::json extraState = GetEnemyExtraState(actor);
     if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
@@ -436,10 +455,11 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     bool hasReportedNonDamageState = health == target->colChkInfo.health &&
                                        (IsReportedDekunutsState(target, payload) ||
                                         IsReportedHintnutsState(target, payload) ||
-                                        IsReportedShopnutsCaughtState(target, payload) ||
-                                        IsReportedNutsballReflectedState(target, payload) ||
-                                        IsReportedMovableBlockState(target, payload) ||
-                                        IsReportedPuzzleActorState(target, payload));
+                                         IsReportedShopnutsCaughtState(target, payload) ||
+                                         IsReportedNutsballReflectedState(target, payload) ||
+                                         IsReportedMovableBlockState(target, payload) ||
+                                         IsReportedBossGomaState(target, payload) ||
+                                         IsReportedPuzzleActorState(target, payload));
 
     if (hasReportedNonDamageState) {
         ApplyReportedEnemyState(target, payload);

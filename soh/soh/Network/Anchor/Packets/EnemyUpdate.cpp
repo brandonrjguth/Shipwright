@@ -1095,6 +1095,11 @@ static BossGomaActionFunc GetBossGomaActionFunc(s32 actionId) {
     }
 }
 
+static bool IsBossGomaReportAction(s32 action) {
+    return action == BOSSGOMA_ACTION_FALL_STRUCK_DOWN || action == BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN ||
+           action == BOSSGOMA_ACTION_FLOOR_STUNNED || action == BOSSGOMA_ACTION_FLOOR_DAMAGED;
+}
+
 enum BossDodongoAction : s32 {
     BOSSDODONGO_ACTION_INTRO_CUTSCENE = 0,
     BOSSDODONGO_ACTION_WALK = 1,
@@ -1494,6 +1499,11 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
     if (actor->id == ACTOR_EN_GOMA) {
         EnGoma* goma = (EnGoma*)actor;
         return (s8)actor->colChkInfo.health <= 0 || IsGomaReportAction(GetGomaActionId(goma->actionFunc));
+    }
+
+    if (actor->id == ACTOR_BOSS_GOMA) {
+        BossGoma* goma = (BossGoma*)actor;
+        return IsBossGomaReportAction(GetBossGomaActionId(goma->actionFunc));
     }
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
@@ -2664,6 +2674,14 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         }
         goma->currentAnimFrameCount = extra.value("currentAnimFrameCount", goma->currentAnimFrameCount);
         ApplySkelAnimeState(extra, &goma->skelanime);
+        s32 action = GetBossGomaActionId(goma->actionFunc);
+        bool targetable = action >= 0 && action != BOSSGOMA_ACTION_DEFEATED &&
+                          (action != BOSSGOMA_ACTION_ENCOUNTER || goma->actionState >= 4);
+        if (targetable) {
+            actor->flags |= ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE;
+        } else if (action == BOSSGOMA_ACTION_DEFEATED || (s8)actor->colChkInfo.health <= 0) {
+            actor->flags &= ~(ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE);
+        }
     } else if (actor->id == ACTOR_BOSS_DODONGO && kind == "BossDodongo") {
         BossDodongo* dodongo = (BossDodongo*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);

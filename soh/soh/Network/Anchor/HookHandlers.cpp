@@ -111,6 +111,19 @@ static void ClearDummyNutsballCollision(EnNutsball* nutsball) {
         nutsball->collider.base.oc = nullptr;
         nutsball->collider.base.ocFlags1 &= ~OC1_HIT;
     }
+
+    collidedActor = nutsball->collider.base.at;
+    if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update &&
+        (nutsball->collider.base.atFlags & AT_TYPE_PLAYER)) {
+        nutsball->collider.base.at = nullptr;
+        nutsball->collider.base.atFlags &= ~(AT_HIT | AT_BOUNCED);
+    }
+
+    collidedActor = nutsball->collider.base.ac;
+    if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update) {
+        nutsball->collider.base.ac = nullptr;
+        nutsball->collider.base.acFlags &= ~AC_HIT;
+    }
 }
 
 static void ClearDummyScrubTalkOffers() {
@@ -318,14 +331,16 @@ void Anchor::RegisterHooks() {
         nlohmann::json authorityExtra =
             enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
         bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
-        if (enemyAuthorityTargets.contains(networkId) && !hasPendingLocalExtraState) {
+        if (actor->id != ACTOR_EN_NUTSBALL && enemyAuthorityTargets.contains(networkId) && !hasPendingLocalExtraState) {
             ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
         }
-        if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
+        if (actor->id != ACTOR_EN_NUTSBALL && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
+            !hasPendingLocalExtraState) {
             ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
         }
         if ((actor->id == ACTOR_OBJ_OSHIHIKI || actor->id == ACTOR_EN_DEKUNUTS ||
-             actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL || actor->id == ACTOR_EN_GOMA) &&
+             actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL || actor->id == ACTOR_EN_GOMA ||
+             actor->id == ACTOR_BOSS_GOMA) &&
             hasPendingLocalExtraState) {
             SendPacket_ReportEnemyDamage(actor, GetReportedEnemyHealth(actor));
         }
@@ -422,10 +437,12 @@ void Anchor::RegisterHooks() {
             nlohmann::json authorityExtra =
                 enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
-            if (enemyAuthorityTargets.contains(networkId) && !hasPendingLocalExtraState) {
+            if (actor->id != ACTOR_EN_NUTSBALL && enemyAuthorityTargets.contains(networkId) &&
+                !hasPendingLocalExtraState) {
                 ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
             }
-            if (enemyExtraStates.contains(networkId) && !hasPendingLocalDamage && !hasPendingLocalExtraState) {
+            if (actor->id != ACTOR_EN_NUTSBALL && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
+                !hasPendingLocalExtraState) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }
             return;
