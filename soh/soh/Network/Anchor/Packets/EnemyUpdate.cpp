@@ -1110,6 +1110,26 @@ static bool ShouldReportBossGomaState(BossGoma* goma) {
            action == BOSSGOMA_ACTION_FLOOR_STUNNED || action == BOSSGOMA_ACTION_FLOOR_DAMAGED;
 }
 
+static bool ShouldPreserveLocalBossGoma(BossGoma* goma, nlohmann::json authorityExtra) {
+    if (goma == nullptr || !ShouldReportBossGomaState(goma)) {
+        return false;
+    }
+
+    s32 localAction = GetBossGomaActionId(goma->actionFunc);
+    if (localAction == BOSSGOMA_ACTION_ENCOUNTER) {
+        if (!authorityExtra.is_object() || authorityExtra.value("kind", std::string("")) != "BossGoma") {
+            return true;
+        }
+
+        s32 authorityAction = authorityExtra.value("action", (s32)-1);
+        s32 authorityActionState = authorityExtra.value("actionState", (s32)0);
+        return authorityAction == BOSSGOMA_ACTION_ENCOUNTER && authorityActionState < 4;
+    }
+
+    return !authorityExtra.is_object() || authorityExtra.value("kind", std::string("")) != "BossGoma" ||
+           !authorityExtra.value("reportActive", false);
+}
+
 enum BossDodongoAction : s32 {
     BOSSDODONGO_ACTION_INTRO_CUTSCENE = 0,
     BOSSDODONGO_ACTION_WALK = 1,
@@ -1547,6 +1567,10 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
                                   (authorityExtra.value("kind", std::string("")) == "EnNutsball" &&
                                    authorityExtra.value("colliderAtTypePlayer", false));
         return localReflected && !authorityReflected;
+    }
+
+    if (actor->id == ACTOR_BOSS_GOMA) {
+        return ShouldPreserveLocalBossGoma((BossGoma*)actor, authorityExtra);
     }
 
     if (actor->id == ACTOR_EN_DEKUNUTS) {
@@ -2594,11 +2618,13 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplySkelAnimeState(extra, &goma->skelanime);
     } else if (actor->id == ACTOR_EN_NUTSBALL && kind == "EnNutsball") {
         EnNutsball* nutsball = (EnNutsball*)actor;
-        ApplyNutsballAction(nutsball, extra.value("action", (s32)-1));
+        s32 remoteAction = extra.value("action", (s32)-1);
+        ApplyNutsballAction(nutsball, remoteAction);
         nutsball->objBankIndex = extra.value("objBankIndex", nutsball->objBankIndex);
         nutsball->timer = extra.value("timer", nutsball->timer);
         nutsball->actor.home.rot.z = extra.value("homeRotZ", nutsball->actor.home.rot.z);
-        if (extra.value("drawEnabled", nutsball->actor.draw != nullptr)) {
+        if (extra.value("drawEnabled", nutsball->actor.draw != nullptr) ||
+            remoteAction == NUTSBALL_ACTION_FLY || GetNutsballActionId(nutsball->actionFunc) == NUTSBALL_ACTION_FLY) {
             nutsball->actor.draw = EnNutsball_Draw;
         } else {
             nutsball->actor.draw = nullptr;

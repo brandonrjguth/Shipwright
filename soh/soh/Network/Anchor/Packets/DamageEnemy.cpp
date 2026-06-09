@@ -9,6 +9,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
+#include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
 #undef this
@@ -20,6 +21,7 @@ void EnGoma_Hurt(EnGoma* thisx, PlayState* play);
 void EnGoma_Die(EnGoma* thisx, PlayState* play);
 void EnGoma_Dead(EnGoma* thisx, PlayState* play);
 void EnGoma_SetupDie(EnGoma* thisx);
+void BossGoma_Encounter(BossGoma* thisx, PlayState* play);
 void EnSt_SetupAction(EnSt* thisx, EnStActionFunc actionFunc);
 void EnSt_BounceAround(EnSt* thisx, PlayState* play);
 void EnSt_FinishBouncing(EnSt* thisx, PlayState* play);
@@ -148,7 +150,9 @@ static bool IsReportedBossGomaState(Actor* target, nlohmann::json payload) {
     constexpr s32 BOSSGOMA_ACTION_FALL_STRUCK_DOWN = 10;
     s32 action = extraState.value("action", (s32)-1);
     if (action == BOSSGOMA_ACTION_ENCOUNTER) {
-        return extraState.value("actionState", (s32)0) >= 4;
+        BossGoma* goma = (BossGoma*)target;
+        return goma->actionFunc == BossGoma_Encounter && goma->actionState < 4 &&
+               extraState.value("actionState", (s32)0) >= 4;
     }
 
     return action == BOSSGOMA_ACTION_FLOOR_DAMAGED || action == BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN ||
