@@ -114,7 +114,7 @@ static void ClearDummyNutsballCollision(EnNutsball* nutsball) {
 
     collidedActor = nutsball->collider.base.at;
     if (collidedActor != nullptr && collidedActor->id == ACTOR_EN_OE2 && collidedActor->update == DummyPlayer_Update &&
-        (nutsball->collider.base.atFlags & AT_TYPE_PLAYER)) {
+        (nutsball->collider.base.atFlags & AT_HIT)) {
         nutsball->collider.base.at = nullptr;
         nutsball->collider.base.atFlags &= ~(AT_HIT | AT_BOUNCED);
     }

@@ -141,11 +141,16 @@ static bool IsReportedBossGomaState(Actor* target, nlohmann::json payload) {
         return false;
     }
 
+    constexpr s32 BOSSGOMA_ACTION_ENCOUNTER = 0;
     constexpr s32 BOSSGOMA_ACTION_FLOOR_DAMAGED = 5;
     constexpr s32 BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN = 6;
     constexpr s32 BOSSGOMA_ACTION_FLOOR_STUNNED = 8;
     constexpr s32 BOSSGOMA_ACTION_FALL_STRUCK_DOWN = 10;
     s32 action = extraState.value("action", (s32)-1);
+    if (action == BOSSGOMA_ACTION_ENCOUNTER) {
+        return extraState.value("actionState", (s32)0) >= 4;
+    }
+
     return action == BOSSGOMA_ACTION_FLOOR_DAMAGED || action == BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN ||
            action == BOSSGOMA_ACTION_FLOOR_STUNNED || action == BOSSGOMA_ACTION_FALL_STRUCK_DOWN;
 }
@@ -251,7 +256,7 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     EnsureReportedGohmaLarvaDeathState(target);
 
     if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_HINTNUTS || target->id == ACTOR_EN_SHOPNUTS ||
-        target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_OBJ_OSHIHIKI ||
+        target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_OBJ_OSHIHIKI || target->id == ACTOR_BOSS_GOMA ||
         IsReportedPuzzleActorState(target, payload)) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;

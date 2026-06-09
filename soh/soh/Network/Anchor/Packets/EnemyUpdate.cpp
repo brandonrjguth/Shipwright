@@ -187,6 +187,7 @@ void BossGoma_CeilingIdle(BossGoma* thisx, PlayState* play);
 void BossGoma_FloorMain(BossGoma* thisx, PlayState* play);
 void BossGoma_WallClimb(BossGoma* thisx, PlayState* play);
 void BossGoma_CeilingMoveToCenter(BossGoma* thisx, PlayState* play);
+void BossGoma_SetupEncounterState4(BossGoma* thisx, PlayState* play);
 void BossDodongo_IntroCutscene(BossDodongo* thisx, PlayState* play);
 void BossDodongo_Walk(BossDodongo* thisx, PlayState* play);
 void BossDodongo_Inhale(BossDodongo* thisx, PlayState* play);
@@ -1095,7 +1096,16 @@ static BossGomaActionFunc GetBossGomaActionFunc(s32 actionId) {
     }
 }
 
-static bool IsBossGomaReportAction(s32 action) {
+static bool ShouldReportBossGomaState(BossGoma* goma) {
+    if (goma == nullptr) {
+        return false;
+    }
+
+    s32 action = GetBossGomaActionId(goma->actionFunc);
+    if (action == BOSSGOMA_ACTION_ENCOUNTER && goma->actionState >= 4) {
+        return true;
+    }
+
     return action == BOSSGOMA_ACTION_FALL_STRUCK_DOWN || action == BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN ||
            action == BOSSGOMA_ACTION_FLOOR_STUNNED || action == BOSSGOMA_ACTION_FLOOR_DAMAGED;
 }
@@ -1503,7 +1513,7 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
 
     if (actor->id == ACTOR_BOSS_GOMA) {
         BossGoma* goma = (BossGoma*)actor;
-        return IsBossGomaReportAction(GetBossGomaActionId(goma->actionFunc));
+        return ShouldReportBossGomaState(goma);
     }
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
@@ -2611,6 +2621,11 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         BossGoma* goma = (BossGoma*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
         s32 localAction = GetBossGomaActionId(goma->actionFunc);
+        s32 remoteActionState = extra.value("actionState", goma->actionState);
+        if (remoteAction == BOSSGOMA_ACTION_ENCOUNTER && localAction == BOSSGOMA_ACTION_ENCOUNTER &&
+            goma->actionState < 4 && remoteActionState >= 4) {
+            BossGoma_SetupEncounterState4(goma, gPlayState);
+        }
         if (remoteAction >= 0 && remoteAction != localAction) {
             BossGomaActionFunc remoteFunc = GetBossGomaActionFunc(remoteAction);
             if (remoteFunc != nullptr) {
@@ -2647,7 +2662,7 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         goma->noBackfaceCulling = extra.value("noBackfaceCulling", goma->noBackfaceCulling);
         goma->blinkTimer = extra.value("blinkTimer", goma->blinkTimer);
         goma->lookedAtFrames = extra.value("lookedAtFrames", goma->lookedAtFrames);
-        goma->actionState = extra.value("actionState", goma->actionState);
+        goma->actionState = remoteActionState;
         goma->framesUntilNextAction = extra.value("framesUntilNextAction", goma->framesUntilNextAction);
         goma->timer = extra.value("timer", goma->timer);
         goma->sfxFaintTimer = extra.value("sfxFaintTimer", goma->sfxFaintTimer);
