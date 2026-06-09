@@ -22,6 +22,14 @@ void EnGoma_Die(EnGoma* thisx, PlayState* play);
 void EnGoma_Dead(EnGoma* thisx, PlayState* play);
 void EnGoma_SetupDie(EnGoma* thisx);
 void BossGoma_Encounter(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorDamaged(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorLandStruckDown(BossGoma* thisx, PlayState* play);
+void BossGoma_FloorStunned(BossGoma* thisx, PlayState* play);
+void BossGoma_FallStruckDown(BossGoma* thisx, PlayState* play);
+void BossGoma_SetupFloorDamaged(BossGoma* thisx);
+void BossGoma_SetupFloorLandStruckDown(BossGoma* thisx);
+void BossGoma_SetupFloorStunned(BossGoma* thisx);
+void BossGoma_SetupFallStruckDown(BossGoma* thisx);
 void EnSt_SetupAction(EnSt* thisx, EnStActionFunc actionFunc);
 void EnSt_BounceAround(EnSt* thisx, PlayState* play);
 void EnSt_FinishBouncing(EnSt* thisx, PlayState* play);
@@ -149,14 +157,75 @@ static bool IsReportedBossGomaState(Actor* target, nlohmann::json payload) {
     constexpr s32 BOSSGOMA_ACTION_FLOOR_STUNNED = 8;
     constexpr s32 BOSSGOMA_ACTION_FALL_STRUCK_DOWN = 10;
     s32 action = extraState.value("action", (s32)-1);
+    BossGoma* goma = (BossGoma*)target;
     if (action == BOSSGOMA_ACTION_ENCOUNTER) {
-        BossGoma* goma = (BossGoma*)target;
         return goma->actionFunc == BossGoma_Encounter && goma->actionState < 4 &&
                extraState.value("actionState", (s32)0) >= 4;
     }
 
-    return action == BOSSGOMA_ACTION_FLOOR_DAMAGED || action == BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN ||
-           action == BOSSGOMA_ACTION_FLOOR_STUNNED || action == BOSSGOMA_ACTION_FALL_STRUCK_DOWN;
+    if (action == BOSSGOMA_ACTION_FLOOR_DAMAGED) {
+        return goma->actionFunc != BossGoma_FloorDamaged;
+    }
+    if (action == BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN) {
+        return goma->actionFunc != BossGoma_FloorLandStruckDown;
+    }
+    if (action == BOSSGOMA_ACTION_FLOOR_STUNNED) {
+        return goma->actionFunc != BossGoma_FloorStunned;
+    }
+    if (action == BOSSGOMA_ACTION_FALL_STRUCK_DOWN) {
+        return goma->actionFunc != BossGoma_FallStruckDown;
+    }
+
+    return false;
+}
+
+static bool ApplyReportedBossGomaState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_BOSS_GOMA || !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    nlohmann::json extraState = payload["extraState"];
+    if (extraState.value("kind", std::string("")) != "BossGoma") {
+        return false;
+    }
+
+    BossGoma* goma = (BossGoma*)target;
+    constexpr s32 BOSSGOMA_ACTION_ENCOUNTER = 0;
+    constexpr s32 BOSSGOMA_ACTION_FLOOR_DAMAGED = 5;
+    constexpr s32 BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN = 6;
+    constexpr s32 BOSSGOMA_ACTION_FLOOR_STUNNED = 8;
+    constexpr s32 BOSSGOMA_ACTION_FALL_STRUCK_DOWN = 10;
+
+    switch (extraState.value("action", (s32)-1)) {
+        case BOSSGOMA_ACTION_ENCOUNTER:
+            break;
+        case BOSSGOMA_ACTION_FLOOR_DAMAGED:
+            if (goma->actionFunc != BossGoma_FloorDamaged) {
+                BossGoma_SetupFloorDamaged(goma);
+            }
+            break;
+        case BOSSGOMA_ACTION_FLOOR_LAND_STRUCK_DOWN:
+            if (goma->actionFunc != BossGoma_FloorLandStruckDown) {
+                BossGoma_SetupFloorLandStruckDown(goma);
+            }
+            break;
+        case BOSSGOMA_ACTION_FLOOR_STUNNED:
+            if (goma->actionFunc != BossGoma_FloorStunned) {
+                BossGoma_SetupFloorStunned(goma);
+            }
+            break;
+        case BOSSGOMA_ACTION_FALL_STRUCK_DOWN:
+            if (goma->actionFunc != BossGoma_FallStruckDown) {
+                BossGoma_SetupFallStruckDown(goma);
+            }
+            break;
+        default:
+            return false;
+    }
+
+    // Apply the reported transition without letting replica motion continuously steer the authority.
+    ApplyEnemyExtraState(target, extraState);
+    return true;
 }
 
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
@@ -255,12 +324,18 @@ static bool ApplyReportedEnStDeathState(Actor* target, nlohmann::json extraState
 
 static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     nlohmann::json extraState = payload["extraState"];
+    u8 reportedHealth = payload.value("health", (u8)target->colChkInfo.health);
+
+    if (target->id == ACTOR_BOSS_GOMA && reportedHealth != 0 && ApplyReportedBossGomaState(target, payload)) {
+        return;
+    }
 
     ApplyEnemyExtraState(target, extraState);
     EnsureReportedGohmaLarvaDeathState(target);
 
+    bool reportedBossGomaDeath = target->id == ACTOR_BOSS_GOMA && target->colChkInfo.health == 0;
     if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_HINTNUTS || target->id == ACTOR_EN_SHOPNUTS ||
-        target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_OBJ_OSHIHIKI || target->id == ACTOR_BOSS_GOMA ||
+        target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_OBJ_OSHIHIKI || reportedBossGomaDeath ||
         IsReportedPuzzleActorState(target, payload)) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;
