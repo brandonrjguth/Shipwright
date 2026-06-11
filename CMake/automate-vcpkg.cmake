@@ -82,10 +82,16 @@ if (WIN32)
 endif()
 
 if(NOT DEFINED VCPKG_ROOT)
-    if(NOT DEFINED ENV{VCPKG_ROOT})
-	    set(VCPKG_ROOT ${VCPKG_FALLBACK_ROOT})
-    else()
+    # An already-configured build directory records its vcpkg toolchain file in the cache; deriving the root
+    # from it keeps regeneration pinned to the same vcpkg even when the environment changed since the first
+    # configure (Visual Studio developer shells export VCPKG_ROOT pointing at the read-only VS-bundled copy,
+    # which can neither be git-pulled nor installed into).
+    if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "scripts/buildsystems/vcpkg.cmake$")
+        get_filename_component(VCPKG_ROOT "${CMAKE_TOOLCHAIN_FILE}/../../.." ABSOLUTE)
+    elseif(DEFINED ENV{VCPKG_ROOT})
         set(VCPKG_ROOT $ENV{VCPKG_ROOT})
+    else()
+        set(VCPKG_ROOT ${VCPKG_FALLBACK_ROOT})
     endif()
 endif()
 
@@ -121,13 +127,15 @@ macro(_install_or_update_vcpkg)
         # If a reproducible build is desired (and potentially old libraries are # ok), uncomment the
         # following line and pin the vcpkg repository to a specific githash.
         # execute_process(COMMAND git checkout 745a0aea597771a580d0b0f4886ea1e3a94dbca6 WORKING_DIRECTORY ${VCPKG_ROOT})
-    else()
+    elseif(EXISTS ${VCPKG_ROOT}/.git)
         # The following command has no effect if the vcpkg repository is in a detached head state.
         message(STATUS "Auto-updating vcpkg in ${VCPKG_ROOT}")
         execute_process(COMMAND git pull WORKING_DIRECTORY ${VCPKG_ROOT})
+    else()
+        message(STATUS "vcpkg in ${VCPKG_ROOT} is not a git clone; skipping auto-update")
     endif()
 
-    if(NOT EXISTS ${VCPKG_ROOT}/README.md)
+    if(NOT EXISTS ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake)
         message(FATAL_ERROR "***** FATAL ERROR: Could not clone vcpkg *****")
     endif()
 
