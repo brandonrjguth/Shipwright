@@ -42,6 +42,12 @@ void Anchor::HandlePacket_SetFlag(nlohmann::json payload) {
     s16 flag = payload.at("flag").get<s16>();
 
     if (sceneNum == SCENE_ID_MAX) {
+        if (flagType == FLAG_EVENT_CHECK_INF && !Flags_GetEventChkInf(flag)) {
+            // The remote player experienced this story beat first. One-time cutscenes are gated on these flags,
+            // so remember it and let the matching cutscene still play once for the local player too.
+            pendingCutsceneReplayFlags.insert(flag);
+        }
+
         auto effect = new GameInteractionEffect::SetFlag();
         effect->parameters[0] = flagType;
         effect->parameters[1] = flag;

@@ -17,6 +17,17 @@ extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 extern bool ShouldReportEnemyExtraState(Actor* actor);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
 
+extern "C" u8 Anchor_ShouldReplayCutsceneForFlag(s16 flag) {
+    if (Anchor::Instance == nullptr) {
+        return 0;
+    }
+    return Anchor::Instance->ConsumeCutsceneReplayFlag(flag) ? 1 : 0;
+}
+
+bool Anchor::ConsumeCutsceneReplayFlag(s16 flag) {
+    return pendingCutsceneReplayFlags.erase(flag) > 0;
+}
+
 extern "C" bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos) {
     if (Anchor::Instance == nullptr || actor == nullptr || outPos == nullptr || !Anchor::Instance->IsSaveLoaded()) {
         return false;
@@ -111,6 +122,7 @@ void Anchor::Disable() {
 void Anchor::OnConnected() {
     SendPacket_Handshake();
     RegisterHooks();
+    pendingCutsceneReplayFlags.clear();
 
     if (IsSaveLoaded()) {
         SendPacket_RequestTeamState();

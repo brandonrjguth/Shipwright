@@ -120,6 +120,9 @@ class Anchor : public Network {
     std::unordered_set<Actor*> enemyCullOverrides;
     // transitionTrigger sampled before each blue warp update, to detect the update that starts the warp-out.
     s32 blueWarpPreUpdateTransitionTrigger = 0;
+    // EVENTCHKINF flags first set by a remote player this session. One-time story cutscenes are gated on these
+    // flags, so the cutscene triggers consult this set to still play the scene once for the local player.
+    std::unordered_set<s16> pendingCutsceneReplayFlags;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorities;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
@@ -253,6 +256,7 @@ class Anchor : public Network {
     void SendJsonToRemote(nlohmann::json packet);
     bool IsSaveLoaded();
     bool CanTeleportTo(uint32_t clientId);
+    bool ConsumeCutsceneReplayFlag(s16 flag);
     uint32_t GetDummyPlayerClientId(const Actor* actor);
 
     void SendPacket_ClearTeamState(std::string teamId);

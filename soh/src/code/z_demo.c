@@ -48,6 +48,10 @@ void func_80068C3C(PlayState* play, CutsceneContext* csCtx);
 void func_80068D84(PlayState* play, CutsceneContext* csCtx);
 void func_80068DC0(PlayState* play, CutsceneContext* csCtx);
 
+// Anchor co-op: true (once) when this one-time-cutscene flag was first set by a remote player, so the
+// cutscene still plays for the local player instead of being swallowed by the synced flag.
+u8 Anchor_ShouldReplayCutsceneForFlag(s16 flag);
+
 CutsceneStateHandler sCsStateHandlers1[] = {
     func_80064720, func_80064760, func_80064720, func_80068D84, func_80064720,
 };
@@ -2195,7 +2199,8 @@ void Cutscene_HandleEntranceTriggers(PlayState* play) {
         }
 
         if ((gSaveContext.entranceIndex == entranceCutscene->entrance) &&
-            (!Flags_GetEventChkInf(entranceCutscene->flag) || (entranceCutscene->flag == EVENTCHKINF_EPONA_OBTAINED)) &&
+            (!Flags_GetEventChkInf(entranceCutscene->flag) || (entranceCutscene->flag == EVENTCHKINF_EPONA_OBTAINED) ||
+             Anchor_ShouldReplayCutsceneForFlag(entranceCutscene->flag)) &&
             (gSaveContext.cutsceneIndex < 0xFFF0) && ((u8)gSaveContext.linkAge == requiredAge) &&
             (gSaveContext.respawnFlag <= 0)) {
             Flags_SetEventChkInf(entranceCutscene->flag);
@@ -2221,7 +2226,8 @@ void Cutscene_HandleConditionalTriggers(PlayState* play) {
     if ((gSaveContext.gameMode == GAMEMODE_NORMAL) && (gSaveContext.respawnFlag <= 0) &&
         (gSaveContext.cutsceneIndex < 0xFFF0)) {
         if ((gSaveContext.entranceIndex == ENTR_DESERT_COLOSSUS_OUTSIDE_TEMPLE) &&
-            !Flags_GetEventChkInf(EVENTCHKINF_LEARNED_REQUIEM_OF_SPIRIT)) {
+            (!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_REQUIEM_OF_SPIRIT) ||
+             Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_LEARNED_REQUIEM_OF_SPIRIT))) {
             Flags_SetEventChkInf(EVENTCHKINF_LEARNED_REQUIEM_OF_SPIRIT);
             gSaveContext.entranceIndex = ENTR_DESERT_COLOSSUS_EAST_EXIT;
             gSaveContext.cutsceneIndex = 0xFFF0;
@@ -2231,11 +2237,13 @@ void Cutscene_HandleConditionalTriggers(PlayState* play) {
                                           Flags_GetEventChkInf(EVENTCHKINF_USED_FOREST_TEMPLE_BLUE_WARP) &&
                                           Flags_GetEventChkInf(EVENTCHKINF_USED_FIRE_TEMPLE_BLUE_WARP) &&
                                           Flags_GetEventChkInf(EVENTCHKINF_USED_WATER_TEMPLE_BLUE_WARP) &&
-                                          !Flags_GetEventChkInf(EVENTCHKINF_BONGO_BONGO_ESCAPED_FROM_WELL)))) {
+                                          (!Flags_GetEventChkInf(EVENTCHKINF_BONGO_BONGO_ESCAPED_FROM_WELL) ||
+                                           Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_BONGO_BONGO_ESCAPED_FROM_WELL))))) {
             Flags_SetEventChkInf(EVENTCHKINF_BONGO_BONGO_ESCAPED_FROM_WELL);
             gSaveContext.cutsceneIndex = 0xFFF0;
         } else if ((gSaveContext.entranceIndex == ENTR_LOST_WOODS_BRIDGE_EAST_EXIT) &&
-                   !Flags_GetEventChkInf(EVENTCHKINF_SPOKE_TO_SARIA_ON_BRIDGE)) {
+                   (!Flags_GetEventChkInf(EVENTCHKINF_SPOKE_TO_SARIA_ON_BRIDGE) ||
+                    Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_SPOKE_TO_SARIA_ON_BRIDGE))) {
             Flags_SetEventChkInf(EVENTCHKINF_SPOKE_TO_SARIA_ON_BRIDGE);
             if (GameInteractor_Should(VB_GIVE_ITEM_FAIRY_OCARINA, true)) {
                 Item_Give(play, ITEM_OCARINA_FAIRY);
@@ -2246,13 +2254,15 @@ void Cutscene_HandleConditionalTriggers(PlayState* play) {
                        VB_BE_ELIGIBLE_FOR_LIGHT_ARROWS,
                        (CHECK_QUEST_ITEM(QUEST_MEDALLION_SPIRIT) && CHECK_QUEST_ITEM(QUEST_MEDALLION_SHADOW) &&
                         LINK_IS_ADULT &&
-                        !Flags_GetEventChkInf(EVENTCHKINF_RETURNED_TO_TEMPLE_OF_TIME_WITH_ALL_MEDALLIONS) &&
-                        (gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_TEMPLE_OF_TIME)))) {
+                        (gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_TEMPLE_OF_TIME) &&
+                        (!Flags_GetEventChkInf(EVENTCHKINF_RETURNED_TO_TEMPLE_OF_TIME_WITH_ALL_MEDALLIONS) ||
+                         Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_RETURNED_TO_TEMPLE_OF_TIME_WITH_ALL_MEDALLIONS))))) {
             Flags_SetEventChkInf(EVENTCHKINF_RETURNED_TO_TEMPLE_OF_TIME_WITH_ALL_MEDALLIONS);
             gSaveContext.entranceIndex = ENTR_TEMPLE_OF_TIME_ENTRANCE;
             gSaveContext.cutsceneIndex = 0xFFF8;
-        } else if (!Flags_GetEventChkInf(EVENTCHKINF_WATCHED_GANONS_CASTLE_COLLAPSE_CAUGHT_BY_GERUDO) &&
-                   (gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_GANON_BOSS)) {
+        } else if ((gEntranceTable[((void)0, gSaveContext.entranceIndex)].scene == SCENE_GANON_BOSS) &&
+                   (!Flags_GetEventChkInf(EVENTCHKINF_WATCHED_GANONS_CASTLE_COLLAPSE_CAUGHT_BY_GERUDO) ||
+                    Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_WATCHED_GANONS_CASTLE_COLLAPSE_CAUGHT_BY_GERUDO))) {
             Flags_SetEventChkInf(EVENTCHKINF_WATCHED_GANONS_CASTLE_COLLAPSE_CAUGHT_BY_GERUDO);
             gSaveContext.entranceIndex = ENTR_GANON_BOSS_0;
             gSaveContext.cutsceneIndex = 0xFFF0;
