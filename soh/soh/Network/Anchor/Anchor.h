@@ -123,6 +123,11 @@ class Anchor : public Network {
     // EVENTCHKINF flags first set by a remote player this session. One-time story cutscenes are gated on these
     // flags, so the cutscene triggers consult this set to still play the scene once for the local player.
     std::unordered_set<s16> pendingCutsceneReplayFlags;
+    // Day/night sync state: last dayTime produced by the local game (adoptions overwrite it so the jump
+    // detector only fires on local changes like Sun's Song), and the authority's broadcast cadence counter.
+    u16 lastLocalDayTime = 0;
+    u8 timeSyncFrameCounter = 0;
+    uint32_t GetTimeSyncAuthorityClientId();
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorities;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
@@ -189,6 +194,7 @@ class Anchor : public Network {
     void HandlePacket_SetFlag(nlohmann::json payload);
     void HandlePacket_TeleportTo(nlohmann::json payload);
     void HandlePacket_WarpToEntrance(nlohmann::json payload);
+    void HandlePacket_TimeUpdate(nlohmann::json payload);
     void HandlePacket_UnsetFlag(nlohmann::json payload);
     void HandlePacket_UpdateBeansCount(nlohmann::json payload);
     void HandlePacket_UpdateClientState(nlohmann::json payload);
@@ -240,6 +246,7 @@ class Anchor : public Network {
     inline static const std::string REPORT_ENEMY_DAMAGE = "REPORT_ENEMY_DAMAGE";
     inline static const std::string HINTNUTS_DIALOGUE = "HINTNUTS_DIALOGUE";
     inline static const std::string WARP_TO_ENTRANCE = "WARP_TO_ENTRANCE";
+    inline static const std::string TIME_UPDATE = "TIME_UPDATE";
 
     static Anchor* Instance;
     std::map<uint32_t, AnchorClient> clients;
@@ -274,6 +281,7 @@ class Anchor : public Network {
     void SendPacket_SetFlag(s16 sceneNum, s16 flagType, s16 flag);
     void SendPacket_TeleportTo(u32 clientId);
     void SendPacket_WarpToEntrance();
+    void SendPacket_TimeUpdate(bool isJump);
     void SendPacket_UnsetFlag(s16 sceneNum, s16 flagType, s16 flag);
     void SendPacket_UpdateBeansCount();
     void SendPacket_UpdateClientState();

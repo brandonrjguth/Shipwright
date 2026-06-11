@@ -28,6 +28,19 @@ bool Anchor::ConsumeCutsceneReplayFlag(s16 flag) {
     return pendingCutsceneReplayFlags.erase(flag) > 0;
 }
 
+uint32_t Anchor::GetTimeSyncAuthorityClientId() {
+    uint32_t authorityClientId = IsSaveLoaded() ? ownClientId : 0;
+    for (auto& [clientId, client] : clients) {
+        if (!client.online || client.self || !client.isSaveLoaded) {
+            continue;
+        }
+        if (authorityClientId == 0 || clientId < authorityClientId) {
+            authorityClientId = clientId;
+        }
+    }
+    return authorityClientId;
+}
+
 extern "C" bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos) {
     if (Anchor::Instance == nullptr || actor == nullptr || outPos == nullptr || !Anchor::Instance->IsSaveLoaded()) {
         return false;
@@ -280,6 +293,8 @@ void Anchor::ProcessIncomingPacketQueue() {
                 HandlePacket_HintnutsDialogue(payload);
             else if (packetType == WARP_TO_ENTRANCE)
                 HandlePacket_WarpToEntrance(payload);
+            else if (packetType == TIME_UPDATE)
+                HandlePacket_TimeUpdate(payload);
         } catch (const std::exception& e) {
             SPDLOG_ERROR("[Anchor] Exception while processing incoming packet {}", e.what());
             SPDLOG_ERROR("[Anchor] Packet: {}", payload.dump());

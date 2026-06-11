@@ -278,6 +278,15 @@ void Anchor::RegisterHooks() {
         }
     });
 
+    COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_ENCOUNT1, isConnected, [&](void* refActor, bool* should) {
+        // Ambush spawners (stalchildren, leevers, tektites) run only on the room authority; replicas receive
+        // the spawned enemies through ENEMY_UPDATE, so both players fight the same skeletons instead of each
+        // client conjuring its own.
+        if (IsRoomStable() && !HasEnemySyncAuthority()) {
+            *should = false;
+        }
+    });
+
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_DOOR_WARP1, isConnected, [&](void* refActor, bool* should) {
         blueWarpPreUpdateTransitionTrigger = gPlayState->transitionTrigger;
     });
@@ -315,6 +324,24 @@ void Anchor::RegisterHooks() {
         ProcessActorBuffers();
         DetectEnemyDamage();
         SendPacket_PlayerUpdate();
+
+        // Day/night sync: the time authority streams its clock; everyone else reports only abrupt local
+        // changes (Sun's Song, sleeping), which the authority adopts and streams back out.
+        if (IsSaveLoaded()) {
+            u16 currentDayTime = gSaveContext.dayTime;
+            bool isTimeAuthority = GetTimeSyncAuthorityClientId() == ownClientId;
+            s32 timeDelta = currentDayTime >= lastLocalDayTime ? currentDayTime - lastLocalDayTime
+                                                               : lastLocalDayTime - currentDayTime;
+            // Below 0xF000 excludes the natural midnight wraparound of the u16 clock.
+            if (!isTimeAuthority && timeDelta > 0x1000 && timeDelta < 0xF000) {
+                SendPacket_TimeUpdate(true);
+            }
+            if (isTimeAuthority && ++timeSyncFrameCounter >= 20) {
+                timeSyncFrameCounter = 0;
+                SendPacket_TimeUpdate(false);
+            }
+            lastLocalDayTime = currentDayTime;
+        }
     });
 
     COND_HOOK(OnGameFrameUpdate, isConnected, [&]() {
