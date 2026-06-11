@@ -1,4 +1,5 @@
 #include "soh/Network/Anchor/Anchor.h"
+#include "soh/Network/Anchor/GenericEnemySync.h"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
 
@@ -1381,7 +1382,7 @@ static bool IsAuthorityReportingExtraState(nlohmann::json authorityExtra, const 
            authorityExtra.value("reportActive", false);
 }
 
-static void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime) {
+void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime) {
     if (skelAnime == nullptr) {
         return;
     }
@@ -1395,7 +1396,7 @@ static void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime) {
     extra["skelMorphRate"] = skelAnime->morphRate;
 }
 
-static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
+void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
     if (skelAnime == nullptr) {
         return;
     }
@@ -2226,6 +2227,10 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         }
     }
 
+    if ((!extra.is_object() || extra.value("kind", std::string("")).empty()) && HasGenericEnemySync(actor->id)) {
+        extra = GetGenericEnemyState(actor);
+    }
+
     if (extra.is_object() && !extra.value("kind", std::string("")).empty()) {
         extra["reportActive"] = ShouldReportEnemyExtraState(actor);
     }
@@ -2981,6 +2986,8 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         objects->switchFlag = extra.value("switchFlag", objects->switchFlag);
         objects->timer = extra.value("timer", objects->timer);
         objects->cameraSetting = extra.value("cameraSetting", objects->cameraSetting);
+    } else if (kind == "Generic") {
+        ApplyGenericEnemyState(actor, extra);
     }
 }
 
@@ -3189,8 +3196,9 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
         bool isNewAssociation = target == nullptr;
+        s16 params = actorParams.empty() ? (s16)0 : actorParams[i];
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
-            if (!IsTransientProjectileActor(actorIds[i])) {
+            if (!IsTransientProjectileActor(actorIds[i], params)) {
                 target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f,
                                                                   actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
                 SetEnemyNetworkId(target, networkIds[i]);
@@ -3252,7 +3260,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                 }
             }
             freshEnemyAuthorityData.erase(networkIds[i]);
-        } else if (IsTransientProjectileActor(actorIds[i])) {
+        } else if (IsTransientProjectileActor(actorIds[i], params)) {
             // Fire-and-forget: after the spawn snapshot the local simulation owns the whole flight, so the
             // projectile reaches the local player's true position instead of trailing one RTT behind the
             // authority and being deleted mid-air by the authority's kill. The only mid-flight change worth

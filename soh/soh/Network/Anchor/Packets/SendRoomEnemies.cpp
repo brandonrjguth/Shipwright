@@ -108,7 +108,7 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         if (enemiesNetworkId.empty() || enemiesNetworkId[ri] == 0) {
             continue;
         }
-        if (IsTransientProjectileActor(enemiesId[ri])) {
+        if (IsTransientProjectileActor(enemiesId[ri], enemiesParams.empty() ? (s16)0 : enemiesParams[ri])) {
             continue;
         }
 

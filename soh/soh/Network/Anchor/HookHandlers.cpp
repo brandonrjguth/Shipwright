@@ -399,7 +399,7 @@ void Anchor::RegisterHooks() {
         if (networkId == 0 || IsEnemyMarkedDead(networkId)) {
             return;
         }
-        if (IsTransientProjectileActor(actor->id)) {
+        if (IsTransientProjectileActor(actor->id, actor->params)) {
             // Fire-and-forget: every client's copy of the projectile flies and impacts on its own simulation, so
             // per-copy deaths are never broadcast. Reflections still propagate through the extra-state reports,
             // and damage the projectile causes is reported by the enemy/player that takes the hit.
@@ -428,6 +428,13 @@ void Anchor::RegisterHooks() {
         }
 
         if (!HasEnemySyncAuthority()) {
+            if (IsTransientProjectileActor(actor->id, actor->params) && networkId == 0 && IsRoomStable()) {
+                // The local simulation of the firing enemy spawns its own projectile; only the authority's copy
+                // (arriving with a networkId via ENEMY_UPDATE) is kept, so the shot isn't duplicated.
+                Actor_Kill(actor);
+                *should = false;
+                return;
+            }
             // Only apply authority data that arrived since the last application. On frames without a new snapshot
             // the local simulation extrapolates with the synced action/velocity instead of being dragged back to a
             // stale position, which is what caused fast actors (e.g. Gohma) to rubber-band and jitter.
@@ -439,11 +446,11 @@ void Anchor::RegisterHooks() {
             nlohmann::json authorityExtra =
                 enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
-            if (!IsTransientProjectileActor(actor->id) && enemyAuthorityTargets.contains(networkId) &&
+            if (!IsTransientProjectileActor(actor->id, actor->params) && enemyAuthorityTargets.contains(networkId) &&
                 !hasPendingLocalExtraState) {
                 ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
             }
-            if (!IsTransientProjectileActor(actor->id) && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
+            if (!IsTransientProjectileActor(actor->id, actor->params) && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
                 !hasPendingLocalExtraState) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }

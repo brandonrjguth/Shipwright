@@ -460,6 +460,9 @@ Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
 }
 
 bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
+    if (IsLocallySimulatedEffectActor(actorId)) {
+        return false;
+    }
     return category == ACTORCAT_ENEMY || category == ACTORCAT_BOSS || actorId == ACTOR_EN_HINTNUTS ||
            actorId == ACTOR_EN_SW || actorId == ACTOR_EN_NUTSBALL ||
            actorId == ACTOR_OBJ_OSHIHIKI || actorId == ACTOR_OBJ_HSBLOCK ||
@@ -470,11 +473,24 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_BG_HAKA_WATER || actorId == ACTOR_BG_HAKA_GATE || actorId == ACTOR_BG_BDAN_OBJECTS;
 }
 
-bool Anchor::IsTransientProjectileActor(s16 actorId) {
+bool Anchor::IsTransientProjectileActor(s16 actorId, s16 params) {
     // Short-lived fire-and-forget projectiles. Replicas spawn them from the authority's first snapshot and then
     // simulate the whole flight locally: per-frame pinning would hold them one RTT behind, and applying the
     // authority's kill would delete them mid-air (the authority impacts latency-delayed player puppets).
-    return actorId == ACTOR_EN_NUTSBALL;
+    // EN_OKUTA is the octorok itself with params 0 and its spat rock otherwise.
+    return actorId == ACTOR_EN_NUTSBALL || (actorId == ACTOR_EN_OKUTA && params != 0);
+}
+
+bool Anchor::IsLocallySimulatedEffectActor(s16 actorId) {
+    // Excluded from enemy sync entirely: each client's (action-synced) parent spawns and simulates its own copy.
+    // The first group dereferences actor->parent, so a network-spawned orphan would crash; the rest are
+    // swarm/cutscene/escort actors in the ENEMY or BOSS categories whose motion is meaningless to mirror.
+    return actorId == ACTOR_EN_BDFIRE || actorId == ACTOR_EN_FD_FIRE || actorId == ACTOR_EN_ANUBICE_FIRE ||
+           actorId == ACTOR_EN_SKJNEEDLE || actorId == ACTOR_EN_ATTACK_NIW || actorId == ACTOR_EN_ENCOUNT2 ||
+           actorId == ACTOR_EN_FIRE_ROCK || actorId == ACTOR_EN_GANON_MANT || actorId == ACTOR_EN_GANON_ORGAN ||
+           actorId == ACTOR_EN_VB_BALL || actorId == ACTOR_DEMO_EFFECT || actorId == ACTOR_DEMO_GEFF ||
+           actorId == ACTOR_DEMO_GJ || actorId == ACTOR_EN_RU1 || actorId == ACTOR_EN_ZL3 ||
+           actorId == ACTOR_EN_SDA || actorId == ACTOR_EN_BLKOBJ || actorId == ACTOR_EN_CLEAR_TAG;
 }
 
 bool Anchor::IsEnemySyncActor(Actor* actor) {
@@ -587,7 +603,7 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
             hashValue((uint16_t)homeX);
             hashValue((uint16_t)homeY);
             hashValue((uint16_t)homeZ);
-            if (IsTransientProjectileActor(actor->id)) {
+            if (IsTransientProjectileActor(actor->id, actor->params)) {
                 hashValue(ownClientId);
                 hashValue(GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num));
                 hashValue(transientEnemyCounter++);
@@ -595,12 +611,12 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
                 hashValue(occurrence);
             }
             networkId = hash;
-            if (!IsTransientProjectileActor(actor->id)) {
+            if (!IsTransientProjectileActor(actor->id, actor->params)) {
                 occurrence++;
             }
         } while (usedNetworkIds.contains(networkId));
 
-        if (!IsTransientProjectileActor(actor->id)) {
+        if (!IsTransientProjectileActor(actor->id, actor->params)) {
             nextOccurrence[counterKey] = occurrence;
         }
         usedNetworkIds.insert(networkId);
@@ -695,7 +711,7 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
 
     float distSq = AnchorVec3fDistSq(actor->world.pos, state.pos);
     float correction = 0.3f;
-    if (IsTransientProjectileActor(actor->id) || immediate || distSq > 250000.0f) {
+    if (IsTransientProjectileActor(actor->id, actor->params) || immediate || distSq > 250000.0f) {
         correction = 1.0f;
     } else if (distSq > 40000.0f) {
         correction = 0.8f;

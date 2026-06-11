@@ -141,7 +141,8 @@ class Anchor : public Network {
     Actor* FindNearbyDeadEnemyDropSource(Actor* dropActor);
     bool IsEnemySyncActor(Actor* actor);
     bool IsEnemySyncActor(ActorCategory category, s16 actorId);
-    bool IsTransientProjectileActor(s16 actorId);
+    bool IsTransientProjectileActor(s16 actorId, s16 params);
+    bool IsLocallySimulatedEffectActor(s16 actorId);
     uint64_t GetEnemyNetworkId(Actor* actor);
     uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);
