@@ -278,6 +278,19 @@ void Anchor::RegisterHooks() {
         }
     });
 
+    COND_ID_HOOK(ShouldActorUpdate, ACTOR_DOOR_WARP1, isConnected, [&](void* refActor, bool* should) {
+        blueWarpPreUpdateTransitionTrigger = gPlayState->transitionTrigger;
+    });
+
+    COND_ID_HOOK(OnActorUpdate, ACTOR_DOOR_WARP1, isConnected, [&](void* refActor) {
+        // The update that flips the transition from off to started is the warp carrying the local player out;
+        // bring every client in the scene along so they all see the post-dungeon cutscene.
+        if (blueWarpPreUpdateTransitionTrigger == TRANS_TRIGGER_OFF &&
+            gPlayState->transitionTrigger == TRANS_TRIGGER_START && !isProcessingIncomingPacket) {
+            SendPacket_WarpToEntrance();
+        }
+    });
+
     COND_ID_HOOK(ShouldActorUpdate, ACTOR_EN_NUTSBALL, isConnected, [&](void* refActor, bool* should) {
         EnNutsball* nutsball = static_cast<EnNutsball*>(refActor);
         ClearDummyNutsballCollision(nutsball);

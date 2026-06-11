@@ -266,6 +266,8 @@ void Anchor::ProcessIncomingPacketQueue() {
                 HandlePacket_ReportEnemyDamage(payload);
             else if (packetType == HINTNUTS_DIALOGUE)
                 HandlePacket_HintnutsDialogue(payload);
+            else if (packetType == WARP_TO_ENTRANCE)
+                HandlePacket_WarpToEntrance(payload);
         } catch (const std::exception& e) {
             SPDLOG_ERROR("[Anchor] Exception while processing incoming packet {}", e.what());
             SPDLOG_ERROR("[Anchor] Packet: {}", payload.dump());

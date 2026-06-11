@@ -118,6 +118,8 @@ class Anchor : public Network {
     std::unordered_set<uint64_t> freshEnemyAuthorityData;
     // Enemies we forced to keep updating because a remote player is near them; cleared when they leave.
     std::unordered_set<Actor*> enemyCullOverrides;
+    // transitionTrigger sampled before each blue warp update, to detect the update that starts the warp-out.
+    s32 blueWarpPreUpdateTransitionTrigger = 0;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorities;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
@@ -183,6 +185,7 @@ class Anchor : public Network {
     void HandlePacket_SetCheckStatus(nlohmann::json payload);
     void HandlePacket_SetFlag(nlohmann::json payload);
     void HandlePacket_TeleportTo(nlohmann::json payload);
+    void HandlePacket_WarpToEntrance(nlohmann::json payload);
     void HandlePacket_UnsetFlag(nlohmann::json payload);
     void HandlePacket_UpdateBeansCount(nlohmann::json payload);
     void HandlePacket_UpdateClientState(nlohmann::json payload);
@@ -233,6 +236,7 @@ class Anchor : public Network {
     inline static const std::string ENEMY_EVENT = "ENEMY_EVENT";
     inline static const std::string REPORT_ENEMY_DAMAGE = "REPORT_ENEMY_DAMAGE";
     inline static const std::string HINTNUTS_DIALOGUE = "HINTNUTS_DIALOGUE";
+    inline static const std::string WARP_TO_ENTRANCE = "WARP_TO_ENTRANCE";
 
     static Anchor* Instance;
     std::map<uint32_t, AnchorClient> clients;
@@ -265,6 +269,7 @@ class Anchor : public Network {
     void SendPacket_SetCheckStatus(RandomizerCheck rc);
     void SendPacket_SetFlag(s16 sceneNum, s16 flagType, s16 flag);
     void SendPacket_TeleportTo(u32 clientId);
+    void SendPacket_WarpToEntrance();
     void SendPacket_UnsetFlag(s16 sceneNum, s16 flagType, s16 flag);
     void SendPacket_UpdateBeansCount();
     void SendPacket_UpdateClientState();
