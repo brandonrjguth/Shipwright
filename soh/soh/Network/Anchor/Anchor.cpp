@@ -608,6 +608,8 @@ void Anchor::ResetEnemyRoomTransientState() {
     enemyHealthTracker.clear();
     enemyAuthorityTargets.clear();
     enemyExtraStates.clear();
+    freshEnemyAuthorityData.clear();
+    enemyCullOverrides.clear();
     enemyDropCounters.clear();
     transientEnemyCounter = 0;
     suppressedTransientProjectileKills.clear();
@@ -686,23 +688,30 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     }
 
     float distSq = AnchorVec3fDistSq(actor->world.pos, state.pos);
-    float correction = 0.2f;
+    float correction = 0.3f;
     if (actor->id == ACTOR_EN_NUTSBALL || immediate || distSq > 250000.0f) {
         correction = 1.0f;
     } else if (distSq > 40000.0f) {
-        correction = 0.75f;
+        correction = 0.8f;
     } else if (distSq > 10000.0f) {
         correction = 0.5f;
     }
 
-    Vec3f correctedPos = AnchorLerpVec3f(actor->world.pos, state.pos, correction);
-    actor->world.pos = correctedPos;
-    actor->prevPos = AnchorLerpVec3f(actor->prevPos, correctedPos, correction);
+    if (correction >= 1.0f) {
+        actor->world.pos = state.pos;
+        actor->prevPos = state.pos;
+    } else if (distSq > 1.0f) {
+        // Leave prevPos at the frame-start position so background checks treat the correction as regular motion
+        // instead of a teleport, and so the renderer interpolates it smoothly.
+        actor->world.pos = AnchorLerpVec3f(actor->world.pos, state.pos, correction);
+    }
     actor->world.rot = state.worldRot;
     actor->shape.rot = state.shapeRot;
     actor->scale = state.scale;
-    actor->velocity = AnchorLerpVec3f(actor->velocity, state.velocity, correction);
-    actor->speedXZ = AnchorLerpFloat(actor->speedXZ, state.speedXZ, correction);
+    // Velocity is taken verbatim: between authority snapshots the local update integrates it, acting as the
+    // dead-reckoning extrapolator, so it must match the authority exactly rather than being smoothed.
+    actor->velocity = state.velocity;
+    actor->speedXZ = state.speedXZ;
     actor->gravity = state.gravity;
     actor->minVelocityY = state.minVelocityY;
     if (actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) {
@@ -732,49 +741,48 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     }
 }
 
-void Anchor::ApplyEnemyAuthorityTargets() {
-    if (!IsSaveLoaded() || HasEnemySyncAuthority()) {
-        return;
-    }
-
-    for (auto it = enemyAuthorityTargets.begin(); it != enemyAuthorityTargets.end();) {
-        Actor* actor = FindActorByEnemyNetworkId(it->first);
-        if (actor == nullptr) {
-            it = enemyAuthorityTargets.erase(it);
-            continue;
-        }
-        nlohmann::json authorityExtra =
-            enemyExtraStates.contains(it->first) ? enemyExtraStates[it->first] : nlohmann::json::object();
-        if (ShouldPreserveLocalEnemyExtraState(actor, authorityExtra)) {
-            ++it;
-            continue;
-        }
-        ApplyEnemyAuthorityState(actor, it->second, false);
-        ++it;
-    }
+bool Anchor::ConsumeFreshEnemyAuthorityData(uint64_t networkId) {
+    return freshEnemyAuthorityData.erase(networkId) > 0;
 }
 
-void Anchor::ApplyEnemyExtraStates() {
-    if (!IsSaveLoaded() || HasEnemySyncAuthority()) {
-        return;
+// The engine only updates actors near the local player (update culling). In co-op an enemy must also stay active
+// while a remote player is near it, otherwise it stands frozen when only the other player approaches. Mirror the
+// engine's rule using the actor's own uncull range against every remote client in the room.
+void Anchor::UpdateEnemyCullOverrides(const std::vector<Actor*>& currentEnemies) {
+    std::unordered_set<Actor*> currentSet(currentEnemies.begin(), currentEnemies.end());
+    for (auto it = enemyCullOverrides.begin(); it != enemyCullOverrides.end();) {
+        if (!currentSet.contains(*it)) {
+            it = enemyCullOverrides.erase(it);
+        } else {
+            ++it;
+        }
     }
 
-    for (auto it = enemyExtraStates.begin(); it != enemyExtraStates.end();) {
-        Actor* actor = FindActorByEnemyNetworkId(it->first);
-        if (actor == nullptr) {
-            it = enemyExtraStates.erase(it);
-            continue;
+    for (Actor* actor : currentEnemies) {
+        bool remoteNear = false;
+        for (auto& [clientId, client] : clients) {
+            if (!client.online || client.self || !client.isSaveLoaded) {
+                continue;
+            }
+            if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+                continue;
+            }
+            float range = actor->uncullZoneForward + actor->uncullZoneScale;
+            if (AnchorVec3fDistSq(actor->world.pos, client.posRot.pos) < SQ(range)) {
+                remoteNear = true;
+                break;
+            }
         }
-        if (enemyAuthorityTargets.contains(it->first) && actor->colChkInfo.health < enemyAuthorityTargets[it->first].health) {
-            ++it;
-            continue;
+
+        if (remoteNear) {
+            if (!(actor->flags & ACTOR_FLAG_UPDATE_CULLING_DISABLED)) {
+                actor->flags |= ACTOR_FLAG_UPDATE_CULLING_DISABLED;
+                enemyCullOverrides.insert(actor);
+            }
+        } else if (enemyCullOverrides.contains(actor)) {
+            actor->flags &= ~ACTOR_FLAG_UPDATE_CULLING_DISABLED;
+            enemyCullOverrides.erase(actor);
         }
-        if (ShouldPreserveLocalEnemyExtraState(actor, it->second)) {
-            ++it;
-            continue;
-        }
-        ApplyEnemyExtraState(actor, it->second);
-        ++it;
     }
 }
 
@@ -883,6 +891,7 @@ void Anchor::MarkEnemyDead(s16 sceneNum, s8 roomNum, uint64_t networkId) {
     deadEnemyLedger[GetEnemyRoomKey(sceneNum, roomNum)].insert(networkId);
     enemyAuthorityTargets.erase(networkId);
     enemyExtraStates.erase(networkId);
+    freshEnemyAuthorityData.erase(networkId);
 }
 
 bool Anchor::IsEnemyMarkedDead(uint64_t networkId) {
@@ -1033,6 +1042,8 @@ void Anchor::DetectEnemyDamage() {
     if (HasEnemySyncAuthority()) {
         AssignEnemyNetworkIds(assignableEnemies);
     }
+
+    UpdateEnemyCullOverrides(currentEnemies);
 
     for (Actor* act : currentEnemies) {
         uint64_t networkId = GetEnemyNetworkId(act);

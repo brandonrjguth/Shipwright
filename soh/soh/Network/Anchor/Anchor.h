@@ -113,6 +113,11 @@ class Anchor : public Network {
     std::unordered_map<Actor*, u8> enemyHealthTracker;
     std::unordered_map<uint64_t, EnemyAuthorityState> enemyAuthorityTargets;
     std::unordered_map<uint64_t, nlohmann::json> enemyExtraStates;
+    // NetworkIds whose authority state arrived since it was last applied. Replicas consume an entry at most once per
+    // frame (right before the actor updates) so stale snapshots never drag a moving actor backwards.
+    std::unordered_set<uint64_t> freshEnemyAuthorityData;
+    // Enemies we forced to keep updating because a remote player is near them; cleared when they leave.
+    std::unordered_set<Actor*> enemyCullOverrides;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorities;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
@@ -147,8 +152,8 @@ class Anchor : public Network {
     void ProcessActorBuffers();
     void DetectEnemyDamage();
     void ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate);
-    void ApplyEnemyAuthorityTargets();
-    void ApplyEnemyExtraStates();
+    bool ConsumeFreshEnemyAuthorityData(uint64_t networkId);
+    void UpdateEnemyCullOverrides(const std::vector<Actor*>& currentEnemies);
     uint32_t GetEnemyRoomKey(s16 sceneNum, s8 roomNum);
     uint32_t GetEnemyRoomAuthorityGeneration(s16 sceneNum, s8 roomNum);
     uint32_t GetEnemySyncAuthorityClientId();

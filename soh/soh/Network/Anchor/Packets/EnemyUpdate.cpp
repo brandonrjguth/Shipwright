@@ -1400,13 +1400,25 @@ static void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
         return;
     }
 
-    skelAnime->curFrame = extra.value("skelCurFrame", skelAnime->curFrame);
+    f32 remoteCurFrame = extra.value("skelCurFrame", skelAnime->curFrame);
+    f32 remoteStartFrame = extra.value("skelStartFrame", skelAnime->startFrame);
+    f32 remoteEndFrame = extra.value("skelEndFrame", skelAnime->endFrame);
+    u8 remoteMode = extra.value("skelMode", skelAnime->mode);
+    bool animChanged = remoteMode != skelAnime->mode || fabsf(remoteStartFrame - skelAnime->startFrame) > 0.01f ||
+                       fabsf(remoteEndFrame - skelAnime->endFrame) > 0.01f;
+
     skelAnime->playSpeed = extra.value("skelPlaySpeed", skelAnime->playSpeed);
-    skelAnime->mode = extra.value("skelMode", skelAnime->mode);
-    skelAnime->startFrame = extra.value("skelStartFrame", skelAnime->startFrame);
-    skelAnime->endFrame = extra.value("skelEndFrame", skelAnime->endFrame);
+    skelAnime->mode = remoteMode;
+    skelAnime->startFrame = remoteStartFrame;
+    skelAnime->endFrame = remoteEndFrame;
     skelAnime->morphWeight = extra.value("skelMorphWeight", skelAnime->morphWeight);
     skelAnime->morphRate = extra.value("skelMorphRate", skelAnime->morphRate);
+
+    // The local animation advances at the same speed as the authority's, so let it play freely while it stays
+    // close; re-snapping the frame on every packet reads as stutter because packets and frames aren't phase-locked.
+    if (animChanged || fabsf(remoteCurFrame - skelAnime->curFrame) > 3.0f) {
+        skelAnime->curFrame = remoteCurFrame;
+    }
 }
 
 static void EnsureEnStDeathState(EnSt* st) {
@@ -3176,6 +3188,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
 
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
+        bool isNewAssociation = target == nullptr;
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
             if (actorIds[i] != ACTOR_EN_NUTSBALL) {
                 target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f,
@@ -3220,19 +3233,29 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                       health[i] };
         enemyAuthorityTargets[networkIds[i]] = state;
         nlohmann::json extraState = extraStates.empty() ? nlohmann::json::object() : extraStates[i];
-        bool preserveLocalState = ShouldPreserveLocalEnemyExtraState(target, extraState);
-        if (!preserveLocalState) {
-            ApplyEnemyAuthorityState(target, state, false);
-        }
+        bool hasExtraState = extraState.is_object() && !extraState.value("kind", std::string("")).empty();
         if (!extraStates.empty()) {
-            if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
-                enemyExtraStates.erase(networkIds[i]);
-            } else {
+            if (hasExtraState) {
                 enemyExtraStates[networkIds[i]] = extraState;
-                if (!preserveLocalState && !(target->colChkInfo.health < state.health)) {
+            } else {
+                enemyExtraStates.erase(networkIds[i]);
+            }
+        }
+
+        if (isNewAssociation || actorIds[i] == ACTOR_EN_NUTSBALL) {
+            // Newly matched/spawned actors snap straight onto the authority state; transient projectiles fly too
+            // fast to wait a frame for the deferred application.
+            if (!ShouldPreserveLocalEnemyExtraState(target, extraState)) {
+                ApplyEnemyAuthorityState(target, state, isNewAssociation);
+                if (hasExtraState && !(target->colChkInfo.health < state.health)) {
                     ApplyEnemyExtraState(target, extraState);
                 }
             }
+            freshEnemyAuthorityData.erase(networkIds[i]);
+        } else {
+            // Mark the snapshot fresh; the ShouldActorUpdate hook applies it exactly once, right before the actor's
+            // next update, so stale data is never re-applied on frames without a new packet.
+            freshEnemyAuthorityData.insert(networkIds[i]);
         }
     }
 }

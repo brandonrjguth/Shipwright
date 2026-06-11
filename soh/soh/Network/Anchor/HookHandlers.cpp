@@ -326,18 +326,11 @@ void Anchor::RegisterHooks() {
             return;
         }
 
-        bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
-                                     actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
+        // Authority data is applied once per frame in the ShouldActorUpdate hook; here we only report local
+        // interactions (dialogue, block pushing, locally observed hits) back to the room authority.
         nlohmann::json authorityExtra =
             enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
         bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
-        if (actor->id != ACTOR_EN_NUTSBALL && enemyAuthorityTargets.contains(networkId) && !hasPendingLocalExtraState) {
-            ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
-        }
-        if (actor->id != ACTOR_EN_NUTSBALL && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
-            !hasPendingLocalExtraState) {
-            ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
-        }
         if ((actor->id == ACTOR_OBJ_OSHIHIKI || actor->id == ACTOR_EN_DEKUNUTS ||
              actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL || actor->id == ACTOR_EN_GOMA ||
              actor->id == ACTOR_BOSS_GOMA) &&
@@ -432,6 +425,12 @@ void Anchor::RegisterHooks() {
         }
 
         if (!HasEnemySyncAuthority()) {
+            // Only apply authority data that arrived since the last application. On frames without a new snapshot
+            // the local simulation extrapolates with the synced action/velocity instead of being dragged back to a
+            // stale position, which is what caused fast actors (e.g. Gohma) to rubber-band and jitter.
+            if (!ConsumeFreshEnemyAuthorityData(networkId)) {
+                return;
+            }
             bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
                                           actor->colChkInfo.health < enemyAuthorityTargets[networkId].health;
             nlohmann::json authorityExtra =
