@@ -470,6 +470,13 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_BG_HAKA_WATER || actorId == ACTOR_BG_HAKA_GATE || actorId == ACTOR_BG_BDAN_OBJECTS;
 }
 
+bool Anchor::IsTransientProjectileActor(s16 actorId) {
+    // Short-lived fire-and-forget projectiles. Replicas spawn them from the authority's first snapshot and then
+    // simulate the whole flight locally: per-frame pinning would hold them one RTT behind, and applying the
+    // authority's kill would delete them mid-air (the authority impacts latency-delayed player puppets).
+    return actorId == ACTOR_EN_NUTSBALL;
+}
+
 bool Anchor::IsEnemySyncActor(Actor* actor) {
     constexpr s16 DEKUNUTS_FLOWER_PARAM = 10;
 
@@ -580,7 +587,7 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
             hashValue((uint16_t)homeX);
             hashValue((uint16_t)homeY);
             hashValue((uint16_t)homeZ);
-            if (actor->id == ACTOR_EN_NUTSBALL) {
+            if (IsTransientProjectileActor(actor->id)) {
                 hashValue(ownClientId);
                 hashValue(GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num));
                 hashValue(transientEnemyCounter++);
@@ -588,12 +595,12 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
                 hashValue(occurrence);
             }
             networkId = hash;
-            if (actor->id != ACTOR_EN_NUTSBALL) {
+            if (!IsTransientProjectileActor(actor->id)) {
                 occurrence++;
             }
         } while (usedNetworkIds.contains(networkId));
 
-        if (actor->id != ACTOR_EN_NUTSBALL) {
+        if (!IsTransientProjectileActor(actor->id)) {
             nextOccurrence[counterKey] = occurrence;
         }
         usedNetworkIds.insert(networkId);
@@ -612,7 +619,6 @@ void Anchor::ResetEnemyRoomTransientState() {
     enemyCullOverrides.clear();
     enemyDropCounters.clear();
     transientEnemyCounter = 0;
-    suppressedTransientProjectileKills.clear();
     hintnutsDialogueActive.clear();
     enemyTransformFrameCounter = 0;
 }
@@ -689,7 +695,7 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
 
     float distSq = AnchorVec3fDistSq(actor->world.pos, state.pos);
     float correction = 0.3f;
-    if (actor->id == ACTOR_EN_NUTSBALL || immediate || distSq > 250000.0f) {
+    if (IsTransientProjectileActor(actor->id) || immediate || distSq > 250000.0f) {
         correction = 1.0f;
     } else if (distSq > 40000.0f) {
         correction = 0.8f;
@@ -985,9 +991,6 @@ void Anchor::ProcessActorBuffers() {
                 continue;
             }
 
-            if (actor->id == ACTOR_EN_NUTSBALL) {
-                suppressedTransientProjectileKills.insert(networkId);
-            }
             ReleaseLocalGohmaDefeatCutsceneBeforeKill(actor);
             Actor_Kill(actor);
         }

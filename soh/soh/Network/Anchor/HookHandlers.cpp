@@ -399,7 +399,10 @@ void Anchor::RegisterHooks() {
         if (networkId == 0 || IsEnemyMarkedDead(networkId)) {
             return;
         }
-        if (actor->id == ACTOR_EN_NUTSBALL && suppressedTransientProjectileKills.erase(networkId) > 0) {
+        if (IsTransientProjectileActor(actor->id)) {
+            // Fire-and-forget: every client's copy of the projectile flies and impacts on its own simulation, so
+            // per-copy deaths are never broadcast. Reflections still propagate through the extra-state reports,
+            // and damage the projectile causes is reported by the enemy/player that takes the hit.
             return;
         }
         if (HasEnemySyncAuthority()) {
@@ -436,11 +439,11 @@ void Anchor::RegisterHooks() {
             nlohmann::json authorityExtra =
                 enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
-            if (actor->id != ACTOR_EN_NUTSBALL && enemyAuthorityTargets.contains(networkId) &&
+            if (!IsTransientProjectileActor(actor->id) && enemyAuthorityTargets.contains(networkId) &&
                 !hasPendingLocalExtraState) {
                 ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
             }
-            if (actor->id != ACTOR_EN_NUTSBALL && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
+            if (!IsTransientProjectileActor(actor->id) && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
                 !hasPendingLocalExtraState) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }

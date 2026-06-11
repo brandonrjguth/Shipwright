@@ -19,7 +19,7 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
         return;
     }
 
-    if (actor->id != ACTOR_EN_NUTSBALL) {
+    if (!IsTransientProjectileActor(actor->id)) {
         MarkEnemyDead(networkId);
     }
 
@@ -57,15 +57,18 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
     }
 
     s16 actorId = payload.value("actorId", (s16)0);
-    bool isTransientProjectile = actorId == ACTOR_EN_NUTSBALL;
-
-    if (!isTransientProjectile && IsEnemyMarkedDead(sceneNum, roomNum, networkId)) {
+    if (IsTransientProjectileActor(actorId)) {
+        // Fire-and-forget: the local simulation owns the projectile's whole flight and decides the impact itself
+        // (wall, shield, or the local player's true position). Applying the authority's kill here deleted the
+        // projectile mid-air, because the authority collides with latency-delayed positions.
         return;
     }
 
-    if (!isTransientProjectile) {
-        MarkEnemyDead(sceneNum, roomNum, networkId);
+    if (IsEnemyMarkedDead(sceneNum, roomNum, networkId)) {
+        return;
     }
+
+    MarkEnemyDead(sceneNum, roomNum, networkId);
 
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target != nullptr) {

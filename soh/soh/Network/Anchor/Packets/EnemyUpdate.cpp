@@ -3190,7 +3190,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
         bool isNewAssociation = target == nullptr;
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
-            if (actorIds[i] != ACTOR_EN_NUTSBALL) {
+            if (!IsTransientProjectileActor(actorIds[i])) {
                 target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f,
                                                                   actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
                 SetEnemyNetworkId(target, networkIds[i]);
@@ -3242,14 +3242,26 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
             }
         }
 
-        if (isNewAssociation || actorIds[i] == ACTOR_EN_NUTSBALL) {
-            // Newly matched/spawned actors snap straight onto the authority state; transient projectiles fly too
-            // fast to wait a frame for the deferred application.
+        if (isNewAssociation) {
+            // Newly matched/spawned actors snap straight onto the authority state; waiting a frame for the
+            // deferred application would leave them visibly out of place.
             if (!ShouldPreserveLocalEnemyExtraState(target, extraState)) {
-                ApplyEnemyAuthorityState(target, state, isNewAssociation);
+                ApplyEnemyAuthorityState(target, state, true);
                 if (hasExtraState && !(target->colChkInfo.health < state.health)) {
                     ApplyEnemyExtraState(target, extraState);
                 }
+            }
+            freshEnemyAuthorityData.erase(networkIds[i]);
+        } else if (IsTransientProjectileActor(actorIds[i])) {
+            // Fire-and-forget: after the spawn snapshot the local simulation owns the whole flight, so the
+            // projectile reaches the local player's true position instead of trailing one RTT behind the
+            // authority and being deleted mid-air by the authority's kill. The only mid-flight change worth
+            // mirroring is an authority-side event the local copy hasn't seen (e.g. a shield reflection),
+            // flagged via reportActive.
+            if (hasExtraState && extraState.value("reportActive", false) && !ShouldReportEnemyExtraState(target) &&
+                !ShouldPreserveLocalEnemyExtraState(target, extraState)) {
+                ApplyEnemyAuthorityState(target, state, true);
+                ApplyEnemyExtraState(target, extraState);
             }
             freshEnemyAuthorityData.erase(networkIds[i]);
         } else {

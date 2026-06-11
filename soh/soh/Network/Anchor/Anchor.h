@@ -123,7 +123,6 @@ class Anchor : public Network {
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
     std::unordered_map<uint64_t, uint16_t> enemyDropCounters;
     uint32_t transientEnemyCounter = 0;
-    std::unordered_set<uint64_t> suppressedTransientProjectileKills;
     std::unordered_set<uint64_t> hintnutsDialogueActive;
     s16 enemySyncSceneNum = SCENE_ID_MAX;
     s8 enemySyncRoomNum = -1;
@@ -142,6 +141,7 @@ class Anchor : public Network {
     Actor* FindNearbyDeadEnemyDropSource(Actor* dropActor);
     bool IsEnemySyncActor(Actor* actor);
     bool IsEnemySyncActor(ActorCategory category, s16 actorId);
+    bool IsTransientProjectileActor(s16 actorId);
     uint64_t GetEnemyNetworkId(Actor* actor);
     uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);
