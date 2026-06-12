@@ -26,6 +26,8 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
 #include "src/overlays/actors/ovl_En_Peehat/z_en_peehat.h"
 #include "src/overlays/actors/ovl_En_Reeba/z_en_reeba.h"
+#include "src/overlays/actors/ovl_En_Fhg_Fire/z_en_fhg_fire.h"
+#include "src/overlays/actors/ovl_Boss_Mo/z_boss_mo.h"
 #include "src/overlays/actors/ovl_Obj_Oshihiki/z_obj_oshihiki.h"
 #include "src/overlays/actors/ovl_Obj_Hsblock/z_obj_hsblock.h"
 #include "src/overlays/actors/ovl_Obj_Elevator/z_obj_elevator.h"
@@ -1539,6 +1541,12 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return (nutsball->collider.base.atFlags & AT_TYPE_PLAYER) != 0;
     }
 
+    if (actor->id == ACTOR_EN_FHG_FIRE) {
+        EnFhgFire* fire = (EnFhgFire*)actor;
+        // The energy ball is report-worthy once it has been deflected and is no longer flying at the player.
+        return actor->params == FHGFIRE_ENERGY_BALL && fire->work[FHGFIRE_FIRE_MODE] != FHGFIRE_LIGHT_GREEN;
+    }
+
     if (actor->id == ACTOR_EN_GOMA) {
         EnGoma* goma = (EnGoma*)actor;
         return (s8)actor->colChkInfo.health <= 0 || IsGomaReportAction(GetGomaActionId(goma->actionFunc));
@@ -1580,6 +1588,23 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
                                   (authorityExtra.value("kind", std::string("")) == "EnNutsball" &&
                                    authorityExtra.value("colliderAtTypePlayer", false));
         return localReflected && !authorityReflected;
+    }
+
+    if (actor->id == ACTOR_EN_FHG_FIRE) {
+        EnFhgFire* fire = (EnFhgFire*)actor;
+        if (actor->params != FHGFIRE_ENERGY_BALL) {
+            return false;
+        }
+        // A local deflection bumped the return counter past what the authority has acknowledged; protect the
+        // returning ball from being dragged back into its pre-deflect flight until the report lands.
+        s16 authorityReturnCount = 0;
+        if (authorityExtra.value("kind", std::string("")) == "EnFhgFire") {
+            auto work = authorityExtra.value("work", std::vector<s16>{});
+            if (work.size() == FHGFIRE_SHORT_COUNT) {
+                authorityReturnCount = work[FHGFIRE_RETURN_COUNT];
+            }
+        }
+        return fire->work[FHGFIRE_RETURN_COUNT] > authorityReturnCount;
     }
 
     if (actor->id == ACTOR_BOSS_GOMA) {
@@ -1907,6 +1932,27 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["eyeEnvColor"] = { goma->eyeEnvColor[0], goma->eyeEnvColor[1], goma->eyeEnvColor[2] };
             AddVec3fState(extra, "shieldKnockbackVel", goma->shieldKnockbackVel);
             AddSkelAnimeState(extra, &goma->skelanime);
+            break;
+        }
+        case ACTOR_EN_FHG_FIRE: {
+            EnFhgFire* fire = (EnFhgFire*)actor;
+            if (actor->params != FHGFIRE_ENERGY_BALL) {
+                break;
+            }
+            extra["kind"] = "EnFhgFire";
+            extra["work"] = std::vector<s16>(fire->work, fire->work + FHGFIRE_SHORT_COUNT);
+            break;
+        }
+        case ACTOR_BOSS_MO: {
+            BossMo* mo = (BossMo*)actor;
+            extra = GetGenericEnemyState(actor);
+            extra["kind"] = "BossMo";
+            extra["work"] = std::vector<s16>(mo->work, mo->work + MO_SHORT_MAX);
+            extra["fwork"] = std::vector<f32>(mo->fwork, mo->fwork + MO_FLOAT_MAX);
+            extra["tentMaxAngle"] = mo->tentMaxAngle;
+            extra["tentSpeed"] = mo->tentSpeed;
+            extra["tentPulse"] = mo->tentPulse;
+            extra["tentSpawnPos"] = mo->tentSpawnPos;
             break;
         }
         case ACTOR_EN_NUTSBALL: {
@@ -2633,6 +2679,27 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         }
         ApplyVec3fState(extra, "shieldKnockbackVel", &goma->shieldKnockbackVel);
         ApplySkelAnimeState(extra, &goma->skelanime);
+    } else if (actor->id == ACTOR_EN_FHG_FIRE && kind == "EnFhgFire") {
+        EnFhgFire* fire = (EnFhgFire*)actor;
+        auto work = extra.value("work", std::vector<s16>{});
+        if (work.size() == FHGFIRE_SHORT_COUNT) {
+            std::copy(work.begin(), work.end(), fire->work);
+        }
+    } else if (actor->id == ACTOR_BOSS_MO && kind == "BossMo") {
+        BossMo* mo = (BossMo*)actor;
+        ApplyGenericEnemyState(actor, extra);
+        auto work = extra.value("work", std::vector<s16>{});
+        if (work.size() == MO_SHORT_MAX) {
+            std::copy(work.begin(), work.end(), mo->work);
+        }
+        auto fwork = extra.value("fwork", std::vector<f32>{});
+        if (fwork.size() == MO_FLOAT_MAX) {
+            std::copy(fwork.begin(), fwork.end(), mo->fwork);
+        }
+        mo->tentMaxAngle = extra.value("tentMaxAngle", mo->tentMaxAngle);
+        mo->tentSpeed = extra.value("tentSpeed", mo->tentSpeed);
+        mo->tentPulse = extra.value("tentPulse", mo->tentPulse);
+        mo->tentSpawnPos = extra.value("tentSpawnPos", mo->tentSpawnPos);
     } else if (actor->id == ACTOR_EN_NUTSBALL && kind == "EnNutsball") {
         EnNutsball* nutsball = (EnNutsball*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
@@ -3203,7 +3270,10 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                                                   actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
                 SetEnemyNetworkId(target, networkIds[i]);
             }
-            if (target == nullptr && !actorParams.empty()) {
+            // Duel actors come with the room on every client, and EN_FHG_FIRE dereferences actor->parent, so
+            // neither may ever be spawned parentless from the network; they only associate with local copies.
+            if (target == nullptr && !actorParams.empty() && !IsIndependentDuelActor(actorIds[i]) &&
+                actorIds[i] != ACTOR_EN_FHG_FIRE) {
                 target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],
                                      worldRotY[i], worldRotZ[i], actorParams[i]);
                 SetEnemyNetworkId(target, networkIds[i]);
@@ -3252,8 +3322,8 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
 
         if (isNewAssociation) {
             // Newly matched/spawned actors snap straight onto the authority state; waiting a frame for the
-            // deferred application would leave them visibly out of place.
-            if (!ShouldPreserveLocalEnemyExtraState(target, extraState)) {
+            // deferred application would leave them visibly out of place. Duel actors only share identity.
+            if (!IsIndependentDuelActor(actorIds[i]) && !ShouldPreserveLocalEnemyExtraState(target, extraState)) {
                 ApplyEnemyAuthorityState(target, state, true);
                 if (hasExtraState && !(target->colChkInfo.health < state.health)) {
                     ApplyEnemyExtraState(target, extraState);

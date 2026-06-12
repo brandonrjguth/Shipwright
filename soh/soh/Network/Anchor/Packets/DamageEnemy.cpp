@@ -9,6 +9,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
+#include "src/overlays/actors/ovl_En_Fhg_Fire/z_en_fhg_fire.h"
 #include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
@@ -106,6 +107,23 @@ static bool IsReportedNutsballReflectedState(Actor* target, nlohmann::json paylo
     return extraState.value("kind", std::string("")) == "EnNutsball" &&
            extraState.value("colliderAtTypePlayer", false) &&
            ((nutsball->collider.base.atFlags & AT_TYPE_PLAYER) == 0);
+}
+
+static bool IsReportedFhgFireVolleyState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_EN_FHG_FIRE || target->params != FHGFIRE_ENERGY_BALL ||
+        !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    nlohmann::json extraState = payload["extraState"];
+    if (extraState.value("kind", std::string("")) != "EnFhgFire") {
+        return false;
+    }
+
+    // A replica deflected the energy ball: its return counter is ahead of ours, so adopt the volley.
+    auto work = extraState.value("work", std::vector<s16>{});
+    EnFhgFire* fire = (EnFhgFire*)target;
+    return work.size() == FHGFIRE_SHORT_COUNT && work[FHGFIRE_RETURN_COUNT] > fire->work[FHGFIRE_RETURN_COUNT];
 }
 
 static bool IsReportedMovableBlockState(Actor* target, nlohmann::json payload) {
@@ -335,8 +353,8 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
 
     bool reportedBossGomaDeath = target->id == ACTOR_BOSS_GOMA && target->colChkInfo.health == 0;
     if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_HINTNUTS || target->id == ACTOR_EN_SHOPNUTS ||
-        target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_OBJ_OSHIHIKI || reportedBossGomaDeath ||
-        IsReportedPuzzleActorState(target, payload)) {
+        target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_EN_FHG_FIRE || target->id == ACTOR_OBJ_OSHIHIKI ||
+        reportedBossGomaDeath || IsReportedPuzzleActorState(target, payload)) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;
     }
@@ -541,6 +559,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
                                         IsReportedHintnutsState(target, payload) ||
                                          IsReportedShopnutsCaughtState(target, payload) ||
                                          IsReportedNutsballReflectedState(target, payload) ||
+                                         IsReportedFhgFireVolleyState(target, payload) ||
                                          IsReportedMovableBlockState(target, payload) ||
                                          IsReportedBossGomaState(target, payload) ||
                                          IsReportedPuzzleActorState(target, payload));

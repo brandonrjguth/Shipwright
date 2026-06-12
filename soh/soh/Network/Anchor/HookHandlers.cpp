@@ -373,7 +373,7 @@ void Anchor::RegisterHooks() {
         bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
         if ((actor->id == ACTOR_OBJ_OSHIHIKI || actor->id == ACTOR_EN_DEKUNUTS ||
              actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL || actor->id == ACTOR_EN_GOMA ||
-             actor->id == ACTOR_BOSS_GOMA) &&
+             actor->id == ACTOR_BOSS_GOMA || actor->id == ACTOR_EN_FHG_FIRE) &&
             hasPendingLocalExtraState) {
             SendPacket_ReportEnemyDamage(actor, GetReportedEnemyHealth(actor));
         }
@@ -473,6 +473,11 @@ void Anchor::RegisterHooks() {
                 // (arriving with a networkId via ENEMY_UPDATE) is kept, so the shot isn't duplicated.
                 Actor_Kill(actor);
                 *should = false;
+                return;
+            }
+            if (IsIndependentDuelActor(actor->id)) {
+                // Each client runs its own duel; only damage/kill packets are shared.
+                ConsumeFreshEnemyAuthorityData(networkId);
                 return;
             }
             // Only apply authority data that arrived since the last application. On frames without a new snapshot

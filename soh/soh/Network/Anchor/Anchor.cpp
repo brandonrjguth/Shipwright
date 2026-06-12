@@ -17,6 +17,38 @@ extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 extern bool ShouldReportEnemyExtraState(Actor* actor);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
 
+// Picks a random ambush target among all players for field enemy spawners. Returns 0 when the local player
+// was picked (or no co-op session), letting the caller use its vanilla local-player path; remote players are
+// only candidates while moving, mirroring the vanilla walking requirement.
+extern "C" u8 Anchor_GetRandomAmbushFocus(Vec3f* outPos, s16* outYaw) {
+    if (Anchor::Instance == nullptr || !Anchor::Instance->IsSaveLoaded()) {
+        return 0;
+    }
+
+    std::vector<const AnchorClient*> candidates;
+    for (auto& [clientId, client] : Anchor::Instance->clients) {
+        if (!client.online || client.self || !client.isSaveLoaded || !client.isMoving) {
+            continue;
+        }
+        if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+            continue;
+        }
+        candidates.push_back(&client);
+    }
+    if (candidates.empty()) {
+        return 0;
+    }
+
+    // The local player occupies one extra slot so ambushes stay evenly distributed.
+    size_t pick = (size_t)(Rand_ZeroOne() * (candidates.size() + 1));
+    if (pick >= candidates.size()) {
+        return 0;
+    }
+    *outPos = candidates[pick]->posRot.pos;
+    *outYaw = candidates[pick]->posRot.rot.y;
+    return 1;
+}
+
 extern "C" u8 Anchor_ShouldReplayCutsceneForFlag(s16 flag) {
     if (Anchor::Instance == nullptr) {
         return 0;
@@ -508,6 +540,13 @@ bool Anchor::IsTransientProjectileActor(s16 actorId, s16 params) {
     // authority's kill would delete them mid-air (the authority impacts latency-delayed player puppets).
     // EN_OKUTA is the octorok itself with params 0 and its spat rock otherwise.
     return actorId == ACTOR_EN_NUTSBALL || (actorId == ACTOR_EN_OKUTA && params != 0);
+}
+
+bool Anchor::IsIndependentDuelActor(s16 actorId) {
+    // Mirror-style duels: every client fights its own fully local copy (Dark Link is a Player-struct puppet
+    // that mirrors whoever is in front of him, so authority sync would make him ignore the second player).
+    // Only identity, damage, and kills sync, pooling everyone's damage into a shared health bar.
+    return actorId == ACTOR_EN_TORCH2;
 }
 
 bool Anchor::IsLocallySimulatedEffectActor(s16 actorId) {

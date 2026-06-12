@@ -12,6 +12,9 @@ void EnEncount1_SpawnLeevers(EnEncount1* this, PlayState* play);
 void EnEncount1_SpawnTektites(EnEncount1* this, PlayState* play);
 void EnEncount1_SpawnStalchildOrWolfos(EnEncount1* this, PlayState* play);
 
+// Anchor co-op: picks a random player as the ambush target; returns 0 when the local player was picked.
+u8 Anchor_GetRandomAmbushFocus(Vec3f* outPos, s16* outYaw);
+
 static s16 sLeeverAngles[] = { 0x0000, 0x2710, 0x7148, 0x8EB8, 0xD8F0 };
 static f32 sLeeverDists[] = { 200.0f, 170.0f, 120.0f, 120.0f, 170.0f };
 
@@ -228,6 +231,9 @@ void EnEncount1_SpawnStalchildOrWolfos(EnEncount1* this, PlayState* play) {
     CollisionPoly* floorPoly;
     s32 bgId;
     f32 floorY;
+    Vec3f ambushFocusPos;
+    s16 ambushFocusYaw;
+    u8 hasRemoteAmbushFocus;
 
     if (play->sceneNum != SCENE_HYRULE_FIELD) {
         if ((fabsf(player->actor.world.pos.y - this->actor.world.pos.y) > 100.0f) ||
@@ -253,11 +259,20 @@ void EnEncount1_SpawnStalchildOrWolfos(EnEncount1* this, PlayState* play) {
         while ((this->curNumSpawn < this->maxCurSpawns && this->totalNumSpawn < this->maxTotalSpawns) ||
                (CVarGetInteger(CVAR_ENHANCEMENT("RandomizedEnemies"), 0) && enemyCount < 15)) {
             if (play->sceneNum == SCENE_HYRULE_FIELD) {
-                if ((player->floorSfxOffset == 0) || (player->actor.floorBgId != BGCHECK_SCENE) ||
-                    !(player->actor.bgCheckFlags & 1) || (player->stateFlags1 & PLAYER_STATE1_IN_WATER)) {
+                // Anchor co-op: ambushes target a random player. Remote players are tracked through their
+                // synced positions (already filtered to moving ones); the local player keeps the vanilla
+                // walking checks.
+                hasRemoteAmbushFocus = Anchor_GetRandomAmbushFocus(&ambushFocusPos, &ambushFocusYaw);
+                if (!hasRemoteAmbushFocus) {
+                    if ((player->floorSfxOffset == 0) || (player->actor.floorBgId != BGCHECK_SCENE) ||
+                        !(player->actor.bgCheckFlags & 1) || (player->stateFlags1 & PLAYER_STATE1_IN_WATER)) {
 
-                    this->fieldSpawnTimer = 60;
-                    break;
+                        this->fieldSpawnTimer = 60;
+                        break;
+                    }
+                    ambushFocusPos = player->actor.world.pos;
+                    ambushFocusPos.y = player->actor.floorHeight;
+                    ambushFocusYaw = player->actor.shape.rot.y;
                 }
                 if (this->fieldSpawnTimer == 60) {
                     this->maxCurSpawns = 2;
@@ -268,16 +283,14 @@ void EnEncount1_SpawnStalchildOrWolfos(EnEncount1* this, PlayState* play) {
                 }
 
                 spawnDist = Rand_CenteredFloat(40.0f) + 200.0f;
-                spawnAngle = player->actor.shape.rot.y;
+                spawnAngle = ambushFocusYaw;
                 if (this->curNumSpawn != 0) {
                     spawnAngle = -spawnAngle;
                     spawnDist = Rand_CenteredFloat(40.0f) + 100.0f;
                 }
-                spawnPos.x =
-                    player->actor.world.pos.x + (Math_SinS(spawnAngle) * spawnDist) + Rand_CenteredFloat(40.0f);
-                spawnPos.y = player->actor.floorHeight + 120.0f;
-                spawnPos.z =
-                    player->actor.world.pos.z + (Math_CosS(spawnAngle) * spawnDist) + Rand_CenteredFloat(40.0f);
+                spawnPos.x = ambushFocusPos.x + (Math_SinS(spawnAngle) * spawnDist) + Rand_CenteredFloat(40.0f);
+                spawnPos.y = ambushFocusPos.y + 120.0f;
+                spawnPos.z = ambushFocusPos.z + (Math_CosS(spawnAngle) * spawnDist) + Rand_CenteredFloat(40.0f);
                 floorY = BgCheck_EntityRaycastFloor4(&play->colCtx, &floorPoly, &bgId, &this->actor, &spawnPos);
                 if (floorY <= BGCHECK_Y_MIN) {
                     break;

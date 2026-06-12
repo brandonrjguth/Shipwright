@@ -40,6 +40,7 @@ typedef struct {
     // Only available in PLAYER_UPDATE packets
     s32 linkAge;
     PosRot posRot;
+    bool isMoving;
     Vec3s jointTable[24];
     u8 movementFlags;
     Vec3s prevTransl;
@@ -153,6 +154,7 @@ class Anchor : public Network {
     bool IsEnemySyncActor(ActorCategory category, s16 actorId);
     bool IsTransientProjectileActor(s16 actorId, s16 params);
     bool IsLocallySimulatedEffectActor(s16 actorId);
+    bool IsIndependentDuelActor(s16 actorId);
     uint64_t GetEnemyNetworkId(Actor* actor);
     uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);

@@ -201,8 +201,10 @@ nlohmann::json GetGenericEnemyState(Actor* actor) {
 }
 
 void ApplyGenericEnemyState(Actor* actor, nlohmann::json extra) {
+    // No kind check: handcrafted extra states (e.g. BossMo) layer their fields on top of the generic ones and
+    // delegate here; the registry lookup is the real gate.
     auto it = Registry().find(actor->id);
-    if (it == Registry().end() || extra.value("kind", std::string("")) != "Generic") {
+    if (it == Registry().end()) {
         return;
     }
 
