@@ -549,6 +549,16 @@ bool Anchor::IsIndependentDuelActor(s16 actorId) {
     return actorId == ACTOR_EN_TORCH2;
 }
 
+bool Anchor::IsParentDependentEnemy(s16 actorId) {
+    // These dereference actor->parent in their update paths, so a parentless network-spawned orphan would
+    // crash. They are never spawned by the ENEMY_UPDATE fallback; replicas only associate the copies their
+    // own simulation spawned (the spawning parent's actions are synced, so local copies always appear).
+    return actorId == ACTOR_EN_FHG_FIRE || actorId == ACTOR_EN_DHA || actorId == ACTOR_EN_FW ||
+           actorId == ACTOR_BOSS_FD2 || actorId == ACTOR_BOSS_VA || actorId == ACTOR_BOSS_SST ||
+           actorId == ACTOR_BOSS_TW || actorId == ACTOR_EN_GOMA || actorId == ACTOR_EN_DODOJR ||
+           actorId == ACTOR_BOSS_GANON || actorId == ACTOR_EN_PO_SISTERS || actorId == ACTOR_EN_FLOORMAS;
+}
+
 bool Anchor::IsLocallySimulatedEffectActor(s16 actorId) {
     // Excluded from enemy sync entirely: each client's (action-synced) parent spawns and simulates its own copy.
     // The first group dereferences actor->parent, so a network-spawned orphan would crash; the rest are
@@ -558,7 +568,10 @@ bool Anchor::IsLocallySimulatedEffectActor(s16 actorId) {
            actorId == ACTOR_EN_FIRE_ROCK || actorId == ACTOR_EN_GANON_MANT || actorId == ACTOR_EN_GANON_ORGAN ||
            actorId == ACTOR_EN_VB_BALL || actorId == ACTOR_DEMO_EFFECT || actorId == ACTOR_DEMO_GEFF ||
            actorId == ACTOR_DEMO_GJ || actorId == ACTOR_EN_RU1 || actorId == ACTOR_EN_ZL3 ||
-           actorId == ACTOR_EN_SDA || actorId == ACTOR_EN_BLKOBJ || actorId == ACTOR_EN_CLEAR_TAG;
+           actorId == ACTOR_EN_SDA || actorId == ACTOR_EN_BLKOBJ || actorId == ACTOR_EN_CLEAR_TAG ||
+           // Traversal hazards that must react to the local player rather than being pinned to the authority:
+           // collapsing tower platforms and flying floor tiles.
+           actorId == ACTOR_BG_GANON_OTYUKA || actorId == ACTOR_EN_YUKABYUN;
 }
 
 bool Anchor::IsEnemySyncActor(Actor* actor) {

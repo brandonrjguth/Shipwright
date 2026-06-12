@@ -373,7 +373,7 @@ void Anchor::RegisterHooks() {
         bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
         if ((actor->id == ACTOR_OBJ_OSHIHIKI || actor->id == ACTOR_EN_DEKUNUTS ||
              actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL || actor->id == ACTOR_EN_GOMA ||
-             actor->id == ACTOR_BOSS_GOMA || actor->id == ACTOR_EN_FHG_FIRE) &&
+             actor->id == ACTOR_BOSS_GOMA || actor->id == ACTOR_EN_FHG_FIRE || actor->id == ACTOR_BOSS_GANON) &&
             hasPendingLocalExtraState) {
             SendPacket_ReportEnemyDamage(actor, GetReportedEnemyHealth(actor));
         }

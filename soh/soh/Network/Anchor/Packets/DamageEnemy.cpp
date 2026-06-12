@@ -10,6 +10,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #include "src/overlays/actors/ovl_En_Fhg_Fire/z_en_fhg_fire.h"
+#include "src/overlays/actors/ovl_Boss_Ganon/z_boss_ganon.h"
 #include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
@@ -124,6 +125,21 @@ static bool IsReportedFhgFireVolleyState(Actor* target, nlohmann::json payload) 
     auto work = extraState.value("work", std::vector<s16>{});
     EnFhgFire* fire = (EnFhgFire*)target;
     return work.size() == FHGFIRE_SHORT_COUNT && work[FHGFIRE_RETURN_COUNT] > fire->work[FHGFIRE_RETURN_COUNT];
+}
+
+static bool IsReportedBossGanonVolleyState(Actor* target, nlohmann::json payload) {
+    if (target == nullptr || target->id != ACTOR_BOSS_GANON || target->params < 0x64 || target->params > 0xC7 ||
+        !HasReportedEnemyState(payload)) {
+        return false;
+    }
+
+    nlohmann::json extraState = payload["extraState"];
+    if (extraState.value("kind", std::string("")) != "BossGanonBall") {
+        return false;
+    }
+
+    BossGanon* ball = (BossGanon*)target;
+    return extraState.value("volleyCount", (s16)0) > ball->unk_1A4;
 }
 
 static bool IsReportedMovableBlockState(Actor* target, nlohmann::json payload) {
@@ -352,9 +368,10 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     EnsureReportedGohmaLarvaDeathState(target);
 
     bool reportedBossGomaDeath = target->id == ACTOR_BOSS_GOMA && target->colChkInfo.health == 0;
+    bool reportedBossGanonVolley = target->id == ACTOR_BOSS_GANON && target->params >= 0x64 && target->params <= 0xC7;
     if (target->id == ACTOR_EN_DEKUNUTS || target->id == ACTOR_EN_HINTNUTS || target->id == ACTOR_EN_SHOPNUTS ||
         target->id == ACTOR_EN_NUTSBALL || target->id == ACTOR_EN_FHG_FIRE || target->id == ACTOR_OBJ_OSHIHIKI ||
-        reportedBossGomaDeath || IsReportedPuzzleActorState(target, payload)) {
+        reportedBossGanonVolley || reportedBossGomaDeath || IsReportedPuzzleActorState(target, payload)) {
         ApplyReportedEnemyDeathMotion(target, payload);
         return;
     }
@@ -560,6 +577,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
                                          IsReportedShopnutsCaughtState(target, payload) ||
                                          IsReportedNutsballReflectedState(target, payload) ||
                                          IsReportedFhgFireVolleyState(target, payload) ||
+                                         IsReportedBossGanonVolleyState(target, payload) ||
                                          IsReportedMovableBlockState(target, payload) ||
                                          IsReportedBossGomaState(target, payload) ||
                                          IsReportedPuzzleActorState(target, payload));

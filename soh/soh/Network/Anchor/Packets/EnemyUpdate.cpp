@@ -28,6 +28,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Reeba/z_en_reeba.h"
 #include "src/overlays/actors/ovl_En_Fhg_Fire/z_en_fhg_fire.h"
 #include "src/overlays/actors/ovl_Boss_Mo/z_boss_mo.h"
+#include "src/overlays/actors/ovl_Boss_Ganon/z_boss_ganon.h"
 #include "src/overlays/actors/ovl_Obj_Oshihiki/z_obj_oshihiki.h"
 #include "src/overlays/actors/ovl_Obj_Hsblock/z_obj_hsblock.h"
 #include "src/overlays/actors/ovl_Obj_Elevator/z_obj_elevator.h"
@@ -1547,6 +1548,11 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return actor->params == FHGFIRE_ENERGY_BALL && fire->work[FHGFIRE_FIRE_MODE] != FHGFIRE_LIGHT_GREEN;
     }
 
+    if (actor->id == ACTOR_BOSS_GANON) {
+        BossGanon* dorf = (BossGanon*)actor;
+        return actor->params >= 0x64 && actor->params <= 0xC7 && dorf->unk_1C2 != 0;
+    }
+
     if (actor->id == ACTOR_EN_GOMA) {
         EnGoma* goma = (EnGoma*)actor;
         return (s8)actor->colChkInfo.health <= 0 || IsGomaReportAction(GetGomaActionId(goma->actionFunc));
@@ -1605,6 +1611,18 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
             }
         }
         return fire->work[FHGFIRE_RETURN_COUNT] > authorityReturnCount;
+    }
+
+    if (actor->id == ACTOR_BOSS_GANON) {
+        BossGanon* dorf = (BossGanon*)actor;
+        if (actor->params < 0x64 || actor->params > 0xC7) {
+            return false;
+        }
+        s16 authorityVolleyCount = 0;
+        if (authorityExtra.value("kind", std::string("")) == "BossGanonBall") {
+            authorityVolleyCount = authorityExtra.value("volleyCount", (s16)0);
+        }
+        return dorf->unk_1A4 > authorityVolleyCount;
     }
 
     if (actor->id == ACTOR_BOSS_GOMA) {
@@ -1941,6 +1959,19 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             }
             extra["kind"] = "EnFhgFire";
             extra["work"] = std::vector<s16>(fire->work, fire->work + FHGFIRE_SHORT_COUNT);
+            break;
+        }
+        case ACTOR_BOSS_GANON: {
+            BossGanon* dorf = (BossGanon*)actor;
+            if (actor->params >= 0x64 && actor->params <= 0xC7) {
+                // Tennis light ball instance: sync the volley.
+                extra["kind"] = "BossGanonBall";
+                extra["ballMode"] = dorf->unk_1C2;
+                extra["volleyCount"] = dorf->unk_1A4;
+            } else if (actor->params < 0x64) {
+                // Ganondorf himself: animation-only generic sync (his action funcs drive cameras).
+                extra = GetGenericEnemyState(actor);
+            }
             break;
         }
         case ACTOR_BOSS_MO: {
@@ -2685,6 +2716,10 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         if (work.size() == FHGFIRE_SHORT_COUNT) {
             std::copy(work.begin(), work.end(), fire->work);
         }
+    } else if (actor->id == ACTOR_BOSS_GANON && kind == "BossGanonBall") {
+        BossGanon* dorf = (BossGanon*)actor;
+        dorf->unk_1C2 = extra.value("ballMode", dorf->unk_1C2);
+        dorf->unk_1A4 = extra.value("volleyCount", dorf->unk_1A4);
     } else if (actor->id == ACTOR_BOSS_MO && kind == "BossMo") {
         BossMo* mo = (BossMo*)actor;
         ApplyGenericEnemyState(actor, extra);
@@ -3270,10 +3305,10 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                                                   actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
                 SetEnemyNetworkId(target, networkIds[i]);
             }
-            // Duel actors come with the room on every client, and EN_FHG_FIRE dereferences actor->parent, so
-            // neither may ever be spawned parentless from the network; they only associate with local copies.
+            // Duel actors come with the room on every client, and parent-dependent enemies would crash if
+            // spawned parentless from the network; both only associate with locally simulated copies.
             if (target == nullptr && !actorParams.empty() && !IsIndependentDuelActor(actorIds[i]) &&
-                actorIds[i] != ACTOR_EN_FHG_FIRE) {
+                !IsParentDependentEnemy(actorIds[i])) {
                 target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],
                                      worldRotY[i], worldRotZ[i], actorParams[i]);
                 SetEnemyNetworkId(target, networkIds[i]);

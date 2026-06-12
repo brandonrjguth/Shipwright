@@ -155,6 +155,7 @@ class Anchor : public Network {
     bool IsTransientProjectileActor(s16 actorId, s16 params);
     bool IsLocallySimulatedEffectActor(s16 actorId);
     bool IsIndependentDuelActor(s16 actorId);
+    bool IsParentDependentEnemy(s16 actorId);
     uint64_t GetEnemyNetworkId(Actor* actor);
     uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);
