@@ -99,6 +99,7 @@ void Anchor::HandlePacket_PlayerUpdate(nlohmann::json payload) {
         f32 dy = newPosRot.pos.y - client.posRot.pos.y;
         f32 dz = newPosRot.pos.z - client.posRot.pos.z;
         client.isMoving = (dx * dx + dy * dy + dz * dz) > 1.0f;
+        client.moveSpeed = sqrtf(dx * dx + dz * dz);
         client.posRot = newPosRot;
         std::vector<int> jointArray = payload.value("jointTable", std::vector<int>{});
         jointArray.resize(24 * 3); // Ensure it has enough elements, in case of missing data

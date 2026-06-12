@@ -4,6 +4,9 @@
 #include <libultraship/libultra.h>
 #include "global.h"
 
+// Anchor co-op: params value that spawns a visual-only puppet horse shown under a remote rider.
+#define ENHORSE_PUPPET_PARAMS 0x0FF0
+
 typedef enum {
     /* 0  */ ENHORSE_ACT_FROZEN,
     /* 1  */ ENHORSE_ACT_INACTIVE,

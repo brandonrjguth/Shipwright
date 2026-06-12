@@ -323,6 +323,7 @@ void Anchor::RegisterHooks() {
         DetectEnemyRoomChange();
         ProcessActorBuffers();
         DetectEnemyDamage();
+        UpdateHorsePuppets();
         SendPacket_PlayerUpdate();
 
         // Day/night sync: the time authority streams its clock; everyone else reports only abrupt local
@@ -391,8 +392,31 @@ void Anchor::RegisterHooks() {
         }
     });
 
-    COND_HOOK(OnFlagSet, isConnected,
-              [&](s16 flagType, s16 flag) { SendPacket_SetFlag(SCENE_ID_MAX, flagType, flag); });
+    COND_HOOK(OnFlagSet, isConnected, [&](s16 flagType, s16 flag) {
+        if (!isProcessingIncomingPacket && flagType == FLAG_EVENT_CHECK_INF) {
+            // The local player just experienced this event themselves; no replay needed anymore.
+            pendingCutsceneReplayFlags.erase(flag);
+        }
+        SendPacket_SetFlag(SCENE_ID_MAX, flagType, flag);
+    });
+
+    COND_VB_SHOULD(VB_BE_ELIGIBLE_FOR_SARIAS_SONG, isConnected, {
+        if (Anchor::Instance->HasQuestItemCutsceneReplay(QUEST_SONG_SARIA)) {
+            *should = true;
+        }
+    });
+
+    COND_VB_SHOULD(VB_MALON_ALREADY_TAUGHT_EPONAS_SONG, isConnected, {
+        if (Anchor::Instance->HasQuestItemCutsceneReplay(QUEST_SONG_EPONA)) {
+            *should = false;
+        }
+    });
+
+    COND_VB_SHOULD(VB_GIVE_ITEM_SONG, isConnected, {
+        s32 itemSong = va_arg(args, s32);
+        // The local player was just taught this song; its replay (if any) is finished.
+        Anchor::Instance->FinishQuestItemCutsceneReplay(QUEST_SONG_MINUET + (itemSong - ITEM_SONG_MINUET));
+    });
 
     COND_HOOK(OnFlagUnset, isConnected,
               [&](s16 flagType, s16 flag) { SendPacket_UnsetFlag(SCENE_ID_MAX, flagType, flag); });

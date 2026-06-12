@@ -41,6 +41,7 @@ typedef struct {
     s32 linkAge;
     PosRot posRot;
     bool isMoving;
+    f32 moveSpeed;
     Vec3s jointTable[24];
     u8 movementFlags;
     Vec3s prevTransl;
@@ -65,6 +66,8 @@ typedef struct {
 
     // Ptr to the dummy player
     Player* player;
+    // Visual-only puppet horse shown while this client rides; managed by UpdateHorsePuppets.
+    Actor* horse;
 } AnchorClient;
 
 typedef struct {
@@ -124,6 +127,9 @@ class Anchor : public Network {
     // EVENTCHKINF flags first set by a remote player this session. One-time story cutscenes are gated on these
     // flags, so the cutscene triggers consult this set to still play the scene once for the local player.
     std::unordered_set<s16> pendingCutsceneReplayFlags;
+    // Same idea for quest items (songs): teaching scenes gated on CHECK_QUEST_ITEM still run for the local
+    // player when the song arrived through sync; erased when the song is taught locally.
+    std::unordered_set<s32> pendingQuestItemReplays;
     // Day/night sync state: last dayTime produced by the local game (adoptions overwrite it so the jump
     // detector only fires on local changes like Sun's Song), and the authority's broadcast cadence counter.
     u16 lastLocalDayTime = 0;
@@ -168,6 +174,7 @@ class Anchor : public Network {
     void ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate);
     bool ConsumeFreshEnemyAuthorityData(uint64_t networkId);
     void UpdateEnemyCullOverrides(const std::vector<Actor*>& currentEnemies);
+    void UpdateHorsePuppets();
     uint32_t GetEnemyRoomKey(s16 sceneNum, s8 roomNum);
     uint32_t GetEnemyRoomAuthorityGeneration(s16 sceneNum, s8 roomNum);
     uint32_t GetEnemySyncAuthorityClientId();
@@ -266,7 +273,9 @@ class Anchor : public Network {
     void SendJsonToRemote(nlohmann::json packet);
     bool IsSaveLoaded();
     bool CanTeleportTo(uint32_t clientId);
-    bool ConsumeCutsceneReplayFlag(s16 flag);
+    bool HasCutsceneReplayFlag(s16 flag);
+    bool HasQuestItemCutsceneReplay(s32 questItem);
+    void FinishQuestItemCutsceneReplay(s32 questItem);
     uint32_t GetDummyPlayerClientId(const Actor* actor);
 
     void SendPacket_ClearTeamState(std::string teamId);

@@ -1,4 +1,7 @@
 #include "z_en_sa.h"
+
+// Anchor co-op: true while the matching teaching scene should still play for the local player.
+u8 Anchor_HasQuestItemCutsceneReplay(s32 questItem);
 #include "overlays/actors/ovl_En_Elf/z_en_elf.h"
 #include "objects/object_sa/object_sa.h"
 #include "scenes/overworld/spot04/spot04_scene.h"
@@ -154,7 +157,7 @@ u16 EnSa_GetTextId(PlayState* play, Actor* thisx) {
     if (IS_RANDO && Randomizer_GetSettingValue(RSK_SARIA_HINT)) {
         return 0x10AD;
     }
-    if (CHECK_QUEST_ITEM(QUEST_SONG_SARIA)) {
+    if (CHECK_QUEST_ITEM(QUEST_SONG_SARIA) && !Anchor_HasQuestItemCutsceneReplay(QUEST_SONG_SARIA)) {
         return 0x10AD;
     }
     if (CHECK_QUEST_ITEM(QUEST_KOKIRI_EMERALD)) {

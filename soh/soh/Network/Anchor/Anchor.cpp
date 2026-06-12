@@ -10,6 +10,7 @@ extern "C" {
 #include "variables.h"
 #include "functions.h"
 #include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
+#include "src/overlays/actors/ovl_En_Horse/z_en_horse.h"
 extern PlayState* gPlayState;
 }
 
@@ -53,11 +54,28 @@ extern "C" u8 Anchor_ShouldReplayCutsceneForFlag(s16 flag) {
     if (Anchor::Instance == nullptr) {
         return 0;
     }
-    return Anchor::Instance->ConsumeCutsceneReplayFlag(flag) ? 1 : 0;
+    return Anchor::Instance->HasCutsceneReplayFlag(flag) ? 1 : 0;
 }
 
-bool Anchor::ConsumeCutsceneReplayFlag(s16 flag) {
-    return pendingCutsceneReplayFlags.erase(flag) > 0;
+extern "C" u8 Anchor_HasQuestItemCutsceneReplay(s32 questItem) {
+    if (Anchor::Instance == nullptr) {
+        return 0;
+    }
+    return Anchor::Instance->HasQuestItemCutsceneReplay(questItem) ? 1 : 0;
+}
+
+// Non-consuming: gates poll these every frame. Entries are erased when the local game itself sets the flag
+// or teaches the song, i.e. when the local player has actually experienced the event.
+bool Anchor::HasCutsceneReplayFlag(s16 flag) {
+    return pendingCutsceneReplayFlags.contains(flag);
+}
+
+bool Anchor::HasQuestItemCutsceneReplay(s32 questItem) {
+    return pendingQuestItemReplays.contains(questItem);
+}
+
+void Anchor::FinishQuestItemCutsceneReplay(s32 questItem) {
+    pendingQuestItemReplays.erase(questItem);
 }
 
 uint32_t Anchor::GetTimeSyncAuthorityClientId() {
@@ -168,6 +186,7 @@ void Anchor::OnConnected() {
     SendPacket_Handshake();
     RegisterHooks();
     pendingCutsceneReplayFlags.clear();
+    pendingQuestItemReplays.clear();
 
     if (IsSaveLoaded()) {
         SendPacket_RequestTeamState();
@@ -1113,6 +1132,57 @@ void Anchor::ProcessActorBuffers() {
         Actor* spawned = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorId,
                                       pos.x, pos.y, pos.z, 0, 0, 0, params);
         enemySpawnBuffer.erase(enemySpawnBuffer.begin());
+    }
+}
+
+void Anchor::UpdateHorsePuppets() {
+    if (!IsSaveLoaded()) {
+        return;
+    }
+
+    for (auto& [clientId, client] : clients) {
+        if (client.self) {
+            continue;
+        }
+
+        // The scene change frees actors without telling us; drop dangling pointers first.
+        if (client.horse != nullptr && !AnchorIsActorInCurrentLists(client.horse)) {
+            client.horse = nullptr;
+        }
+
+        bool ridingHere = client.online && client.isSaveLoaded && client.sceneNum == gPlayState->sceneNum &&
+                          (client.stateFlags1 & PLAYER_STATE1_ON_HORSE);
+        if (!ridingHere) {
+            if (client.horse != nullptr) {
+                Actor_Kill(client.horse);
+                client.horse = nullptr;
+            }
+            continue;
+        }
+
+        if (client.horse == nullptr) {
+            // Fails harmlessly (and is retried) in scenes without the horse object loaded.
+            client.horse =
+                Actor_Spawn(&gPlayState->actorCtx, gPlayState, ACTOR_EN_HORSE, client.posRot.pos.x,
+                            client.posRot.pos.y - 43.0f, client.posRot.pos.z, 0, client.posRot.rot.y, 0,
+                            ENHORSE_PUPPET_PARAMS);
+        }
+
+        if (client.horse != nullptr) {
+            EnHorse* horse = (EnHorse*)client.horse;
+            // Anchor the saddle under the rider: riderPos is the saddle-bone offset computed during draw.
+            // Until the first draw has run it can hold a garbage absolute position, so fall back to a fixed
+            // saddle height when it looks implausible.
+            Vec3f saddleOffset = horse->riderPos;
+            if (fabsf(saddleOffset.y) > 200.0f || fabsf(saddleOffset.x) > 200.0f || fabsf(saddleOffset.z) > 200.0f) {
+                saddleOffset = { 0.0f, 70.0f, 0.0f };
+            }
+            horse->actor.world.pos.x = client.posRot.pos.x - saddleOffset.x;
+            horse->actor.world.pos.y = client.posRot.pos.y + 27.0f - saddleOffset.y;
+            horse->actor.world.pos.z = client.posRot.pos.z - saddleOffset.z;
+            horse->actor.shape.rot.y = client.posRot.rot.y;
+            horse->actor.speedXZ = client.moveSpeed;
+        }
     }
 }
 

@@ -19,6 +19,7 @@ typedef void (*EnHorseActionFunc)(EnHorse*, PlayState*);
 void EnHorse_Init(Actor* thisx, PlayState* play);
 void EnHorse_Destroy(Actor* thisx, PlayState* play);
 void EnHorse_Update(Actor* thisx, PlayState* play);
+void EnHorse_UpdatePuppet(Actor* thisx, PlayState* play);
 void EnHorse_Draw(Actor* thisx, PlayState* play);
 
 void EnHorse_InitCutscene(EnHorse* this, PlayState* play);
@@ -785,6 +786,22 @@ void EnHorse_Init(Actor* thisx, PlayState* play2) {
     // params was -1
     if (this->actor.params == 0x7FFF) {
         this->actor.params = 1;
+    }
+
+    if (this->actor.params == ENHORSE_PUPPET_PARAMS) {
+        // Anchor co-op: visual-only puppet under a remote rider; position, yaw, and speed are driven
+        // externally every frame, so no colliders, AI, or background checks are set up.
+        this->stateFlags = ENHORSE_UNRIDEABLE | ENHORSE_CANT_JUMP;
+        Actor_SetScale(&this->actor, 0.01f);
+        ActorShape_Init(&this->actor.shape, 0.0f, ActorShadow_DrawHorse, 20.0f);
+        Skin_Init(play, &this->skin, sSkeletonHeaders[this->type], sAnimationHeaders[this->type][ENHORSE_ANIM_IDLE]);
+        this->animationIdx = ENHORSE_ANIM_IDLE;
+        this->action = ENHORSE_ACT_IDLE;
+        this->actor.speedXZ = 0.0f;
+        this->actor.gravity = 0.0f;
+        this->actor.flags |= ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED;
+        this->actor.update = EnHorse_UpdatePuppet;
+        return;
     }
 
     if (play->sceneNum == SCENE_LON_LON_BUILDINGS) {
@@ -3483,6 +3500,33 @@ s32 EnHorse_UpdateConveyors(EnHorse* this, PlayState* play) {
 
 s32 EnHorse_RandInt(f32 range) {
     return Rand_ZeroOne() * range;
+}
+
+// Anchor co-op: update for visual-only puppet horses shown under remote riders. Position, yaw, and speedXZ
+// are written externally every frame from the rider's synced state; this just keeps the animation matched
+// to the movement speed.
+void EnHorse_UpdatePuppet(Actor* thisx, PlayState* play) {
+    EnHorse* this = (EnHorse*)thisx;
+    s32 targetAnim;
+
+    if (this->actor.speedXZ > 6.0f) {
+        targetAnim = ENHORSE_ANIM_GALLOP;
+    } else if (this->actor.speedXZ > 0.5f) {
+        targetAnim = ENHORSE_ANIM_TROT;
+    } else {
+        targetAnim = ENHORSE_ANIM_IDLE;
+    }
+
+    if (targetAnim != this->animationIdx) {
+        this->animationIdx = targetAnim;
+        Animation_PlayOnce(&this->skin.skelAnime, sAnimationHeaders[this->type][this->animationIdx]);
+    } else if (SkelAnime_Update(&this->skin.skelAnime)) {
+        Animation_PlayOnce(&this->skin.skelAnime, sAnimationHeaders[this->type][this->animationIdx]);
+    }
+
+    this->actor.world.rot.y = this->actor.shape.rot.y;
+    this->actor.focus.pos = this->actor.world.pos;
+    this->actor.focus.pos.y += 70.0f;
 }
 
 void EnHorse_Update(Actor* thisx, PlayState* play2) {

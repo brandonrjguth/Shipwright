@@ -5,6 +5,9 @@
  */
 
 #include "z_en_xc.h"
+
+// Anchor co-op: true while this one-time-cutscene flag was first set by a remote player.
+u8 Anchor_ShouldReplayCutsceneForFlag(s16 flag);
 #include "overlays/actors/ovl_En_Arrow/z_en_arrow.h"
 #include "overlays/actors/ovl_Door_Warp1/z_door_warp1.h"
 #include "objects/object_xc/object_xc.h"
@@ -283,7 +286,8 @@ void func_80B3C9EC(EnXc* this) {
 
 void func_80B3CA38(EnXc* this, PlayState* play) {
     // If Player is adult but hasn't learned Minuet of Forest
-    if (!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_MINUET_OF_FOREST) && LINK_IS_ADULT) {
+    if ((!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_MINUET_OF_FOREST) ||
+         Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_LEARNED_MINUET_OF_FOREST)) && LINK_IS_ADULT) {
         this->action = SHEIK_ACTION_INIT;
     } else {
         Actor_Kill(&this->actor);
@@ -317,7 +321,8 @@ s32 EnXc_MinuetCS(EnXc* this, PlayState* play) {
 
 void func_80B3CB58(EnXc* this, PlayState* play) {
     // If hasn't learned Bolero and Player is Adult
-    if (!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_BOLERO_OF_FIRE) && LINK_IS_ADULT) {
+    if ((!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_BOLERO_OF_FIRE) ||
+         Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_LEARNED_BOLERO_OF_FIRE)) && LINK_IS_ADULT) {
         this->action = SHEIK_ACTION_INIT;
     } else {
         Actor_Kill(&this->actor);
@@ -355,7 +360,8 @@ void EnXc_SetupSerenadeAction(EnXc* this, PlayState* play) {
     // Player is adult and does not have iron boots and has not learned Serenade
     if (GameInteractor_Should(VB_SHIEK_PREPARE_TO_GIVE_SERENADE_OF_WATER,
                               (!CHECK_OWNED_EQUIP(EQUIP_TYPE_BOOTS, EQUIP_INV_BOOTS_IRON) &&
-                               !Flags_GetEventChkInf(EVENTCHKINF_LEARNED_SERENADE_OF_WATER)) &&
+                               (!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_SERENADE_OF_WATER) ||
+                                Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_LEARNED_SERENADE_OF_WATER))) &&
                                   LINK_IS_ADULT)) {
         this->action = SHEIK_ACTION_SERENADE;
         osSyncPrintf("水のセレナーデ シーク誕生!!!!!!!!!!!!!!!!!!\n");
@@ -371,7 +377,8 @@ s32 EnXc_SerenadeCS(EnXc* this, PlayState* play) {
         s32 stateFlags = player->stateFlags1;
         if (GameInteractor_Should(VB_BE_ELIGIBLE_FOR_SERENADE_OF_WATER,
                                   CHECK_OWNED_EQUIP(EQUIP_TYPE_BOOTS, EQUIP_INV_BOOTS_IRON) &&
-                                      !Flags_GetEventChkInf(EVENTCHKINF_LEARNED_SERENADE_OF_WATER)) &&
+                                      (!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_SERENADE_OF_WATER) ||
+                                       Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_LEARNED_SERENADE_OF_WATER))) &&
             !(stateFlags & PLAYER_STATE1_IN_CUTSCENE) && !Play_InCsMode(play)) {
             if (GameInteractor_Should(VB_PLAY_SERENADE_OF_WATER_CS, true)) {
                 Cutscene_SetSegment(play, &gIceCavernSerenadeCs);
@@ -2191,7 +2198,8 @@ void EnXc_InitTempleOfTime(EnXc* this, PlayState* play) {
             }
             func_80B3EBF0(this, play);
         } else if (GameInteractor_Should(VB_BE_ELIGIBLE_FOR_PRELUDE_OF_LIGHT,
-                                         !Flags_GetEventChkInf(EVENTCHKINF_LEARNED_PRELUDE_OF_LIGHT) &&
+                                         (!Flags_GetEventChkInf(EVENTCHKINF_LEARNED_PRELUDE_OF_LIGHT) ||
+                                          Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_LEARNED_PRELUDE_OF_LIGHT)) &&
                                              Flags_GetEventChkInf(EVENTCHKINF_USED_FOREST_TEMPLE_BLUE_WARP))) {
             Flags_SetEventChkInf(EVENTCHKINF_LEARNED_PRELUDE_OF_LIGHT);
             if (GameInteractor_Should(VB_GIVE_ITEM_SONG, true, ITEM_SONG_PRELUDE)) {

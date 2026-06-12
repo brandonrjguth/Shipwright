@@ -5,6 +5,9 @@
  */
 
 #include "z_en_fu.h"
+
+// Anchor co-op: true while this one-time-cutscene flag was first set by a remote player.
+u8 Anchor_ShouldReplayCutsceneForFlag(s16 flag);
 #include "objects/object_fu/object_fu.h"
 #include "scenes/indoors/hakasitarelay/hakasitarelay_scene.h"
 #include "soh/ResourceManagerHelpers.h"
@@ -225,7 +228,8 @@ void EnFu_WaitAdult(EnFu* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
 
     yawDiff = this->actor.yawTowardsPlayer - this->actor.shape.rot.y;
-    if ((Flags_GetEventChkInf(EVENTCHKINF_LEARNED_SONG_OF_STORMS))) {
+    if (Flags_GetEventChkInf(EVENTCHKINF_LEARNED_SONG_OF_STORMS) &&
+        !Anchor_ShouldReplayCutsceneForFlag(EVENTCHKINF_LEARNED_SONG_OF_STORMS)) {
         func_80A1D94C(this, play, 0x508E, func_80A1DBA0);
     } else if (player->stateFlags2 & PLAYER_STATE2_ATTEMPT_PLAY_FOR_ACTOR) {
         this->actor.textId = 0x5035;

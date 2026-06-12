@@ -61,6 +61,8 @@ void Anchor::HandlePacket_GiveItem(nlohmann::json payload) {
         getItemEntry = Rando::StaticData::RetrieveItem(static_cast<RandomizerGet>(getItemId)).GetGIEntry_Copy();
     }
 
+    u32 questItemsBefore = gSaveContext.inventory.questItems;
+
     if (getItemEntry.modIndex == MOD_NONE) {
         if (getItemEntry.getItemId == GI_SWORD_BGS) {
             gSaveContext.bgsFlag = true;
@@ -72,6 +74,15 @@ void Anchor::HandlePacket_GiveItem(nlohmann::json payload) {
             incomingIceTrapsFromAnchor++;
         } else {
             Randomizer_Item_Give(gPlayState, getItemEntry);
+        }
+    }
+
+    // Songs the remote player just learned: remember them so the local player's teaching scene still plays
+    // even though the song is already in the (shared) inventory.
+    u32 newQuestItems = gSaveContext.inventory.questItems & ~questItemsBefore;
+    for (s32 questSong = QUEST_SONG_MINUET; questSong <= QUEST_SONG_STORMS; questSong++) {
+        if (newQuestItems & (1 << questSong)) {
+            pendingQuestItemReplays.insert(questSong);
         }
     }
 
