@@ -134,7 +134,6 @@ void Anchor::HandlePacket_UpdateTeamState(nlohmann::json payload) {
     if (payload.contains("state")) {
         SaveContext loadedData = payload["state"].get<SaveContext>();
 
-        gSaveContext.healthCapacity = loadedData.healthCapacity;
         gSaveContext.magicLevel = loadedData.magicLevel;
         gSaveContext.magicCapacity = gSaveContext.magic = loadedData.magicCapacity;
         gSaveContext.isMagicAcquired = loadedData.isMagicAcquired;

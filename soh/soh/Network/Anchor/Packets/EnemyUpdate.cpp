@@ -47,6 +47,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_Bg_Haka_Water/z_bg_haka_water.h"
 #include "src/overlays/actors/ovl_Bg_Haka_Gate/z_bg_haka_gate.h"
 #include "src/overlays/actors/ovl_Bg_Bdan_Objects/z_bg_bdan_objects.h"
+#include "src/overlays/actors/ovl_En_Skb/z_en_skb.h"
 
 extern "C" {
 void EnDekunuts_Wait(EnDekunuts* thisx, PlayState* play);
@@ -2302,6 +2303,12 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["cameraSetting"] = objects->cameraSetting;
             break;
         }
+        case ACTOR_EN_SKB: {
+            EnSkb* skb = (EnSkb*)actor;
+            extra = GetGenericEnemyState(actor);
+            extra["shapeYOffset"] = skb->actor.shape.yOffset;
+            break;
+        }
     }
 
     if ((!extra.is_object() || extra.value("kind", std::string("")).empty()) && HasGenericEnemySync(actor->id)) {
@@ -2318,6 +2325,17 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
 void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     if (actor == nullptr || !extra.is_object()) {
         return;
+    }
+
+    if (actor->id == ACTOR_EN_SKB) {
+        EnSkb* skb = (EnSkb*)actor;
+        skb->actor.shape.yOffset = extra.value("shapeYOffset", skb->actor.shape.yOffset);
+        if (actor->colChkInfo.health == 0 && skb->actionState != 1) {
+            BodyBreak_Alloc(&skb->bodyBreak, 18, gPlayState);
+            skb->breakFlags |= 4;
+            skb->actionState = 1;
+            actor->flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
+        }
     }
 
     std::string kind = extra.value("kind", "");

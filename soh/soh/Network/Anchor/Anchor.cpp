@@ -11,6 +11,7 @@ extern "C" {
 #include "functions.h"
 #include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
 #include "src/overlays/actors/ovl_En_Horse/z_en_horse.h"
+#include "src/overlays/actors/ovl_En_Skb/z_en_skb.h"
 extern PlayState* gPlayState;
 }
 
@@ -1094,22 +1095,54 @@ void Anchor::ProcessActorBuffers() {
         return;
     }
 
+    static std::unordered_map<uint64_t, u32> stalchildDeathDeferralFrames;
+
     std::vector<uint64_t> deferredKillBuffer;
     while (!enemyKillBuffer.empty()) {
         uint64_t networkId = enemyKillBuffer.front();
         enemyKillBuffer.erase(enemyKillBuffer.begin());
         Actor* actor = FindActorByEnemyNetworkId(networkId);
-        if (actor != nullptr && actor->update != nullptr) {
-            if (ShouldDeferKillForLocalDialogue(actor)) {
-                if (!EnemyKillBufferContains(deferredKillBuffer, networkId)) {
-                    deferredKillBuffer.push_back(networkId);
-                }
-                continue;
-            }
-
-            ReleaseLocalGohmaDefeatCutsceneBeforeKill(actor);
-            Actor_Kill(actor);
+        if (actor == nullptr || actor->update == nullptr) {
+            stalchildDeathDeferralFrames.erase(networkId);
+            continue;
         }
+        if (ShouldDeferKillForLocalDialogue(actor)) {
+            if (!EnemyKillBufferContains(deferredKillBuffer, networkId)) {
+                deferredKillBuffer.push_back(networkId);
+            }
+            continue;
+        }
+
+        // Stalchild death animation: when the kill arrives before the health=0 snapshot could
+        // trigger the death transition, the replica's stalchild is still in a normal action and
+        // would just vanish. Initialize the body-break death state and defer the kill so the
+        // skeleton falls apart naturally instead of statically sliding backwards.
+        if (actor->id == ACTOR_EN_SKB && !HasEnemySyncAuthority()) {
+            EnSkb* skb = (EnSkb*)actor;
+            if (actor->colChkInfo.health == 0 && skb->actionState != 1) {
+                BodyBreak_Alloc(&skb->bodyBreak, 18, gPlayState);
+                skb->breakFlags |= 4;
+                skb->actionState = 1;
+                actor->flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
+                if (enemyExtraStates.contains(networkId)) {
+                    ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
+                }
+            }
+            if (skb->actionState == 1) {
+                u32& frames = stalchildDeathDeferralFrames[networkId];
+                if (frames < 120) {
+                    frames++;
+                    if (!EnemyKillBufferContains(deferredKillBuffer, networkId)) {
+                        deferredKillBuffer.push_back(networkId);
+                    }
+                    continue;
+                }
+            }
+        }
+
+        ReleaseLocalGohmaDefeatCutsceneBeforeKill(actor);
+        Actor_Kill(actor);
+        stalchildDeathDeferralFrames.erase(networkId);
     }
     enemyKillBuffer.insert(enemyKillBuffer.end(), deferredKillBuffer.begin(), deferredKillBuffer.end());
 
