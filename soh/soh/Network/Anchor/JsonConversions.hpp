@@ -172,7 +172,9 @@ inline void to_json(json& j, const SaveContext& saveContext) {
         { "isDoubleMagicAcquired", saveContext.isDoubleMagicAcquired },
         { "isDoubleDefenseAcquired", saveContext.isDoubleDefenseAcquired },
         { "bgsFlag", saveContext.bgsFlag },
+        { "bgsDayCount", saveContext.bgsDayCount },
         { "swordHealth", saveContext.swordHealth },
+        { "rupees", saveContext.rupees },
         { "sceneFlags", sceneFlagsArray },
         { "eventChkInf", saveContext.eventChkInf },
         { "itemGetInf", saveContext.itemGetInf },
@@ -191,7 +193,9 @@ inline void from_json(const json& j, SaveContext& saveContext) {
     j.at("isDoubleMagicAcquired").get_to(saveContext.isDoubleMagicAcquired);
     j.at("isDoubleDefenseAcquired").get_to(saveContext.isDoubleDefenseAcquired);
     j.at("bgsFlag").get_to(saveContext.bgsFlag);
+    j.at("bgsDayCount").get_to(saveContext.bgsDayCount);
     j.at("swordHealth").get_to(saveContext.swordHealth);
+    j.at("rupees").get_to(saveContext.rupees);
     std::vector<u32> sceneFlagsArray;
     j.at("sceneFlags").get_to(sceneFlagsArray);
     for (int i = 0; i < 124; i++) {

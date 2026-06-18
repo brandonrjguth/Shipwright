@@ -2327,15 +2327,19 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         return;
     }
 
+    // Generic death setup: when a replica enemy's health has reached 0 via sync but
+    // its native death sequence hasn't triggered yet, allocate BodyBreak and set any
+    // per-enemy death flags so the death animation plays correctly.
+    if (actor->colChkInfo.health == 0 && (actor->flags & ACTOR_FLAG_ATTENTION_ENABLED)) {
+        EnsureEnemyDeathSetup(actor, gPlayState);
+    }
+
+    // Stalchild: sync yOffset so emerged stalchildren are visible on replicas
+    // instead of stuck underground (yOffset starts at -8000 and is smoothed to 0
+    // during the uncurl animation, which replicas skip when associating late).
     if (actor->id == ACTOR_EN_SKB) {
         EnSkb* skb = (EnSkb*)actor;
         skb->actor.shape.yOffset = extra.value("shapeYOffset", skb->actor.shape.yOffset);
-        if (actor->colChkInfo.health == 0 && skb->actionState != 1) {
-            BodyBreak_Alloc(&skb->bodyBreak, 18, gPlayState);
-            skb->breakFlags |= 4;
-            skb->actionState = 1;
-            actor->flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
-        }
     }
 
     std::string kind = extra.value("kind", "");

@@ -34,5 +34,12 @@ void Anchor::HandlePacket_UpdateDungeonItems(nlohmann::json payload) {
 
     u16 mapIndex = payload.at("mapIndex").get<u16>();
     gSaveContext.inventory.dungeonItems[mapIndex] = payload.at("dungeonItems").get<u8>();
-    gSaveContext.inventory.dungeonKeys[mapIndex] = payload.at("dungeonKeys").get<s8>();
+    s8 remoteDungeonKeys = payload.at("dungeonKeys").get<s8>();
+    // Take the minimum to prevent key dupe from race conditions: if both players
+    // use a key simultaneously, both send their decremented count, and taking
+    // the min ensures the team loses both keys instead of just one.
+    s8 localDungeonKeys = gSaveContext.inventory.dungeonKeys[mapIndex];
+    if (remoteDungeonKeys < localDungeonKeys) {
+        gSaveContext.inventory.dungeonKeys[mapIndex] = remoteDungeonKeys;
+    }
 }

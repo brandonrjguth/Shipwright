@@ -140,8 +140,14 @@ void Anchor::HandlePacket_UpdateTeamState(nlohmann::json payload) {
         gSaveContext.isDoubleMagicAcquired = loadedData.isDoubleMagicAcquired;
         gSaveContext.isDoubleDefenseAcquired = loadedData.isDoubleDefenseAcquired;
         gSaveContext.bgsFlag = loadedData.bgsFlag;
+        gSaveContext.bgsDayCount = loadedData.bgsDayCount;
         gSaveContext.swordHealth = loadedData.swordHealth;
         gSaveContext.ship.quest = loadedData.ship.quest;
+        // Sync rupees to the lower value so purchases by one player effectively
+        // deduct from the shared team wallet instead of duplicating items.
+        if (loadedData.rupees < gSaveContext.rupees) {
+            gSaveContext.rupees = loadedData.rupees;
+        }
 
         for (int i = 0; i < 124; i++) {
             if (i == SCENE_WATER_TEMPLE) {

@@ -13,3 +13,9 @@ struct Actor;
 bool HasGenericEnemySync(int16_t actorId);
 nlohmann::json GetGenericEnemyState(Actor* actor);
 void ApplyGenericEnemyState(Actor* actor, nlohmann::json extra);
+
+// Called when a replica enemy's health has reached 0 but its native death sequence hasn't
+// triggered yet (the kill arrived before the health=0 snapshot). Allocates BodyBreak and
+// sets any per-enemy death flags so the enemy's own death animation plays correctly.
+struct PlayState;
+void EnsureEnemyDeathSetup(Actor* actor, PlayState* play);

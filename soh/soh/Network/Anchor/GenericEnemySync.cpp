@@ -24,6 +24,8 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Sb/z_en_sb.h"
 #include "src/overlays/actors/ovl_En_Ba/z_en_ba.h"
 #include "src/overlays/actors/ovl_En_Bubble/z_en_bubble.h"
+#include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
+#include "src/overlays/actors/ovl_En_Bb/z_en_bb.h"
 #include "src/overlays/actors/ovl_En_Tp/z_en_tp.h"
 #include "src/overlays/actors/ovl_En_Rr/z_en_rr.h"
 #include "src/overlays/actors/ovl_En_Ny/z_en_ny.h"
@@ -248,4 +250,40 @@ void ApplyGenericEnemyState(Actor* actor, nlohmann::json extra) {
     if (remoteFunc != localFunc) {
         memcpy((uint8_t*)actor + it->second.actionFuncOffset, &remoteFunc, sizeof(void*));
     }
+}
+
+void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
+    switch (actor->id) {
+        case ACTOR_EN_SKB: {
+            EnSkb* skb = (EnSkb*)actor;
+            BodyBreak_Alloc(&skb->bodyBreak, 18, play);
+            skb->breakFlags |= 4;
+            skb->actionState = 1;
+            break;
+        }
+        case ACTOR_EN_TEST: {
+            EnTest* test = (EnTest*)actor;
+            BodyBreak_Alloc(&test->bodyBreak, 60, play);
+            break;
+        }
+        case ACTOR_EN_TITE: {
+            EnTite* tite = (EnTite*)actor;
+            BodyBreak_Alloc(&tite->bodyBreak, 24, play);
+            break;
+        }
+        case ACTOR_EN_BB: {
+            EnBb* bb = (EnBb*)actor;
+            BodyBreak_Alloc(&bb->bodyBreak, 12, play);
+            break;
+        }
+        case ACTOR_EN_SB: {
+            EnSb* sb = (EnSb*)actor;
+            BodyBreak_Alloc(&sb->bodyBreak, 8, play);
+            sb->isDead = true;
+            break;
+        }
+        default:
+            return;
+    }
+    actor->flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
 }
