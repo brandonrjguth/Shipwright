@@ -13,17 +13,6 @@
     (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_UPDATE_CULLING_DISABLED | \
      ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
-typedef enum {
-    /* 0x00 */ TW_KOTAKE,
-    /* 0x01 */ TW_KOUME,
-    /* 0x02 */ TW_TWINROVA,
-    /* 0x64 */ TW_FIRE_BLAST = 0x64,
-    /* 0x65 */ TW_FIRE_BLAST_GROUND,
-    /* 0x66 */ TW_ICE_BLAST,
-    /* 0x67 */ TW_ICE_BLAST_GROUND,
-    /* 0x68 */ TW_DEATHBALL_KOTAKE,
-    /* 0x69 */ TW_DEATHBALL_KOUME
-} TwinrovaType;
 
 void BossTw_Init(Actor* thisx, PlayState* play);
 void BossTw_Destroy(Actor* thisx, PlayState* play);
@@ -5469,4 +5458,24 @@ void BossTw_TwinrovaLaugh(BossTw* this, PlayState* play) {
 void BossTw_Reset(void) {
     sTwInitalized = false;
     memset(sTwEffects, 0, sizeof(sTwEffects));
+}
+
+void BossTw_GetSyncState(TwinrovaSyncState* state) {
+    state->shieldFireCharge = sShieldFireCharge;
+    state->shieldIceCharge = sShieldIceCharge;
+    state->fixedBlastType = sFixedBlastType;
+    state->fixedBlatSeq = sFixedBlatSeq;
+    state->twinrovaBlastType = sTwinrovaBlastType;
+    state->groundBlastType = sGroundBlastType;
+    state->envType = sEnvType;
+}
+
+void BossTw_SetSyncState(TwinrovaSyncState* state) {
+    sShieldFireCharge = state->shieldFireCharge;
+    sShieldIceCharge = state->shieldIceCharge;
+    sFixedBlastType = state->fixedBlastType;
+    sFixedBlatSeq = state->fixedBlatSeq;
+    sTwinrovaBlastType = state->twinrovaBlastType;
+    sGroundBlastType = state->groundBlastType;
+    sEnvType = state->envType;
 }

@@ -53,6 +53,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Poh/z_en_poh.h"
 #include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
 #include "src/overlays/actors/ovl_En_Brob/z_en_brob.h"
+#include "src/overlays/actors/ovl_En_Reeba/z_en_reeba.h"
 #include "src/overlays/actors/ovl_Boss_Va/z_boss_va.h"
 #include "src/overlays/actors/ovl_Boss_Fd/z_boss_fd.h"
 #include "src/overlays/actors/ovl_Boss_Fd2/z_boss_fd2.h"
@@ -111,6 +112,7 @@ const std::unordered_map<int16_t, GenericEnemySyncEntry>& Registry() {
         { ACTOR_EN_POH, GENERIC_SYNC(EnPoh) },
         { ACTOR_EN_KAREBABA, GENERIC_SYNC(EnKarebaba) },
         { ACTOR_EN_RR, GENERIC_SYNC_NO_SKEL(EnRr) },
+        { ACTOR_EN_REEBA, { (ptrdiff_t)offsetof(EnReeba, actionfunc), (ptrdiff_t)offsetof(EnReeba, skelanime) } },
         // Fire Temple
         { ACTOR_EN_BW, GENERIC_SYNC(EnBw) },
         { ACTOR_EN_FD, GENERIC_SYNC(EnFd) },

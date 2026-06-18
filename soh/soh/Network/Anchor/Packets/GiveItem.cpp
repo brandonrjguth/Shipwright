@@ -40,6 +40,7 @@ void Anchor::SendPacket_GiveItem(u16 modId, s16 getItemId) {
     payload["addToQueue"] = true;
     payload["modId"] = modId;
     payload["getItemId"] = getItemId;
+    payload["rupees"] = gSaveContext.rupees;
 
     SendJsonToRemote(payload);
 }
@@ -53,6 +54,12 @@ void Anchor::HandlePacket_GiveItem(nlohmann::json payload) {
     AnchorClient& client = clients[clientId];
     u16 modId = payload.at("modId").get<u16>();
     u16 getItemId = payload.at("getItemId").get<u16>();
+
+    // Shared rupee pool: adopt the sender's rupee total. For shop purchases this
+    // immediately deducts from the receiver so the team can't dupe items for free.
+    if (payload.contains("rupees")) {
+        gSaveContext.rupees = payload.at("rupees").get<s16>();
+    }
 
     GetItemEntry getItemEntry;
     if (modId == MOD_NONE) {

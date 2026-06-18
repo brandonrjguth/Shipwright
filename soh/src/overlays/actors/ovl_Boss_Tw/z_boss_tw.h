@@ -177,4 +177,29 @@ typedef struct BossTw {
     /* 0x06B0 */ f32 subCamYawStep;
 } BossTw; // size = 0x06B4
 
+typedef enum {
+    /* 0x00 */ TW_KOTAKE,
+    /* 0x01 */ TW_KOUME,
+    /* 0x02 */ TW_TWINROVA,
+    /* 0x64 */ TW_FIRE_BLAST = 0x64,
+    /* 0x65 */ TW_FIRE_BLAST_GROUND,
+    /* 0x66 */ TW_ICE_BLAST,
+    /* 0x67 */ TW_ICE_BLAST_GROUND,
+    /* 0x68 */ TW_DEATHBALL_KOTAKE,
+    /* 0x69 */ TW_DEATHBALL_KOUME
+} TwinrovaType;
+
+typedef struct TwinrovaSyncState {
+    u8 shieldFireCharge;
+    u8 shieldIceCharge;
+    u8 fixedBlastType;
+    u8 fixedBlatSeq;
+    u8 twinrovaBlastType;
+    u8 groundBlastType;
+    s8 envType;
+} TwinrovaSyncState;
+
+void BossTw_GetSyncState(TwinrovaSyncState* state);
+void BossTw_SetSyncState(TwinrovaSyncState* state);
+
 #endif

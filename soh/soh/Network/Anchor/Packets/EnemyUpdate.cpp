@@ -37,6 +37,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
 #include "src/overlays/actors/ovl_Boss_Dodongo/z_boss_dodongo.h"
 #include "src/overlays/actors/ovl_Boss_Ganondrof/z_boss_ganondrof.h"
+#include "src/overlays/actors/ovl_Boss_Tw/z_boss_tw.h"
 #include "src/overlays/actors/ovl_Bg_Jya_Bigmirror/z_bg_jya_bigmirror.h"
 #include "src/overlays/actors/ovl_Bg_Jya_Cobra/z_bg_jya_cobra.h"
 #include "src/overlays/actors/ovl_Bg_Mizu_Water/z_bg_mizu_water.h"
@@ -1987,6 +1988,23 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["tentSpawnPos"] = mo->tentSpawnPos;
             break;
         }
+        case ACTOR_BOSS_TW: {
+            BossTw* tw = (BossTw*)actor;
+            if (actor->params == TW_TWINROVA) {
+                extra = GetGenericEnemyState(actor);
+                extra["kind"] = "BossTw";
+                TwinrovaSyncState syncState;
+                BossTw_GetSyncState(&syncState);
+                extra["shieldFireCharge"] = syncState.shieldFireCharge;
+                extra["shieldIceCharge"] = syncState.shieldIceCharge;
+                extra["fixedBlastType"] = syncState.fixedBlastType;
+                extra["fixedBlatSeq"] = syncState.fixedBlatSeq;
+                extra["twinrovaBlastType"] = syncState.twinrovaBlastType;
+                extra["groundBlastType"] = syncState.groundBlastType;
+                extra["envType"] = syncState.envType;
+            }
+            break;
+        }
         case ACTOR_EN_NUTSBALL: {
             EnNutsball* nutsball = (EnNutsball*)actor;
             extra["kind"] = "EnNutsball";
@@ -2757,6 +2775,21 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         mo->tentSpeed = extra.value("tentSpeed", mo->tentSpeed);
         mo->tentPulse = extra.value("tentPulse", mo->tentPulse);
         mo->tentSpawnPos = extra.value("tentSpawnPos", mo->tentSpawnPos);
+    } else if (actor->id == ACTOR_BOSS_TW && kind == "BossTw") {
+        BossTw* tw = (BossTw*)actor;
+        ApplyGenericEnemyState(actor, extra);
+        if (actor->params == TW_TWINROVA) {
+            TwinrovaSyncState syncState;
+            BossTw_GetSyncState(&syncState);
+            syncState.shieldFireCharge = extra.value("shieldFireCharge", syncState.shieldFireCharge);
+            syncState.shieldIceCharge = extra.value("shieldIceCharge", syncState.shieldIceCharge);
+            syncState.fixedBlastType = extra.value("fixedBlastType", syncState.fixedBlastType);
+            syncState.fixedBlatSeq = extra.value("fixedBlatSeq", syncState.fixedBlatSeq);
+            syncState.twinrovaBlastType = extra.value("twinrovaBlastType", syncState.twinrovaBlastType);
+            syncState.groundBlastType = extra.value("groundBlastType", syncState.groundBlastType);
+            syncState.envType = extra.value("envType", syncState.envType);
+            BossTw_SetSyncState(&syncState);
+        }
     } else if (actor->id == ACTOR_EN_NUTSBALL && kind == "EnNutsball") {
         EnNutsball* nutsball = (EnNutsball*)actor;
         s32 remoteAction = extra.value("action", (s32)-1);
