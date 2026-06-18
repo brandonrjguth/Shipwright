@@ -3302,3 +3302,31 @@ void BossSst_Reset(void) {
     sStaticColor.g = 0;
     sStaticColor.b = 0;
 }
+
+void BossSst_GetSyncState(BongoBongoSyncState* state) {
+    state->handState[0] = sHandState[0];
+    state->handState[1] = sHandState[1];
+    state->bodyStatic = sBodyStatic;
+    state->bodyColorR = sBodyColor.r;
+    state->bodyColorG = sBodyColor.g;
+    state->bodyColorB = sBodyColor.b;
+    state->bodyColorA = sBodyColor.a;
+    state->staticColorR = sStaticColor.r;
+    state->staticColorG = sStaticColor.g;
+    state->staticColorB = sStaticColor.b;
+    state->staticColorA = sStaticColor.a;
+}
+
+void BossSst_SetSyncState(BongoBongoSyncState* state) {
+    sHandState[0] = state->handState[0];
+    sHandState[1] = state->handState[1];
+    sBodyStatic = state->bodyStatic;
+    sBodyColor.r = state->bodyColorR;
+    sBodyColor.g = state->bodyColorG;
+    sBodyColor.b = state->bodyColorB;
+    sBodyColor.a = state->bodyColorA;
+    sStaticColor.r = state->staticColorR;
+    sStaticColor.g = state->staticColorG;
+    sStaticColor.b = state->staticColorB;
+    sStaticColor.a = state->staticColorA;
+}

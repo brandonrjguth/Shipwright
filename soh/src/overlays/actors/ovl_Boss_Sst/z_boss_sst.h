@@ -60,4 +60,14 @@ typedef enum {
     /*  1 */ BONGO_RIGHT_HAND
 } BossSstType;
 
+typedef struct BongoBongoSyncState {
+    s32 handState[2];
+    u32 bodyStatic;
+    u8 bodyColorR, bodyColorG, bodyColorB, bodyColorA;
+    u8 staticColorR, staticColorG, staticColorB, staticColorA;
+} BongoBongoSyncState;
+
+void BossSst_GetSyncState(BongoBongoSyncState* state);
+void BossSst_SetSyncState(BongoBongoSyncState* state);
+
 #endif

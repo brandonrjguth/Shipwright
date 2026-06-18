@@ -4051,3 +4051,29 @@ void BossVa_Reset(void) {
         sBodyBari[i] = 0;
     }
 }
+
+void BossVa_GetSyncState(BarinadeSyncState* state) {
+    state->fightPhase = sFightPhase;
+    state->bodyState = sBodyState;
+    state->killBari = sKillBari;
+    for (s32 i = 0; i < 10; i++) {
+        state->bodyBari[i] = sBodyBari[i];
+    }
+    state->phase4HP = sPhase4HP;
+    state->phase2Timer = sPhase2Timer;
+    state->phase3StopMoving = sPhase3StopMoving;
+    state->doorState = sDoorState;
+}
+
+void BossVa_SetSyncState(BarinadeSyncState* state) {
+    sFightPhase = state->fightPhase;
+    sBodyState = state->bodyState;
+    sKillBari = state->killBari;
+    for (s32 i = 0; i < 10; i++) {
+        sBodyBari[i] = state->bodyBari[i];
+    }
+    sPhase4HP = state->phase4HP;
+    sPhase2Timer = state->phase2Timer;
+    sPhase3StopMoving = state->phase3StopMoving;
+    sDoorState = state->doorState;
+}

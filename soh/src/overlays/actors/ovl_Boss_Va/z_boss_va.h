@@ -71,4 +71,18 @@ typedef enum {
     /* 19 */ BOSSVA_DOOR
 } BossVaParam;
 
+typedef struct BarinadeSyncState {
+    u8 fightPhase;
+    u8 bodyState;
+    u8 killBari;
+    u8 bodyBari[10];
+    s8 phase4HP;
+    u16 phase2Timer;
+    u8 phase3StopMoving;
+    s16 doorState;
+} BarinadeSyncState;
+
+void BossVa_GetSyncState(BarinadeSyncState* state);
+void BossVa_SetSyncState(BarinadeSyncState* state);
+
 #endif

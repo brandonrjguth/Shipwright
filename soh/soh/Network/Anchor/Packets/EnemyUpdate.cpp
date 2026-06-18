@@ -38,6 +38,9 @@ extern "C" {
 #include "src/overlays/actors/ovl_Boss_Dodongo/z_boss_dodongo.h"
 #include "src/overlays/actors/ovl_Boss_Ganondrof/z_boss_ganondrof.h"
 #include "src/overlays/actors/ovl_Boss_Tw/z_boss_tw.h"
+#include "src/overlays/actors/ovl_Boss_Va/z_boss_va.h"
+#include "src/overlays/actors/ovl_Boss_Fd/z_boss_fd.h"
+#include "src/overlays/actors/ovl_Boss_Sst/z_boss_sst.h"
 #include "src/overlays/actors/ovl_Bg_Jya_Bigmirror/z_bg_jya_bigmirror.h"
 #include "src/overlays/actors/ovl_Bg_Jya_Cobra/z_bg_jya_cobra.h"
 #include "src/overlays/actors/ovl_Bg_Mizu_Water/z_bg_mizu_water.h"
@@ -1986,6 +1989,60 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["tentSpeed"] = mo->tentSpeed;
             extra["tentPulse"] = mo->tentPulse;
             extra["tentSpawnPos"] = mo->tentSpawnPos;
+            extra["waterLevelMod"] = mo->waterLevelMod;
+            break;
+        }
+        case ACTOR_BOSS_VA: {
+            BossVa* va = (BossVa*)actor;
+            if (actor->params == BOSSVA_BODY) {
+                extra = GetGenericEnemyState(actor);
+                extra["kind"] = "BossVa";
+                BarinadeSyncState syncState;
+                BossVa_GetSyncState(&syncState);
+                extra["fightPhase"] = syncState.fightPhase;
+                extra["bodyState"] = syncState.bodyState;
+                extra["killBari"] = syncState.killBari;
+                std::vector<u8> bodyBari(syncState.bodyBari, syncState.bodyBari + 10);
+                extra["bodyBari"] = bodyBari;
+                extra["phase4HP"] = syncState.phase4HP;
+                extra["phase2Timer"] = syncState.phase2Timer;
+                extra["phase3StopMoving"] = syncState.phase3StopMoving;
+                extra["doorState"] = syncState.doorState;
+            }
+            break;
+        }
+        case ACTOR_BOSS_FD: {
+            BossFd* fd = (BossFd*)actor;
+            extra = GetGenericEnemyState(actor);
+            extra["kind"] = "BossFd";
+            extra["work"] = std::vector<s16>(fd->work, fd->work + BFD_SHORT_COUNT);
+            extra["timers"] = std::vector<s16>(fd->timers, fd->timers + 6);
+            extra["fwork"] = std::vector<f32>(fd->fwork, fd->fwork + BFD_FLOAT_COUNT);
+            extra["holeIndex"] = fd->holeIndex;
+            extra["skinSegments"] = fd->skinSegments;
+            extra["faceExposed"] = fd->faceExposed;
+            extra["handoffSignal"] = fd->handoffSignal;
+            break;
+        }
+        case ACTOR_BOSS_SST: {
+            BossSst* sst = (BossSst*)actor;
+            if (actor->params == BONGO_HEAD) {
+                extra = GetGenericEnemyState(actor);
+                extra["kind"] = "BossSst";
+                BongoBongoSyncState syncState;
+                BossSst_GetSyncState(&syncState);
+                extra["handState0"] = syncState.handState[0];
+                extra["handState1"] = syncState.handState[1];
+                extra["bodyStatic"] = syncState.bodyStatic;
+                extra["bodyColorR"] = syncState.bodyColorR;
+                extra["bodyColorG"] = syncState.bodyColorG;
+                extra["bodyColorB"] = syncState.bodyColorB;
+                extra["bodyColorA"] = syncState.bodyColorA;
+                extra["staticColorR"] = syncState.staticColorR;
+                extra["staticColorG"] = syncState.staticColorG;
+                extra["staticColorB"] = syncState.staticColorB;
+                extra["staticColorA"] = syncState.staticColorA;
+            }
             break;
         }
         case ACTOR_BOSS_TW: {
@@ -2775,6 +2832,64 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         mo->tentSpeed = extra.value("tentSpeed", mo->tentSpeed);
         mo->tentPulse = extra.value("tentPulse", mo->tentPulse);
         mo->tentSpawnPos = extra.value("tentSpawnPos", mo->tentSpawnPos);
+        mo->waterLevelMod = extra.value("waterLevelMod", mo->waterLevelMod);
+    } else if (actor->id == ACTOR_BOSS_VA && kind == "BossVa") {
+        BossVa* va = (BossVa*)actor;
+        ApplyGenericEnemyState(actor, extra);
+        if (actor->params == BOSSVA_BODY) {
+            BarinadeSyncState syncState;
+            BossVa_GetSyncState(&syncState);
+            syncState.fightPhase = extra.value("fightPhase", syncState.fightPhase);
+            syncState.bodyState = extra.value("bodyState", syncState.bodyState);
+            syncState.killBari = extra.value("killBari", syncState.killBari);
+            auto bodyBari = extra.value("bodyBari", std::vector<u8>{});
+            if (bodyBari.size() == 10) {
+                std::copy(bodyBari.begin(), bodyBari.end(), syncState.bodyBari);
+            }
+            syncState.phase4HP = extra.value("phase4HP", syncState.phase4HP);
+            syncState.phase2Timer = extra.value("phase2Timer", syncState.phase2Timer);
+            syncState.phase3StopMoving = extra.value("phase3StopMoving", syncState.phase3StopMoving);
+            syncState.doorState = extra.value("doorState", syncState.doorState);
+            BossVa_SetSyncState(&syncState);
+        }
+    } else if (actor->id == ACTOR_BOSS_FD && kind == "BossFd") {
+        BossFd* fd = (BossFd*)actor;
+        ApplyGenericEnemyState(actor, extra);
+        auto work = extra.value("work", std::vector<s16>{});
+        if (work.size() == BFD_SHORT_COUNT) {
+            std::copy(work.begin(), work.end(), fd->work);
+        }
+        auto timers = extra.value("timers", std::vector<s16>{});
+        if (timers.size() == 6) {
+            std::copy(timers.begin(), timers.end(), fd->timers);
+        }
+        auto fwork = extra.value("fwork", std::vector<f32>{});
+        if (fwork.size() == BFD_FLOAT_COUNT) {
+            std::copy(fwork.begin(), fwork.end(), fd->fwork);
+        }
+        fd->holeIndex = extra.value("holeIndex", fd->holeIndex);
+        fd->skinSegments = extra.value("skinSegments", fd->skinSegments);
+        fd->faceExposed = extra.value("faceExposed", fd->faceExposed);
+        fd->handoffSignal = extra.value("handoffSignal", fd->handoffSignal);
+    } else if (actor->id == ACTOR_BOSS_SST && kind == "BossSst") {
+        BossSst* sst = (BossSst*)actor;
+        ApplyGenericEnemyState(actor, extra);
+        if (actor->params == BONGO_HEAD) {
+            BongoBongoSyncState syncState;
+            BossSst_GetSyncState(&syncState);
+            syncState.handState[0] = extra.value("handState0", syncState.handState[0]);
+            syncState.handState[1] = extra.value("handState1", syncState.handState[1]);
+            syncState.bodyStatic = extra.value("bodyStatic", syncState.bodyStatic);
+            syncState.bodyColorR = extra.value("bodyColorR", syncState.bodyColorR);
+            syncState.bodyColorG = extra.value("bodyColorG", syncState.bodyColorG);
+            syncState.bodyColorB = extra.value("bodyColorB", syncState.bodyColorB);
+            syncState.bodyColorA = extra.value("bodyColorA", syncState.bodyColorA);
+            syncState.staticColorR = extra.value("staticColorR", syncState.staticColorR);
+            syncState.staticColorG = extra.value("staticColorG", syncState.staticColorG);
+            syncState.staticColorB = extra.value("staticColorB", syncState.staticColorB);
+            syncState.staticColorA = extra.value("staticColorA", syncState.staticColorA);
+            BossSst_SetSyncState(&syncState);
+        }
     } else if (actor->id == ACTOR_BOSS_TW && kind == "BossTw") {
         BossTw* tw = (BossTw*)actor;
         ApplyGenericEnemyState(actor, extra);
