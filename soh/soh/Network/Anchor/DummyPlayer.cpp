@@ -95,13 +95,34 @@ void Math_Vec3s_Copy(Vec3s* dest, Vec3s* src) {
     dest->z = src->z;
 }
 
+static bool DummyPlayer_IsDungeonScene(s16 sceneNum) {
+    return sceneNum == SCENE_DEKU_TREE || sceneNum == SCENE_DODONGOS_CAVERN ||
+           sceneNum == SCENE_JABU_JABU || sceneNum == SCENE_FOREST_TEMPLE ||
+           sceneNum == SCENE_FIRE_TEMPLE || sceneNum == SCENE_WATER_TEMPLE ||
+           sceneNum == SCENE_SPIRIT_TEMPLE || sceneNum == SCENE_SHADOW_TEMPLE ||
+           sceneNum == SCENE_BOTTOM_OF_THE_WELL || sceneNum == SCENE_ICE_CAVERN ||
+           sceneNum == SCENE_GERUDO_TRAINING_GROUND || sceneNum == SCENE_INSIDE_GANONS_CASTLE ||
+           sceneNum == SCENE_GANONS_TOWER || sceneNum == SCENE_GANONS_TOWER_COLLAPSE_INTERIOR ||
+           sceneNum == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR;
+}
+
 static bool DummyPlayer_ShouldShow(AnchorClient& client) {
     if (gPlayState == nullptr || gPlayState->roomCtx.status != 0 || gPlayState->roomCtx.curRoom.segment == nullptr) {
         return false;
     }
 
-    return client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
-           client.online && client.isSaveLoaded && client.roomStable;
+    if (client.sceneNum != gPlayState->sceneNum || !client.online || !client.isSaveLoaded || !client.roomStable) {
+        return false;
+    }
+
+    // In dungeons, rooms load one at a time — only show players in the same room.
+    // In overworld areas (Kokiri Forest, Hyrule Field, etc.), multiple rooms are loaded
+    // simultaneously, so players should be visible across room boundaries.
+    if (DummyPlayer_IsDungeonScene(gPlayState->sceneNum)) {
+        return client.curRoomNum == gPlayState->roomCtx.curRoom.num;
+    }
+
+    return true;
 }
 
 static bool DummyPlayer_IsSettled(AnchorClient& client) {
