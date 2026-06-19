@@ -3286,6 +3286,9 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     std::vector<float> posX;
     std::vector<float> posY;
     std::vector<float> posZ;
+    std::vector<float> homeX;
+    std::vector<float> homeY;
+    std::vector<float> homeZ;
     std::vector<s16> worldRotX;
     std::vector<s16> worldRotY;
     std::vector<s16> worldRotZ;
@@ -3323,6 +3326,9 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         posX.push_back(actor->world.pos.x);
         posY.push_back(actor->world.pos.y);
         posZ.push_back(actor->world.pos.z);
+        homeX.push_back(actor->home.pos.x);
+        homeY.push_back(actor->home.pos.y);
+        homeZ.push_back(actor->home.pos.z);
         worldRotX.push_back(actor->world.rot.x);
         worldRotY.push_back(actor->world.rot.y);
         worldRotZ.push_back(actor->world.rot.z);
@@ -3366,6 +3372,9 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["posX"] = posX;
     payload["posY"] = posY;
     payload["posZ"] = posZ;
+    payload["homeX"] = homeX;
+    payload["homeY"] = homeY;
+    payload["homeZ"] = homeZ;
     payload["worldRotX"] = worldRotX;
     payload["worldRotY"] = worldRotY;
     payload["worldRotZ"] = worldRotZ;
@@ -3417,6 +3426,9 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     auto posX = payload.at("posX").get<std::vector<float>>();
     auto posY = payload.at("posY").get<std::vector<float>>();
     auto posZ = payload.at("posZ").get<std::vector<float>>();
+    auto homeX = payload.value("homeX", std::vector<float>{});
+    auto homeY = payload.value("homeY", std::vector<float>{});
+    auto homeZ = payload.value("homeZ", std::vector<float>{});
     auto worldRotX = payload.at("worldRotX").get<std::vector<s16>>();
     auto worldRotY = payload.at("worldRotY").get<std::vector<s16>>();
     auto worldRotZ = payload.at("worldRotZ").get<std::vector<s16>>();
@@ -3449,7 +3461,11 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         worldRotY.size() != enemyCount || worldRotZ.size() != enemyCount || shapeRotX.size() != enemyCount ||
         shapeRotY.size() != enemyCount || shapeRotZ.size() != enemyCount ||
         (!scaleX.empty() && scaleX.size() != enemyCount) || (!scaleY.empty() && scaleY.size() != enemyCount) ||
-        (!scaleZ.empty() && scaleZ.size() != enemyCount) || velocityX.size() != enemyCount || velocityY.size() != enemyCount ||
+        (!scaleZ.empty() && scaleZ.size() != enemyCount) ||
+        (!homeX.empty() && homeX.size() != enemyCount) ||
+        (!homeY.empty() && homeY.size() != enemyCount) ||
+        (!homeZ.empty() && homeZ.size() != enemyCount) ||
+        velocityX.size() != enemyCount || velocityY.size() != enemyCount ||
         velocityZ.size() != enemyCount || speedXZ.size() != enemyCount || gravity.size() != enemyCount ||
         minVelocityY.size() != enemyCount || (!yawTowardsPlayer.empty() && yawTowardsPlayer.size() != enemyCount) ||
         (!xzDistToPlayer.empty() && xzDistToPlayer.size() != enemyCount) ||
@@ -3498,6 +3514,9 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         EnemyAuthorityState state = { actorIds[i],
                                       category,
                                       pos,
+                                      { homeX.empty() ? pos.x : homeX[i],
+                                        homeY.empty() ? pos.y : homeY[i],
+                                        homeZ.empty() ? pos.z : homeZ[i] },
                                       { worldRotX[i], worldRotY[i], worldRotZ[i] },
                                       { shapeRotX[i], shapeRotY[i], shapeRotZ[i] },
                                       { scaleX.empty() ? target->scale.x : scaleX[i], scaleY.empty() ? target->scale.y : scaleY[i],

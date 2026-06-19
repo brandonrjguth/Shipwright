@@ -82,6 +82,7 @@ typedef struct {
     s16 actorId;
     ActorCategory category;
     Vec3f pos;
+    Vec3f homePos;
     Vec3s worldRot;
     Vec3s shapeRot;
     Vec3f scale;

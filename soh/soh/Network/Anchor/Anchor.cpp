@@ -828,6 +828,11 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
         // instead of a teleport, and so the renderer interpolates it smoothly.
         actor->world.pos = AnchorLerpVec3f(actor->world.pos, state.pos, correction);
     }
+    // Apply home position on immediate snaps (new associations) so rooted enemies like
+    // Deku Babas compute their visual offset from the correct base, not from world.pos.
+    if (immediate) {
+        actor->home.pos = state.homePos;
+    }
     actor->world.rot = state.worldRot;
     actor->shape.rot = state.shapeRot;
     actor->scale = state.scale;
