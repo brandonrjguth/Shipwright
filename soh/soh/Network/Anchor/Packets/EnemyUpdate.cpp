@@ -1038,6 +1038,27 @@ static EnSwActionFunc GetEnSwActionFunc(s32 actionId) {
 extern PlayState* gPlayState;
 }
 
+static bool IsDungeonScene(s16 sceneNum) {
+    return sceneNum == SCENE_DEKU_TREE || sceneNum == SCENE_DODONGOS_CAVERN ||
+           sceneNum == SCENE_JABU_JABU || sceneNum == SCENE_FOREST_TEMPLE ||
+           sceneNum == SCENE_FIRE_TEMPLE || sceneNum == SCENE_WATER_TEMPLE ||
+           sceneNum == SCENE_SPIRIT_TEMPLE || sceneNum == SCENE_SHADOW_TEMPLE ||
+           sceneNum == SCENE_BOTTOM_OF_THE_WELL || sceneNum == SCENE_ICE_CAVERN ||
+           sceneNum == SCENE_GERUDO_TRAINING_GROUND || sceneNum == SCENE_INSIDE_GANONS_CASTLE ||
+           sceneNum == SCENE_GANONS_TOWER || sceneNum == SCENE_GANONS_TOWER_COLLAPSE_INTERIOR ||
+           sceneNum == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR;
+}
+
+static bool IsClientInSameRoom(AnchorClient& client) {
+    if (client.sceneNum != gPlayState->sceneNum) {
+        return false;
+    }
+    if (IsDungeonScene(gPlayState->sceneNum)) {
+        return client.curRoomNum == gPlayState->roomCtx.curRoom.num;
+    }
+    return true;
+}
+
 enum BossGomaAction : s32 {
     BOSSGOMA_ACTION_ENCOUNTER = 0,
     BOSSGOMA_ACTION_DEFEATED = 1,
@@ -3270,8 +3291,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
 
     uint32_t currentPlayerCount = 0;
     for (auto& [clientId, client] : clients) {
-        if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
-            client.online && client.isSaveLoaded && !client.self) {
+        if (IsClientInSameRoom(client) && client.online && client.isSaveLoaded && !client.self) {
             currentPlayerCount++;
         }
     }
@@ -3402,8 +3422,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["quiet"] = true;
 
     for (auto& [clientId, client] : clients) {
-        if (client.sceneNum == gPlayState->sceneNum && client.curRoomNum == gPlayState->roomCtx.curRoom.num &&
-            client.online && client.isSaveLoaded && !client.self) {
+        if (IsClientInSameRoom(client) && client.online && client.isSaveLoaded && !client.self) {
             payload["targetClientId"] = clientId;
             SendJsonToRemote(payload);
         }

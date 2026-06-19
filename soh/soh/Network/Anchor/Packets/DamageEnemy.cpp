@@ -15,6 +15,18 @@ extern "C" {
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
 #undef this
+
+static bool IsDungeonScene(s16 sceneNum) {
+    return sceneNum == SCENE_DEKU_TREE || sceneNum == SCENE_DODONGOS_CAVERN ||
+           sceneNum == SCENE_JABU_JABU || sceneNum == SCENE_FOREST_TEMPLE ||
+           sceneNum == SCENE_FIRE_TEMPLE || sceneNum == SCENE_WATER_TEMPLE ||
+           sceneNum == SCENE_SPIRIT_TEMPLE || sceneNum == SCENE_SHADOW_TEMPLE ||
+           sceneNum == SCENE_BOTTOM_OF_THE_WELL || sceneNum == SCENE_ICE_CAVERN ||
+           sceneNum == SCENE_GERUDO_TRAINING_GROUND || sceneNum == SCENE_INSIDE_GANONS_CASTLE ||
+           sceneNum == SCENE_GANONS_TOWER || sceneNum == SCENE_GANONS_TOWER_COLLAPSE_INTERIOR ||
+           sceneNum == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR;
+}
+
 extern PlayState* gPlayState;
 
 void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
@@ -527,8 +539,13 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum ||
-        client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+    // In dungeons, rooms load one at a time — only accept reports from the same room.
+    // In overworld areas, multiple rooms are loaded simultaneously, so players in
+    // adjacent rooms can still damage enemies (e.g. Deku Babas in Kokiri Forest).
+    if (client.sceneNum != gPlayState->sceneNum) {
+        return;
+    }
+    if (IsDungeonScene(gPlayState->sceneNum) && client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
@@ -590,6 +607,10 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     if (health < target->colChkInfo.health) {
         if (health == 0 && !hasReportedState) {
+            // Set health to 0 so the enemy's own update function triggers its native
+            // death animation, then queue the kill for when the animation completes.
+            target->colChkInfo.health = 0;
+            enemyHealthTracker[target] = 0;
             enemyKillBuffer.push_back(networkId);
             return;
         }
