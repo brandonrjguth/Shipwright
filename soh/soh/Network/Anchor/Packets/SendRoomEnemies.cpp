@@ -9,6 +9,17 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
+static bool IsDungeonScene(s16 sceneNum) {
+    return sceneNum == SCENE_DEKU_TREE || sceneNum == SCENE_DODONGOS_CAVERN ||
+           sceneNum == SCENE_JABU_JABU || sceneNum == SCENE_FOREST_TEMPLE ||
+           sceneNum == SCENE_FIRE_TEMPLE || sceneNum == SCENE_WATER_TEMPLE ||
+           sceneNum == SCENE_SPIRIT_TEMPLE || sceneNum == SCENE_SHADOW_TEMPLE ||
+           sceneNum == SCENE_BOTTOM_OF_THE_WELL || sceneNum == SCENE_ICE_CAVERN ||
+           sceneNum == SCENE_GERUDO_TRAINING_GROUND || sceneNum == SCENE_INSIDE_GANONS_CASTLE ||
+           sceneNum == SCENE_GANONS_TOWER || sceneNum == SCENE_GANONS_TOWER_COLLAPSE_INTERIOR ||
+           sceneNum == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR;
+}
+
 void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category) {
     if (!IsRoomStable() || !HasEnemySyncAuthority()) {
         return;
@@ -155,7 +166,10 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         }
     }
 
-    if (!HasEnemySyncAuthority()) {
+    // Only prune unmatched enemies in dungeons where rooms load one at a time.
+    // In overworld areas, enemies from adjacent rooms may be loaded but not yet
+    // reported by the authority — pruning them would make them vanish.
+    if (!HasEnemySyncAuthority() && IsDungeonScene(gPlayState->sceneNum)) {
         for (Actor* local : localActors) {
             if (local == nullptr || local->update == nullptr || !IsEnemySyncActor(local) || GetEnemyNetworkId(local) != 0) {
                 continue;
