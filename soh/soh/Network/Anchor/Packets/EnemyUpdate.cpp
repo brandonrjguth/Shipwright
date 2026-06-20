@@ -67,6 +67,7 @@ void EnKarebaba_Dead(EnKarebaba* thisx, PlayState* play);
 void EnKarebaba_Regrow(EnKarebaba* thisx, PlayState* play);
 void EnKarebaba_SetupUpright(EnKarebaba* thisx);
 void EnKarebaba_SetupDeadItemDrop(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_SetupDead(EnKarebaba* thisx);
 }
 
 extern "C" {
@@ -973,7 +974,7 @@ static void ApplyKarebabaAction(EnKarebaba* karebaba, s32 action) {
         case KAREBABA_ACTION_DYING: karebaba->actionFunc = EnKarebaba_Dying; break;
         case KAREBABA_ACTION_DEAD_ITEM_DROP: EnKarebaba_SetupDeadItemDrop(karebaba, gPlayState); break;
         case KAREBABA_ACTION_RETRACT: karebaba->actionFunc = EnKarebaba_Retract; break;
-        case KAREBABA_ACTION_DEAD: karebaba->actionFunc = EnKarebaba_Dead; break;
+        case KAREBABA_ACTION_DEAD: EnKarebaba_SetupDead(karebaba); break;
         case KAREBABA_ACTION_REGROW: karebaba->actionFunc = EnKarebaba_Regrow; break;
         default: break;
     }
@@ -1630,7 +1631,8 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
     // so we must report the action change when it enters the Dying state.
     if (actor->id == ACTOR_EN_KAREBABA) {
         EnKarebaba* karebaba = (EnKarebaba*)actor;
-        return GetKarebabaActionId(karebaba->actionFunc) == KAREBABA_ACTION_DYING;
+        s32 action = GetKarebabaActionId(karebaba->actionFunc);
+        return action == KAREBABA_ACTION_DYING || action == KAREBABA_ACTION_DEAD;
     }
 
     if (actor->id == ACTOR_BOSS_GOMA) {
@@ -1656,6 +1658,14 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
 
     if (IsLocalEnemyDialogueActor(actor)) {
         return true;
+    }
+
+    if (actor->id == ACTOR_EN_KAREBABA) {
+        EnKarebaba* karebaba = (EnKarebaba*)actor;
+        s32 localAction = GetKarebabaActionId(karebaba->actionFunc);
+        s32 authorityAction = authorityExtra.value("action", (s32)-1);
+        return (localAction == KAREBABA_ACTION_DYING || localAction == KAREBABA_ACTION_DEAD) &&
+               localAction != authorityAction;
     }
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {

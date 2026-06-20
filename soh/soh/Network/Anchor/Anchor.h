@@ -276,7 +276,6 @@ class Anchor : public Network {
     bool CanTeleportTo(uint32_t clientId);
     bool HasCutsceneReplayFlag(s16 flag);
     bool HasQuestItemCutsceneReplay(s32 questItem);
-    bool ShouldSuppressEnemyOffer(Actor* actor);
     void FinishQuestItemCutsceneReplay(s32 questItem);
     uint32_t GetDummyPlayerClientId(const Actor* actor);
 

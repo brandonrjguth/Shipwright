@@ -21,6 +21,7 @@ extern PlayState* gPlayState;
 void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
 void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
 void EnKarebaba_SetupDying(EnKarebaba* thisx);
+void EnKarebaba_SetupDead(EnKarebaba* thisx);
 void EnGoma_Hurt(EnGoma* thisx, PlayState* play);
 void EnGoma_Die(EnGoma* thisx, PlayState* play);
 void EnGoma_Dead(EnGoma* thisx, PlayState* play);
@@ -403,6 +404,10 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
             EnKarebaba_SetupDying((EnKarebaba*)target);
             return;
         }
+        if (remoteAction == 8) { // KAREBABA_ACTION_DEAD (stick collected)
+            EnKarebaba_SetupDead((EnKarebaba*)target);
+            return;
+        }
     }
 
     if (ApplyReportedEnStDeathState(target, extraState)) {
@@ -589,6 +594,17 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     if (hasReportedNonDamageState) {
         ApplyReportedEnemyState(target, payload);
         enemyHealthTracker[target] = target->colChkInfo.health;
+        return;
+    }
+
+    // A replica's player collected an item from a defeated enemy that uses the
+    // "actor-becomes-collectible" pattern (e.g. DekuBaba DeadStickDrop). The enemy
+    // was Actor_Kill'd on the replica; propagate the kill. This path is only reached
+    // via OnActorKill (no extraState in payload), so it won't interfere with
+    // non-damage state reports that carry extraState.
+    if (health == 0 && target->colChkInfo.health == 0 && !hasReportedState) {
+        SendPacket_KillEnemy(target);
+        enemyKillBuffer.push_back(networkId);
         return;
     }
 

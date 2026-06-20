@@ -22,8 +22,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-extern u8 Anchor_ShouldSuppressEnemyOffer(void* actor);
-
 #if defined(_MSC_VER) || defined(__GNUC__)
 #include "textures/place_title_cards/g_pn_49.h"
 #include "textures/place_title_cards/g_pn_01.h"
@@ -2112,10 +2110,6 @@ s32 GiveItemEntryFromActorWithFixedRange(Actor* actor, PlayState* play, GetItemE
 
 // If you're doing something for randomizer, you're probably looking for GiveItemEntryFromActor
 s32 Actor_OfferGetItem(Actor* actor, PlayState* play, s32 getItemId, f32 xzRange, f32 yRange) {
-    if (Anchor_ShouldSuppressEnemyOffer(actor)) {
-        return false;
-    }
-
     Player* player = GET_PLAYER(play);
 
     if (!(player->stateFlags1 &
