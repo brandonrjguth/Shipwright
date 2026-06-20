@@ -7,6 +7,7 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
 #include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #include "src/overlays/actors/ovl_En_Fhg_Fire/z_en_fhg_fire.h"
@@ -19,6 +20,7 @@ extern PlayState* gPlayState;
 
 void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
 void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
+void EnKarebaba_SetupDying(EnKarebaba* thisx);
 void EnGoma_Hurt(EnGoma* thisx, PlayState* play);
 void EnGoma_Die(EnGoma* thisx, PlayState* play);
 void EnGoma_Dead(EnGoma* thisx, PlayState* play);
@@ -392,6 +394,17 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
         }
     }
 
+    // Withered Deku Baba: triggered by AC_HIT collision, not health reaching 0.
+    // The replica's report includes the action, so the authority can trigger the
+    // native death (head pops off, falls, drops a stick, regrows).
+    if (target->id == ACTOR_EN_KAREBABA) {
+        s32 remoteAction = extraState.value("action", (s32)-1);
+        if (remoteAction == 5) { // KAREBABA_ACTION_DYING
+            EnKarebaba_SetupDying((EnKarebaba*)target);
+            return;
+        }
+    }
+
     if (ApplyReportedEnStDeathState(target, extraState)) {
         return;
     }
@@ -580,7 +593,10 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
                                          IsReportedBossGanonVolleyState(target, payload) ||
                                          IsReportedMovableBlockState(target, payload) ||
                                          IsReportedBossGomaState(target, payload) ||
-                                         IsReportedPuzzleActorState(target, payload));
+                                         IsReportedPuzzleActorState(target, payload) ||
+                                         // Withered Deku Baba: death is triggered by AC_HIT collision
+                                         // (not health change), so it arrives as a non-damage state report.
+                                         (target->id == ACTOR_EN_KAREBABA && hasReportedState));
 
     if (hasReportedNonDamageState) {
         ApplyReportedEnemyState(target, payload);

@@ -52,6 +52,21 @@ extern "C" {
 #include "src/overlays/actors/ovl_Bg_Haka_Gate/z_bg_haka_gate.h"
 #include "src/overlays/actors/ovl_Bg_Bdan_Objects/z_bg_bdan_objects.h"
 #include "src/overlays/actors/ovl_En_Skb/z_en_skb.h"
+#include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
+
+extern "C" {
+void EnKarebaba_Grow(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Idle(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Awaken(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Upright(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Spin(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Dying(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_DeadItemDrop(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Retract(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Dead(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_Regrow(EnKarebaba* thisx, PlayState* play);
+void EnKarebaba_SetupUpright(EnKarebaba* thisx);
+}
 
 extern "C" {
 void EnDekunuts_Wait(EnDekunuts* thisx, PlayState* play);
@@ -916,6 +931,49 @@ static bool IsDekubabaDeathAction(s32 action) {
            action == DEKUBABA_ACTION_DEAD_STICK_DROP;
 }
 
+enum EnKarebabaAction : s32 {
+    KAREBABA_ACTION_GROW = 0,
+    KAREBABA_ACTION_IDLE = 1,
+    KAREBABA_ACTION_AWAKEN = 2,
+    KAREBABA_ACTION_UPRIGHT = 3,
+    KAREBABA_ACTION_SPIN = 4,
+    KAREBABA_ACTION_DYING = 5,
+    KAREBABA_ACTION_DEAD_ITEM_DROP = 6,
+    KAREBABA_ACTION_RETRACT = 7,
+    KAREBABA_ACTION_DEAD = 8,
+    KAREBABA_ACTION_REGROW = 9,
+};
+
+static s32 GetKarebabaActionId(EnKarebabaActionFunc actionFunc) {
+    if (actionFunc == EnKarebaba_Grow) return KAREBABA_ACTION_GROW;
+    if (actionFunc == EnKarebaba_Idle) return KAREBABA_ACTION_IDLE;
+    if (actionFunc == EnKarebaba_Awaken) return KAREBABA_ACTION_AWAKEN;
+    if (actionFunc == EnKarebaba_Upright) return KAREBABA_ACTION_UPRIGHT;
+    if (actionFunc == EnKarebaba_Spin) return KAREBABA_ACTION_SPIN;
+    if (actionFunc == EnKarebaba_Dying) return KAREBABA_ACTION_DYING;
+    if (actionFunc == EnKarebaba_DeadItemDrop) return KAREBABA_ACTION_DEAD_ITEM_DROP;
+    if (actionFunc == EnKarebaba_Retract) return KAREBABA_ACTION_RETRACT;
+    if (actionFunc == EnKarebaba_Dead) return KAREBABA_ACTION_DEAD;
+    if (actionFunc == EnKarebaba_Regrow) return KAREBABA_ACTION_REGROW;
+    return -1;
+}
+
+static void ApplyKarebabaAction(EnKarebaba* karebaba, s32 action) {
+    switch (action) {
+        case KAREBABA_ACTION_GROW: karebaba->actionFunc = EnKarebaba_Grow; break;
+        case KAREBABA_ACTION_IDLE: karebaba->actionFunc = EnKarebaba_Idle; break;
+        case KAREBABA_ACTION_AWAKEN: karebaba->actionFunc = EnKarebaba_Awaken; break;
+        case KAREBABA_ACTION_UPRIGHT: EnKarebaba_SetupUpright(karebaba); break;
+        case KAREBABA_ACTION_SPIN: karebaba->actionFunc = EnKarebaba_Spin; break;
+        case KAREBABA_ACTION_DYING: karebaba->actionFunc = EnKarebaba_Dying; break;
+        case KAREBABA_ACTION_DEAD_ITEM_DROP: karebaba->actionFunc = EnKarebaba_DeadItemDrop; break;
+        case KAREBABA_ACTION_RETRACT: karebaba->actionFunc = EnKarebaba_Retract; break;
+        case KAREBABA_ACTION_DEAD: karebaba->actionFunc = EnKarebaba_Dead; break;
+        case KAREBABA_ACTION_REGROW: karebaba->actionFunc = EnKarebaba_Regrow; break;
+        default: break;
+    }
+}
+
 static f32 GetDekubabaNativeSize(Actor* actor) {
     return actor != nullptr && actor->params == DEKUBABA_BIG ? 2.5f : 1.0f;
 }
@@ -1563,6 +1621,13 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return (s8)actor->colChkInfo.health <= 0 || IsGomaReportAction(GetGomaActionId(goma->actionFunc));
     }
 
+    // Withered Deku Baba: death is triggered by AC_HIT collision (not health change),
+    // so we must report the action change when it enters the Dying state.
+    if (actor->id == ACTOR_EN_KAREBABA) {
+        EnKarebaba* karebaba = (EnKarebaba*)actor;
+        return GetKarebabaActionId(karebaba->actionFunc) == KAREBABA_ACTION_DYING;
+    }
+
     if (actor->id == ACTOR_BOSS_GOMA) {
         BossGoma* goma = (BossGoma*)actor;
         return ShouldReportBossGomaState(goma);
@@ -1737,6 +1802,17 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             }
             extra["bodyPartsPos"] = bodyPartsPos;
             AddSkelAnimeState(extra, &dekubaba->skelAnime);
+            break;
+        }
+        case ACTOR_EN_KAREBABA: {
+            EnKarebaba* karebaba = (EnKarebaba*)actor;
+            extra["kind"] = "EnKarebaba";
+            extra["action"] = GetKarebabaActionId(karebaba->actionFunc);
+            // params is used as a lifecycle timer (grow count, upright countdown,
+            // dying state, dead timer, regrow count). Must be synced for the entire
+            // grow → idle → upright → spin → dying → dead → regrow cycle to work.
+            extra["params"] = karebaba->actor.params;
+            AddSkelAnimeState(extra, &karebaba->skelAnime);
             break;
         }
         case ACTOR_EN_SHOPNUTS: {
@@ -2519,6 +2595,16 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             }
         }
         ApplySkelAnimeState(extra, &dekubaba->skelAnime);
+    } else if (actor->id == ACTOR_EN_KAREBABA && kind == "EnKarebaba") {
+        EnKarebaba* karebaba = (EnKarebaba*)actor;
+        s32 remoteAction = extra.value("action", (s32)-1);
+        if (remoteAction >= 0) {
+            ApplyKarebabaAction(karebaba, remoteAction);
+        }
+        // params is the lifecycle timer — must be synced every frame so the
+        // grow/dying/regrow state machines stay in lockstep.
+        karebaba->actor.params = extra.value("params", karebaba->actor.params);
+        ApplySkelAnimeState(extra, &karebaba->skelAnime);
     } else if (actor->id == ACTOR_EN_SHOPNUTS && kind == "EnShopnuts") {
         EnShopnuts* shopnuts = (EnShopnuts*)actor;
         ApplyShopnutsAction(shopnuts, extra.value("action", (s32)-1));
