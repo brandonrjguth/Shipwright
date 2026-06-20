@@ -168,7 +168,7 @@ void Anchor::HandlePacket_HintnutsDialogue(nlohmann::json payload) {
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
         target = FindClosestUnassignedActorByCategoryAndId(
-            category, actorId, pos, 100000.0f, payload.value("actorParams", (s16)-0x8000));
+            category, actorId, pos, 100000.0f, payload.value("actorParams", (s16)-0x8000), roomNum);
         SetEnemyNetworkId(target, networkId);
     }
     if (target == nullptr) {
@@ -239,13 +239,15 @@ void Anchor::HandlePacket_EnemyEvent(nlohmann::json payload) {
     float posY = payload.at("posY").get<float>();
     float posZ = payload.at("posZ").get<float>();
     s16 category = payload.at("category").get<s16>();
+    s8 eventRoomNum = payload.value("roomNum", (s8)-1);
     std::string eventType = payload.at("eventType").get<std::string>();
     nlohmann::json eventData = payload.value("eventData", nlohmann::json::object());
 
     Vec3f pos = { posX, posY, posZ };
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
-        target = FindClosestUnassignedActorByCategoryAndId((ActorCategory)category, actorId, pos, 100000.0f);
+        target = FindClosestUnassignedActorByCategoryAndId((ActorCategory)category, actorId, pos, 100000.0f,
+                                                           (s16)-0x8000, eventRoomNum);
         SetEnemyNetworkId(target, networkId);
     }
     if (target == nullptr) {

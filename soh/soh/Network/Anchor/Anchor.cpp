@@ -458,7 +458,7 @@ Actor* Anchor::FindClosestActorByCategoryAndId(ActorCategory category, s16 actor
 }
 
 Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos, float maxDistSq,
-                                                         s16 actorParams) {
+                                                         s16 actorParams, s8 roomNum) {
     if (gPlayState == nullptr) {
         return nullptr;
     }
@@ -472,6 +472,13 @@ Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category,
         Actor* currAct = gPlayState->actorCtx.actorLists[currCategory].head;
         while (currAct != nullptr) {
             if (currAct->id != actorId || !IsEnemySyncActor(currAct)) {
+                currAct = currAct->next;
+                continue;
+            }
+            // In overworld scenes, actors from multiple rooms are loaded.
+            // Only match actors from the same room as the authority packet
+            // to prevent cross-room matching that causes duplicates.
+            if (roomNum >= 0 && currAct->room != roomNum) {
                 currAct = currAct->next;
                 continue;
             }
@@ -1296,12 +1303,16 @@ void Anchor::DetectEnemyDamage() {
             nlohmann::json authorityExtra =
                 enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             if (currentHealth < lastHealth) {
-                if (HasEnemySyncAuthority()) {
+                // Check authority for the enemy's room, not the player's current room.
+                // In overworld scenes, enemies from adjacent rooms may be loaded and
+                // the authority for those rooms may be a different player.
+                bool isAuthorityForEnemy = GetEnemySyncAuthorityClientId(gPlayState->sceneNum, act->room) == ownClientId;
+                if (isAuthorityForEnemy) {
                     SendPacket_DamageEnemy(act, currentHealth);
                 } else {
                     SendPacket_ReportEnemyDamage(act, currentHealth);
                 }
-            } else if (!HasEnemySyncAuthority() && currentHealth == lastHealth &&
+            } else if (GetEnemySyncAuthorityClientId(gPlayState->sceneNum, act->room) != ownClientId && currentHealth == lastHealth &&
                        ShouldPreserveLocalEnemyExtraState(act, authorityExtra) && ShouldReportEnemyExtraState(act)) {
                 SendPacket_ReportEnemyDamage(act, currentHealth);
             }

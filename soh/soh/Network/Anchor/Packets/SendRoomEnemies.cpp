@@ -85,6 +85,7 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
     }
 
     ActorCategory category = (ActorCategory)payload.at("category").get<s16>();
+    s8 authorityRoomNum = payload.value("roomNum", (s8)-1);
     auto enemiesNetworkId = payload.value("enemiesNetworkId", std::vector<uint64_t>{});
     auto deadEnemiesNetworkId = payload.value("deadEnemiesNetworkId", std::vector<uint64_t>{});
     auto enemiesId = payload.at("enemiesId").get<std::vector<s16>>();
@@ -158,7 +159,8 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
 
         if (closestActor == nullptr && enemiesId[ri] == ACTOR_EN_HINTNUTS) {
             closestActor = FindClosestUnassignedActorByCategoryAndId(category, enemiesId[ri], remotePos, 100000.0f,
-                                                                    enemiesParams.empty() ? (s16)-0x8000 : enemiesParams[ri]);
+                                                                    enemiesParams.empty() ? (s16)-0x8000 : enemiesParams[ri],
+                                                                    authorityRoomNum);
         }
 
         if (closestActor != nullptr) {

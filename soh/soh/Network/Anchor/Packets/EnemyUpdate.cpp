@@ -3438,6 +3438,8 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         return;
     }
 
+    s8 authorityRoomNum = payload.value("roomNum", (s8)-1);
+
     auto networkIds = payload.at("networkIds").get<std::vector<uint64_t>>();
     auto actorIds = payload.at("actorIds").get<std::vector<s16>>();
     auto actorParams = payload.value("actorParams", std::vector<s16>{});
@@ -3507,7 +3509,8 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
             if (!IsTransientProjectileActor(actorIds[i], params)) {
                 target = FindClosestUnassignedActorByCategoryAndId(category, actorIds[i], pos, 100000.0f,
-                                                                  actorParams.empty() ? (s16)-0x8000 : actorParams[i]);
+                                                                  actorParams.empty() ? (s16)-0x8000 : actorParams[i],
+                                                                  authorityRoomNum);
                 SetEnemyNetworkId(target, networkIds[i]);
             }
             // Duel actors come with the room on every client, and parent-dependent enemies would crash if

@@ -154,7 +154,7 @@ class Anchor : public Network {
     void SetDummyPlayerClientId(const Actor* actor, uint32_t clientId);
     Actor* FindClosestActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos);
     Actor* FindClosestUnassignedActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos, float maxDistSq,
-                                                     s16 actorParams = (s16)-0x8000);
+                                                     s16 actorParams = (s16)-0x8000, s8 roomNum = -1);
     Actor* FindActorByEnemyNetworkId(uint64_t networkId);
     Actor* FindNearbyDeadEnemyDropSource(Actor* dropActor);
     bool IsEnemySyncActor(Actor* actor);
