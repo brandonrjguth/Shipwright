@@ -991,23 +991,7 @@ bool Anchor::IsValidEnemyAuthorityPacket(nlohmann::json payload) {
     uint32_t authorityClientId = payload.value("authorityClientId", (uint32_t)0);
     uint32_t authorityGeneration = payload.value("authorityGeneration", (uint32_t)0);
 
-    // In dungeons, rooms load one at a time — only accept packets for the current room.
-    // In overworld areas, multiple rooms are loaded simultaneously, so accept packets
-    // for any room in the same scene.
-    if (sceneNum != gPlayState->sceneNum) {
-        return false;
-    }
-    static auto isDungeonScene = [](s16 scene) {
-        return scene == SCENE_DEKU_TREE || scene == SCENE_DODONGOS_CAVERN ||
-               scene == SCENE_JABU_JABU || scene == SCENE_FOREST_TEMPLE ||
-               scene == SCENE_FIRE_TEMPLE || scene == SCENE_WATER_TEMPLE ||
-               scene == SCENE_SPIRIT_TEMPLE || scene == SCENE_SHADOW_TEMPLE ||
-               scene == SCENE_BOTTOM_OF_THE_WELL || scene == SCENE_ICE_CAVERN ||
-               scene == SCENE_GERUDO_TRAINING_GROUND || scene == SCENE_INSIDE_GANONS_CASTLE ||
-               scene == SCENE_GANONS_TOWER || scene == SCENE_GANONS_TOWER_COLLAPSE_INTERIOR ||
-               scene == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR;
-    };
-    if (isDungeonScene(gPlayState->sceneNum) && roomNum != gPlayState->roomCtx.curRoom.num) {
+    if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return false;
     }
     if (authorityClientId == 0) {
@@ -1303,16 +1287,12 @@ void Anchor::DetectEnemyDamage() {
             nlohmann::json authorityExtra =
                 enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             if (currentHealth < lastHealth) {
-                // Check authority for the enemy's room, not the player's current room.
-                // In overworld scenes, enemies from adjacent rooms may be loaded and
-                // the authority for those rooms may be a different player.
-                bool isAuthorityForEnemy = GetEnemySyncAuthorityClientId(gPlayState->sceneNum, act->room) == ownClientId;
-                if (isAuthorityForEnemy) {
+                if (HasEnemySyncAuthority()) {
                     SendPacket_DamageEnemy(act, currentHealth);
                 } else {
                     SendPacket_ReportEnemyDamage(act, currentHealth);
                 }
-            } else if (GetEnemySyncAuthorityClientId(gPlayState->sceneNum, act->room) != ownClientId && currentHealth == lastHealth &&
+            } else if (!HasEnemySyncAuthority() && currentHealth == lastHealth &&
                        ShouldPreserveLocalEnemyExtraState(act, authorityExtra) && ShouldReportEnemyExtraState(act)) {
                 SendPacket_ReportEnemyDamage(act, currentHealth);
             }

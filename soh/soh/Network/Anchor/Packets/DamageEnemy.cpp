@@ -15,18 +15,6 @@ extern "C" {
 #define this thisx
 #include "src/overlays/actors/ovl_En_St/z_en_st.h"
 #undef this
-
-static bool IsDungeonScene(s16 sceneNum) {
-    return sceneNum == SCENE_DEKU_TREE || sceneNum == SCENE_DODONGOS_CAVERN ||
-           sceneNum == SCENE_JABU_JABU || sceneNum == SCENE_FOREST_TEMPLE ||
-           sceneNum == SCENE_FIRE_TEMPLE || sceneNum == SCENE_WATER_TEMPLE ||
-           sceneNum == SCENE_SPIRIT_TEMPLE || sceneNum == SCENE_SHADOW_TEMPLE ||
-           sceneNum == SCENE_BOTTOM_OF_THE_WELL || sceneNum == SCENE_ICE_CAVERN ||
-           sceneNum == SCENE_GERUDO_TRAINING_GROUND || sceneNum == SCENE_INSIDE_GANONS_CASTLE ||
-           sceneNum == SCENE_GANONS_TOWER || sceneNum == SCENE_GANONS_TOWER_COLLAPSE_INTERIOR ||
-           sceneNum == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR;
-}
-
 extern PlayState* gPlayState;
 
 void EnDekubaba_SetupPrunedSomersault(EnDekubaba* thisx);
@@ -485,10 +473,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
         return;
     }
 
-    // Use the enemy's room for authority lookup, not the player's current room.
-    // In overworld scenes, enemies from adjacent rooms may be loaded and the
-    // authority for those rooms may be a different player.
-    uint32_t authorityClientId = GetEnemySyncAuthorityClientId(gPlayState->sceneNum, actor->room);
+    uint32_t authorityClientId = GetEnemySyncAuthorityClientId();
     if (authorityClientId == 0 || authorityClientId == ownClientId) {
         return;
     }
@@ -505,9 +490,9 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["type"] = REPORT_ENEMY_DAMAGE;
     payload["targetClientId"] = authorityClientId;
     payload["sceneNum"] = gPlayState->sceneNum;
-    payload["roomNum"] = actor->room;
+    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = authorityClientId;
-    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, actor->room);
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -532,7 +517,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
 }
 
 void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
-    if (!IsRoomStable()) {
+    if (!IsRoomStable() || !HasEnemySyncAuthority()) {
         return;
     }
 
@@ -542,13 +527,8 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    // In dungeons, rooms load one at a time — only accept reports from the same room.
-    // In overworld areas, multiple rooms are loaded simultaneously, so players in
-    // adjacent rooms can still damage enemies (e.g. Deku Babas in Kokiri Forest).
-    if (client.sceneNum != gPlayState->sceneNum) {
-        return;
-    }
-    if (IsDungeonScene(gPlayState->sceneNum) && client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
+    if (client.sceneNum != gPlayState->sceneNum ||
+        client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
@@ -569,12 +549,6 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
-        return;
-    }
-
-    // Verify we are actually the authority for this enemy's room, not just our current room.
-    // In overworld scenes with cross-room visibility, the enemy may be in a different room.
-    if (GetEnemySyncAuthorityClientId(gPlayState->sceneNum, target->room) != ownClientId) {
         return;
     }
 
