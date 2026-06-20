@@ -485,7 +485,10 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
         return;
     }
 
-    uint32_t authorityClientId = GetEnemySyncAuthorityClientId();
+    // Use the enemy's room for authority lookup, not the player's current room.
+    // In overworld scenes, enemies from adjacent rooms may be loaded and the
+    // authority for those rooms may be a different player.
+    uint32_t authorityClientId = GetEnemySyncAuthorityClientId(gPlayState->sceneNum, actor->room);
     if (authorityClientId == 0 || authorityClientId == ownClientId) {
         return;
     }
@@ -502,9 +505,9 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["type"] = REPORT_ENEMY_DAMAGE;
     payload["targetClientId"] = authorityClientId;
     payload["sceneNum"] = gPlayState->sceneNum;
-    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["roomNum"] = actor->room;
     payload["authorityClientId"] = authorityClientId;
-    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, actor->room);
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -529,7 +532,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
 }
 
 void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
-    if (!IsRoomStable() || !HasEnemySyncAuthority()) {
+    if (!IsRoomStable()) {
         return;
     }
 
@@ -566,6 +569,12 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
+        return;
+    }
+
+    // Verify we are actually the authority for this enemy's room, not just our current room.
+    // In overworld scenes with cross-room visibility, the enemy may be in a different room.
+    if (GetEnemySyncAuthorityClientId(gPlayState->sceneNum, target->room) != ownClientId) {
         return;
     }
 
