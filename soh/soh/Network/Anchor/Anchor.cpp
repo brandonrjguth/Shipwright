@@ -65,6 +65,13 @@ extern "C" u8 Anchor_HasQuestItemCutsceneReplay(s32 questItem) {
     return Anchor::Instance->HasQuestItemCutsceneReplay(questItem) ? 1 : 0;
 }
 
+extern "C" u8 Anchor_ShouldSuppressEnemyOffer(void* refActor) {
+    if (Anchor::Instance == nullptr || !Anchor::Instance->isConnected) {
+        return 0;
+    }
+    return Anchor::Instance->ShouldSuppressEnemyOffer((Actor*)refActor) ? 1 : 0;
+}
+
 // Non-consuming: gates poll these every frame. Entries are erased when the local game itself sets the flag
 // or teaches the song, i.e. when the local player has actually experienced the event.
 bool Anchor::HasCutsceneReplayFlag(s16 flag) {
@@ -73,6 +80,13 @@ bool Anchor::HasCutsceneReplayFlag(s16 flag) {
 
 bool Anchor::HasQuestItemCutsceneReplay(s32 questItem) {
     return pendingQuestItemReplays.contains(questItem);
+}
+
+bool Anchor::ShouldSuppressEnemyOffer(Actor* actor) {
+    if (GetEnemyNetworkId(actor) == 0) {
+        return false;
+    }
+    return !HasEnemySyncAuthority();
 }
 
 void Anchor::FinishQuestItemCutsceneReplay(s32 questItem) {

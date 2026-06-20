@@ -584,19 +584,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
-    bool hasReportedNonDamageState = health == target->colChkInfo.health &&
-                                       (IsReportedDekunutsState(target, payload) ||
-                                        IsReportedHintnutsState(target, payload) ||
-                                         IsReportedShopnutsCaughtState(target, payload) ||
-                                         IsReportedNutsballReflectedState(target, payload) ||
-                                         IsReportedFhgFireVolleyState(target, payload) ||
-                                         IsReportedBossGanonVolleyState(target, payload) ||
-                                         IsReportedMovableBlockState(target, payload) ||
-                                         IsReportedBossGomaState(target, payload) ||
-                                         IsReportedPuzzleActorState(target, payload) ||
-                                         // Withered Deku Baba: death is triggered by AC_HIT collision
-                                         // (not health change), so it arrives as a non-damage state report.
-                                         (target->id == ACTOR_EN_KAREBABA && hasReportedState));
+    bool hasReportedNonDamageState = health == target->colChkInfo.health && hasReportedState;
 
     if (hasReportedNonDamageState) {
         ApplyReportedEnemyState(target, payload);

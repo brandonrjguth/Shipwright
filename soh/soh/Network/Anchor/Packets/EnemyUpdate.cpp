@@ -66,6 +66,7 @@ void EnKarebaba_Retract(EnKarebaba* thisx, PlayState* play);
 void EnKarebaba_Dead(EnKarebaba* thisx, PlayState* play);
 void EnKarebaba_Regrow(EnKarebaba* thisx, PlayState* play);
 void EnKarebaba_SetupUpright(EnKarebaba* thisx);
+void EnKarebaba_SetupDeadItemDrop(EnKarebaba* thisx, PlayState* play);
 }
 
 extern "C" {
@@ -959,6 +960,10 @@ static s32 GetKarebabaActionId(EnKarebabaActionFunc actionFunc) {
 }
 
 static void ApplyKarebabaAction(EnKarebaba* karebaba, s32 action) {
+    if (action == GetKarebabaActionId(karebaba->actionFunc)) {
+        return;
+    }
+
     switch (action) {
         case KAREBABA_ACTION_GROW: karebaba->actionFunc = EnKarebaba_Grow; break;
         case KAREBABA_ACTION_IDLE: karebaba->actionFunc = EnKarebaba_Idle; break;
@@ -966,7 +971,7 @@ static void ApplyKarebabaAction(EnKarebaba* karebaba, s32 action) {
         case KAREBABA_ACTION_UPRIGHT: EnKarebaba_SetupUpright(karebaba); break;
         case KAREBABA_ACTION_SPIN: karebaba->actionFunc = EnKarebaba_Spin; break;
         case KAREBABA_ACTION_DYING: karebaba->actionFunc = EnKarebaba_Dying; break;
-        case KAREBABA_ACTION_DEAD_ITEM_DROP: karebaba->actionFunc = EnKarebaba_DeadItemDrop; break;
+        case KAREBABA_ACTION_DEAD_ITEM_DROP: EnKarebaba_SetupDeadItemDrop(karebaba, gPlayState); break;
         case KAREBABA_ACTION_RETRACT: karebaba->actionFunc = EnKarebaba_Retract; break;
         case KAREBABA_ACTION_DEAD: karebaba->actionFunc = EnKarebaba_Dead; break;
         case KAREBABA_ACTION_REGROW: karebaba->actionFunc = EnKarebaba_Regrow; break;
