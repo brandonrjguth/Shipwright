@@ -2472,6 +2472,13 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             EnVm* vm = (EnVm*)actor;
             extra["kind"] = "EnVm";
             extra["vmState"] = vm->unk_21C;
+            extra["beamScaleX"] = vm->beamScale.x;
+            extra["beamScaleZ"] = vm->beamScale.z;
+            extra["beamRotX"] = vm->beamRot.x;
+            extra["beamRotY"] = vm->beamRot.y;
+            extra["beamRotZ"] = vm->beamRot.z;
+            extra["beamTexScroll"] = vm->beamTexScroll;
+            extra["headRotY"] = vm->headRotY;
             break;
         }
         case ACTOR_OBJ_HSBLOCK: {

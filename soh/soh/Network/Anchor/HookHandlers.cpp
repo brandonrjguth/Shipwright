@@ -28,6 +28,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Door/z_en_door.h"
 #include "src/overlays/actors/ovl_En_Hintnuts/z_en_hintnuts.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
+#include "src/overlays/actors/ovl_En_Vm/z_en_vm.h"
 #include "src/overlays/actors/ovl_En_Si/z_en_si.h"
 #include "src/overlays/actors/ovl_En_Sw/z_en_sw.h"
 #include "src/overlays/actors/ovl_Item_B_Heart/z_item_b_heart.h"
@@ -378,6 +379,43 @@ void Anchor::RegisterHooks() {
             hasPendingLocalExtraState) {
             SendPacket_ReportEnemyDamage(actor, GetReportedEnemyHealth(actor));
         }
+    });
+
+    // Beamos beam visual override: OnActorUpdate fires AFTER the actor's update() but BEFORE Draw.
+    // The Beamos's Attack action computes beam parameters from GET_PLAYER (local player), which is
+    // wrong on replicas. Override with the authority's synced beam parameters so the laser visual
+    // matches across all clients.
+    COND_HOOK(OnActorUpdate, isConnected, [&](void* refActor) {
+        if (!IsRoomStable()) {
+            return;
+        }
+        Actor* actor = (Actor*)refActor;
+        if (actor->id != ACTOR_EN_VM) {
+            return;
+        }
+        if (HasEnemySyncAuthority()) {
+            return;
+        }
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        if (networkId == 0) {
+            return;
+        }
+        auto it = enemyExtraStates.find(networkId);
+        if (it == enemyExtraStates.end()) {
+            return;
+        }
+        nlohmann::json& extra = it->second;
+        if (extra.value("kind", std::string("")) != "EnVm") {
+            return;
+        }
+        EnVm* vm = (EnVm*)actor;
+        vm->beamScale.x = extra.value("beamScaleX", vm->beamScale.x);
+        vm->beamScale.z = extra.value("beamScaleZ", vm->beamScale.z);
+        vm->beamRot.x = extra.value("beamRotX", vm->beamRot.x);
+        vm->beamRot.y = extra.value("beamRotY", vm->beamRot.y);
+        vm->beamRot.z = extra.value("beamRotZ", vm->beamRot.z);
+        vm->beamTexScroll = extra.value("beamTexScroll", vm->beamTexScroll);
+        vm->headRotY = extra.value("headRotY", vm->headRotY);
     });
 
     COND_HOOK(OnPlayerSfx, isConnected, [&](u16 sfxId) { SendPacket_PlayerSfx(sfxId); });

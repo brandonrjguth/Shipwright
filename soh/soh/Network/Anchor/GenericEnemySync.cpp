@@ -81,6 +81,7 @@ void EnFirefly_SetupFall(EnFirefly* thisx);
 void EnVm_SetupDie(EnVm* thisx);
 void EnOkuta_SetupDie(EnOkuta* thisx);
 void EnPeehat_Adult_SetStateDie(EnPeehat* thisx);
+void EnPeehat_Adult_StateDie(EnPeehat* thisx, PlayState* play);
 void func_80862FA8(EnTest* thisx, PlayState* play);
 }
 
