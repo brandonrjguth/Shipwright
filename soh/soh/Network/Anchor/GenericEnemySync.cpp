@@ -81,6 +81,7 @@ void EnFirefly_SetupFall(EnFirefly* thisx);
 void EnVm_SetupDie(EnVm* thisx);
 void EnOkuta_SetupDie(EnOkuta* thisx);
 void EnPeehat_Adult_SetStateDie(EnPeehat* thisx);
+void func_80862FA8(EnTest* thisx, PlayState* play);
 }
 
 extern void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime);
@@ -282,7 +283,11 @@ void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
         }
         case ACTOR_EN_TEST: {
             EnTest* test = (EnTest*)actor;
-            BodyBreak_Alloc(&test->bodyBreak, 60, play);
+            // 5=front fall, 6=back fall, 7=body breaking, 2=split (types 4/5)
+            if (test->unk_7C8 != 5 && test->unk_7C8 != 6 &&
+                test->unk_7C8 != 7 && test->unk_7C8 != 2) {
+                func_80862FA8(test, play);
+            }
             break;
         }
         case ACTOR_EN_TITE: {

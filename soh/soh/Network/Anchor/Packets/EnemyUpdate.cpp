@@ -55,6 +55,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
 #include "src/overlays/actors/ovl_Obj_Syokudai/z_obj_syokudai.h"
 #include "src/overlays/actors/ovl_En_Niw/z_en_niw.h"
+#include "src/overlays/actors/ovl_En_Vm/z_en_vm.h"
 
 extern "C" {
 void EnKarebaba_Grow(EnKarebaba* thisx, PlayState* play);
@@ -70,6 +71,9 @@ void EnKarebaba_Regrow(EnKarebaba* thisx, PlayState* play);
 void EnKarebaba_SetupUpright(EnKarebaba* thisx);
 void EnKarebaba_SetupDeadItemDrop(EnKarebaba* thisx, PlayState* play);
 void EnKarebaba_SetupDead(EnKarebaba* thisx);
+void EnVm_SetupWait(EnVm* thisx);
+void EnVm_SetupAttack(EnVm* thisx);
+void EnVm_SetupStun(EnVm* thisx);
 }
 
 extern "C" {
@@ -2464,6 +2468,12 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["niwHeld"] = actor->parent != nullptr;
             break;
         }
+        case ACTOR_EN_VM: {
+            EnVm* vm = (EnVm*)actor;
+            extra["kind"] = "EnVm";
+            extra["vmState"] = vm->unk_21C;
+            break;
+        }
         case ACTOR_OBJ_HSBLOCK: {
             ObjHsblock* block = (ObjHsblock*)actor;
             extra["kind"] = "ObjHsblock";
@@ -3410,6 +3420,16 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
             actor->parent = actor;
         } else if (!remoteHeld && actor->parent == actor) {
             actor->parent = nullptr;
+        }
+    } else if (actor->id == ACTOR_EN_VM && kind == "EnVm") {
+        EnVm* vm = (EnVm*)actor;
+        s32 remoteState = extra.value("vmState", (s32)-1);
+        if (remoteState >= 0 && remoteState != vm->unk_21C) {
+            switch (remoteState) {
+                case 0: EnVm_SetupWait(vm); break;
+                case 1: EnVm_SetupAttack(vm); break;
+                case 2: EnVm_SetupStun(vm); break;
+            }
         }
     } else if (actor->id == ACTOR_OBJ_HSBLOCK && kind == "ObjHsblock") {
         ObjHsblock* block = (ObjHsblock*)actor;
