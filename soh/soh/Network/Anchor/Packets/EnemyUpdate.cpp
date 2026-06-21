@@ -53,6 +53,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_Bg_Bdan_Objects/z_bg_bdan_objects.h"
 #include "src/overlays/actors/ovl_En_Skb/z_en_skb.h"
 #include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
+#include "src/overlays/actors/ovl_Obj_Syokudai/z_obj_syokudai.h"
 
 extern "C" {
 void EnKarebaba_Grow(EnKarebaba* thisx, PlayState* play);
@@ -1747,6 +1748,11 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return IsObjOshihikiMoving((ObjOshihiki*)actor);
     }
 
+    if (actor->id == ACTOR_OBJ_SYOKUDAI) {
+        ObjSyokudai* torch = (ObjSyokudai*)actor;
+        return torch->litTimer > 0;
+    }
+
     if (IsPuzzleActorActive(actor)) {
         return true;
     }
@@ -1773,6 +1779,12 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
 
     if (actor->id == ACTOR_OBJ_OSHIHIKI) {
         return ShouldPreserveLocalObjOshihiki((ObjOshihiki*)actor, authorityExtra);
+    }
+
+    if (actor->id == ACTOR_OBJ_SYOKUDAI) {
+        ObjSyokudai* torch = (ObjSyokudai*)actor;
+        s16 authorityLitTimer = authorityExtra.value("litTimer", (s16)0);
+        return torch->litTimer > 0 && authorityLitTimer <= 0;
     }
 
     if (actor->id == ACTOR_EN_NUTSBALL) {
@@ -2430,6 +2442,12 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["homeY"] = block->dyna.actor.home.pos.y;
             extra["homeZ"] = block->dyna.actor.home.pos.z;
             extra["floorHeight"] = block->dyna.actor.floorHeight;
+            break;
+        }
+        case ACTOR_OBJ_SYOKUDAI: {
+            ObjSyokudai* torch = (ObjSyokudai*)actor;
+            extra["kind"] = "ObjSyokudai";
+            extra["litTimer"] = torch->litTimer;
             break;
         }
         case ACTOR_OBJ_HSBLOCK: {
@@ -3366,6 +3384,12 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         block->dyna.actor.world.rot.y = block->dyna.unk_158;
         block->yawSin = Math_SinS(block->dyna.actor.world.rot.y);
         block->yawCos = Math_CosS(block->dyna.actor.world.rot.y);
+    } else if (actor->id == ACTOR_OBJ_SYOKUDAI && kind == "ObjSyokudai") {
+        ObjSyokudai* torch = (ObjSyokudai*)actor;
+        s16 remoteLitTimer = extra.value("litTimer", (s16)0);
+        if (remoteLitTimer > torch->litTimer) {
+            torch->litTimer = remoteLitTimer;
+        }
     } else if (actor->id == ACTOR_OBJ_HSBLOCK && kind == "ObjHsblock") {
         ObjHsblock* block = (ObjHsblock*)actor;
         ApplyDynaPolyState(extra, &block->dyna);

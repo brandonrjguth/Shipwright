@@ -558,7 +558,20 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_BG_MIZU_WATER || actorId == ACTOR_BG_MIZU_MOVEBG || actorId == ACTOR_BG_MIZU_SHUTTER ||
            actorId == ACTOR_BG_HIDAN_FSLIFT || actorId == ACTOR_BG_JYA_COBRA ||
            actorId == ACTOR_BG_JYA_BIGMIRROR || actorId == ACTOR_BG_HAKA_SHIP ||
-           actorId == ACTOR_BG_HAKA_WATER || actorId == ACTOR_BG_HAKA_GATE || actorId == ACTOR_BG_BDAN_OBJECTS;
+           actorId == ACTOR_BG_HAKA_WATER || actorId == ACTOR_BG_HAKA_GATE || actorId == ACTOR_BG_BDAN_OBJECTS ||
+           // Pushable / breakable objects
+           actorId == ACTOR_BG_SPOT15_RRBOX ||  // Hyrule Castle milk crates
+           actorId == ACTOR_OBJ_SYOKUDAI ||      // Torches (lit state)
+           actorId == ACTOR_EN_GOROIWA ||        // Rolling boulders
+           actorId == ACTOR_OBJ_TSUBO ||         // Pots
+           // NPCs (position sync)
+           actorId == ACTOR_EN_NIW ||            // Cuccos
+           actorId == ACTOR_EN_HEISHI1 ||        // Courtyard guards
+           actorId == ACTOR_EN_HEISHI2 ||        // Kakariko guards
+           actorId == ACTOR_EN_DAIKU_KAKARIKO || // Carpenters
+           actorId == ACTOR_EN_MM ||             // Running man (child)
+           actorId == ACTOR_EN_NIW_GIRL ||       // Girl chasing cucco
+           actorId == ACTOR_EN_MA1;              // Malon (Hyrule Castle)
 }
 
 bool Anchor::IsTransientProjectileActor(s16 actorId, s16 params) {
@@ -1131,8 +1144,10 @@ void Anchor::ProcessActorBuffers() {
         // animation entirely. Defer the kill for up to 60 frames while
         // EnsureEnemyDeathSetup triggers the enemy's death state. This applies to BOTH
         // authority and replica: the authority needs it for replica-initiated kills, and
-        // replicas need it for authority-initiated kills.
-        if (actor->colChkInfo.health == 0) {
+        // replicas need it for authority-initiated kills. Only enemies and bosses get
+        // deferral — props (pots, torches, etc.) should be destroyed immediately.
+        if (actor->colChkInfo.health == 0 &&
+            (actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS)) {
             u32& frames = deathDeferralFrames[networkId];
             if (frames == 0) {
                 if (enemyExtraStates.contains(networkId)) {

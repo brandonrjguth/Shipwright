@@ -8,6 +8,7 @@ extern "C" {
 #include "functions.h"
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
+#include "src/overlays/actors/ovl_Obj_Syokudai/z_obj_syokudai.h"
 #include "src/overlays/actors/ovl_En_Goma/z_en_goma.h"
 #include "src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
 #include "src/overlays/actors/ovl_En_Fhg_Fire/z_en_fhg_fire.h"
@@ -408,6 +409,15 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
             EnKarebaba_SetupDead((EnKarebaba*)target);
             return;
         }
+    }
+
+    if (target->id == ACTOR_OBJ_SYOKUDAI) {
+        ObjSyokudai* torch = (ObjSyokudai*)target;
+        s16 remoteLitTimer = extraState.value("litTimer", (s16)0);
+        if (remoteLitTimer > torch->litTimer) {
+            torch->litTimer = remoteLitTimer;
+        }
+        return;
     }
 
     if (ApplyReportedEnStDeathState(target, extraState)) {
