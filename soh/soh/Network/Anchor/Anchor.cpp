@@ -12,7 +12,14 @@ extern "C" {
 #include "functions.h"
 #include "src/overlays/actors/ovl_Boss_Goma/z_boss_goma.h"
 #include "src/overlays/actors/ovl_En_Horse/z_en_horse.h"
+#include "src/overlays/actors/ovl_Obj_Tsubo/z_obj_tsubo.h"
+#include "src/overlays/actors/ovl_Obj_Kibako/z_obj_kibako.h"
 extern PlayState* gPlayState;
+}
+
+extern "C" {
+void ObjTsubo_AirBreak(ObjTsubo* thisx, PlayState* play);
+void ObjKibako_AirBreak(ObjKibako* thisx, PlayState* play);
 }
 
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
@@ -564,14 +571,65 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_OBJ_SYOKUDAI ||      // Torches (lit state)
            actorId == ACTOR_EN_GOROIWA ||        // Rolling boulders
            actorId == ACTOR_OBJ_TSUBO ||         // Pots
+           actorId == ACTOR_OBJ_KIBAKO ||        // Small wooden crates
+           actorId == ACTOR_EN_DNS ||            // Business Scrub (Dodongo's Cavern)
            // NPCs (position sync)
            actorId == ACTOR_EN_NIW ||            // Cuccos
            actorId == ACTOR_EN_HEISHI1 ||        // Courtyard guards
            actorId == ACTOR_EN_HEISHI2 ||        // Kakariko guards
-           actorId == ACTOR_EN_DAIKU_KAKARIKO || // Carpenters
+           actorId == ACTOR_EN_HEISHI3 ||        // Gate guards
+           actorId == ACTOR_EN_HEISHI4 ||        // Hyrule guards
+           actorId == ACTOR_EN_DAIKU_KAKARIKO || // Carpenters (Kakariko)
+           actorId == ACTOR_EN_DAIKU ||          // Carpenters (tent)
+           actorId == ACTOR_EN_TORYO ||          // Boss Carpenter
            actorId == ACTOR_EN_MM ||             // Running man (child)
+           actorId == ACTOR_EN_MM2 ||            // Running man (adult)
            actorId == ACTOR_EN_NIW_GIRL ||       // Girl chasing cucco
-           actorId == ACTOR_EN_MA1;              // Malon (Hyrule Castle)
+           actorId == ACTOR_EN_NIW_LADY ||       // Cucco Lady (Anju)
+           actorId == ACTOR_EN_MA1 ||            // Malon (Hyrule Castle, child)
+           actorId == ACTOR_EN_MA2 ||            // Malon (Adult, Ingo's Ranch)
+           actorId == ACTOR_EN_MA3 ||            // Malon (Adult, Lon Lon Ranch)
+           actorId == ACTOR_EN_HY ||             // Market NPCs (bag guy, townspeople)
+           actorId == ACTOR_EN_DOG ||            // Dog
+           actorId == ACTOR_EN_OSSAN ||          // Shopkeepers (Bazaar, etc.)
+           actorId == ACTOR_EN_SYATEKI_MAN ||    // Shooting Gallery Man
+           actorId == ACTOR_EN_BOM_BOWL_MAN ||   // Bombchu Bowling Lady
+           actorId == ACTOR_EN_TAKARA_MAN ||     // Treasure Box Shop Man
+           actorId == ACTOR_EN_MU ||             // Haggling Townspeople
+           actorId == ACTOR_EN_TG ||             // Entwined Lovers
+           actorId == ACTOR_EN_GUEST ||          // Happy Mask Shop Customer
+           actorId == ACTOR_EN_GB ||             // Poe Collector
+           actorId == ACTOR_EN_ANI ||            // Kakariko Rooftop Man
+           actorId == ACTOR_EN_CS ||             // Graveyard Boy
+           actorId == ACTOR_EN_FU ||             // Windmill Man
+           actorId == ACTOR_EN_HS ||             // Carpenter's Son (Grog, adult)
+           actorId == ACTOR_EN_HS2 ||            // Carpenter's Son (child)
+           actorId == ACTOR_EN_SSH ||            // Cursed Skulltula People
+           actorId == ACTOR_EN_STH ||            // Uncursed Skulltula People
+           actorId == ACTOR_EN_DS ||             // Potion Shop Granny
+           actorId == ACTOR_EN_KAKASI ||         // Pierre the Scarecrow
+           actorId == ACTOR_EN_KAKASI3 ||        // Bonooru the Scarecrow
+           actorId == ACTOR_EN_DU ||             // Darunia
+           actorId == ACTOR_EN_GO ||             // Gorons 1
+           actorId == ACTOR_EN_GO2 ||            // Gorons 2 (Biggoron, rolling gorons)
+           actorId == ACTOR_EN_KZ ||             // King Zora
+           actorId == ACTOR_EN_ZO ||             // Zoras
+           actorId == ACTOR_EN_IN ||             // Ingo
+           actorId == ACTOR_EN_TA ||             // Talon
+           actorId == ACTOR_EN_COW ||            // Cows
+           actorId == ACTOR_EN_KO ||             // Kokiri Children
+           actorId == ACTOR_EN_MD ||             // Mido
+           actorId == ACTOR_EN_SA ||             // Saria
+           actorId == ACTOR_EN_SKJ ||            // Skullkid
+           actorId == ACTOR_EN_MK ||             // Lakeside Professor
+           actorId == ACTOR_EN_MS ||             // Bean Salesman
+           actorId == ACTOR_EN_JS ||             // Magic Carpet Man
+           actorId == ACTOR_EN_GE1 ||            // White Clothed Gerudo
+           actorId == ACTOR_EN_GE2 ||            // Patrolling Gerudo
+           actorId == ACTOR_EN_GE3 ||            // Gerudo Fortress Leader
+           actorId == ACTOR_EN_GS ||             // Gossip Stone
+           actorId == ACTOR_EN_OWL ||            // Kaepora Gaebora (owl)
+           actorId == ACTOR_EN_FR;               // Frogs
 }
 
 bool Anchor::IsTransientProjectileActor(s16 actorId, s16 params) {
@@ -1165,6 +1223,12 @@ void Anchor::ProcessActorBuffers() {
         }
 
         ReleaseLocalGohmaDefeatCutsceneBeforeKill(actor);
+        // Play break animation for pots/crates so they shatter visually instead of just disappearing
+        if (actor->id == ACTOR_OBJ_TSUBO) {
+            ObjTsubo_AirBreak((ObjTsubo*)actor, gPlayState);
+        } else if (actor->id == ACTOR_OBJ_KIBAKO) {
+            ObjKibako_AirBreak((ObjKibako*)actor, gPlayState);
+        }
         Actor_Kill(actor);
         deathDeferralFrames.erase(networkId);
     }

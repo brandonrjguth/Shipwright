@@ -54,6 +54,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Skb/z_en_skb.h"
 #include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
 #include "src/overlays/actors/ovl_Obj_Syokudai/z_obj_syokudai.h"
+#include "src/overlays/actors/ovl_En_Niw/z_en_niw.h"
 
 extern "C" {
 void EnKarebaba_Grow(EnKarebaba* thisx, PlayState* play);
@@ -1753,6 +1754,10 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return torch->litTimer > 0;
     }
 
+    if (actor->id == ACTOR_EN_NIW) {
+        return actor->parent != nullptr;
+    }
+
     if (IsPuzzleActorActive(actor)) {
         return true;
     }
@@ -1785,6 +1790,10 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
         ObjSyokudai* torch = (ObjSyokudai*)actor;
         s16 authorityLitTimer = authorityExtra.value("litTimer", (s16)0);
         return torch->litTimer > 0 && authorityLitTimer <= 0;
+    }
+
+    if (actor->id == ACTOR_EN_NIW) {
+        return actor->parent != nullptr && !authorityExtra.value("niwHeld", false);
     }
 
     if (actor->id == ACTOR_EN_NUTSBALL) {
@@ -2448,6 +2457,11 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             ObjSyokudai* torch = (ObjSyokudai*)actor;
             extra["kind"] = "ObjSyokudai";
             extra["litTimer"] = torch->litTimer;
+            break;
+        }
+        case ACTOR_EN_NIW: {
+            extra["kind"] = "EnNiw";
+            extra["niwHeld"] = actor->parent != nullptr;
             break;
         }
         case ACTOR_OBJ_HSBLOCK: {
@@ -3389,6 +3403,13 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         s16 remoteLitTimer = extra.value("litTimer", (s16)0);
         if (remoteLitTimer > torch->litTimer) {
             torch->litTimer = remoteLitTimer;
+        }
+    } else if (actor->id == ACTOR_EN_NIW && kind == "EnNiw") {
+        bool remoteHeld = extra.value("niwHeld", false);
+        if (remoteHeld && actor->parent == nullptr) {
+            actor->parent = actor;
+        } else if (!remoteHeld && actor->parent == actor) {
+            actor->parent = nullptr;
         }
     } else if (actor->id == ACTOR_OBJ_HSBLOCK && kind == "ObjHsblock") {
         ObjHsblock* block = (ObjHsblock*)actor;

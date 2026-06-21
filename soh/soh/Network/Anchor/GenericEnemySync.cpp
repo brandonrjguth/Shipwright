@@ -18,6 +18,9 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Dodojr/z_en_dodojr.h"
 #include "src/overlays/actors/ovl_En_Am/z_en_am.h"
 #include "src/overlays/actors/ovl_En_Vm/z_en_vm.h"
+#include "src/overlays/actors/ovl_En_Firefly/z_en_firefly.h"
+#include "src/overlays/actors/ovl_En_Okuta/z_en_okuta.h"
+#include "src/overlays/actors/ovl_En_Peehat/z_en_peehat.h"
 #include "src/overlays/actors/ovl_En_Bigokuta/z_en_bigokuta.h"
 #include "src/overlays/actors/ovl_En_Bili/z_en_bili.h"
 #include "src/overlays/actors/ovl_En_Vali/z_en_vali.h"
@@ -74,6 +77,10 @@ void EnWf_SetupDie(EnWf* thisx);
 void EnZf_SetupDie(EnZf* thisx);
 void EnTite_SetupDeathCry(EnTite* thisx);
 void EnBb_SetupDeath(EnBb* thisx, PlayState* play);
+void EnFirefly_SetupFall(EnFirefly* thisx);
+void EnVm_SetupDie(EnVm* thisx);
+void EnOkuta_SetupDie(EnOkuta* thisx);
+void EnPeehat_Adult_SetStateDie(EnPeehat* thisx);
 }
 
 extern void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime);
@@ -318,6 +325,28 @@ void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
             EnZf* zf = (EnZf*)actor;
             if (zf->action != ENZF_ACTION_DIE) {
                 EnZf_SetupDie(zf);
+            }
+            break;
+        }
+        case ACTOR_EN_FIREFLY: {
+            EnFirefly* firefly = (EnFirefly*)actor;
+            EnFirefly_SetupFall(firefly);
+            break;
+        }
+        case ACTOR_EN_VM: {
+            EnVm* vm = (EnVm*)actor;
+            EnVm_SetupDie(vm);
+            break;
+        }
+        case ACTOR_EN_OKUTA: {
+            EnOkuta* okuta = (EnOkuta*)actor;
+            EnOkuta_SetupDie(okuta);
+            break;
+        }
+        case ACTOR_EN_PEEHAT: {
+            EnPeehat* peehat = (EnPeehat*)actor;
+            if (peehat->actionFunc != EnPeehat_Adult_StateDie) {
+                EnPeehat_Adult_SetStateDie(peehat);
             }
             break;
         }
