@@ -610,10 +610,12 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
 
     if (health < target->colChkInfo.health) {
         if (health == 0 && !hasReportedState) {
-            // Set health to 0 so the enemy's own update function triggers its native
-            // death animation, then queue the kill for when the animation completes.
+            // Set health to 0, broadcast to all replicas so they can trigger death
+            // animations, then queue the kill for deferred processing (death animation
+            // plays during the 60-frame deferral in ProcessActorBuffers).
             target->colChkInfo.health = 0;
             enemyHealthTracker[target] = 0;
+            SendPacket_DamageEnemy(target, 0);
             enemyKillBuffer.push_back(networkId);
             return;
         }

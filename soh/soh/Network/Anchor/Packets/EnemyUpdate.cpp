@@ -71,6 +71,44 @@ void EnKarebaba_SetupDead(EnKarebaba* thisx);
 }
 
 extern "C" {
+void EnWf_SetupWaitToAppear(EnWf* thisx);
+void EnWf_SetupWait(EnWf* thisx);
+void EnWf_SetupRunAtPlayer(EnWf* thisx, PlayState* play);
+void EnWf_SetupSearchForPlayer(EnWf* thisx);
+void EnWf_SetupRunAroundPlayer(EnWf* thisx);
+void EnWf_SetupSlash(EnWf* thisx);
+void EnWf_SetupRecoilFromBlockedSlash(EnWf* thisx);
+void EnWf_SetupBackflipAway(EnWf* thisx);
+void EnWf_SetupStunned(EnWf* thisx);
+void EnWf_SetupDamaged(EnWf* thisx);
+void EnWf_SetupBlocking(EnWf* thisx);
+void EnWf_SetupSidestep(EnWf* thisx, PlayState* play);
+void EnWf_SetupDie(EnWf* thisx);
+void EnTite_SetupIdle(EnTite* thisx);
+void EnTite_SetupAttack(EnTite* thisx);
+void EnTite_SetupTurnTowardPlayer(EnTite* thisx);
+void EnTite_SetupMoveTowardPlayer(EnTite* thisx);
+void EnTite_SetupRecoil(EnTite* thisx);
+void EnTite_SetupStunned(EnTite* thisx);
+void EnTite_SetupDeathCry(EnTite* thisx);
+void EnZf_SetupDropIn(EnZf* thisx);
+void EnZf_SetupApproachPlayer(EnZf* thisx, PlayState* play);
+void EnZf_SetupJumpForward(EnZf* thisx);
+void EnZf_SetupSlash(EnZf* thisx);
+void EnZf_SetupRecoilFromBlockedSlash(EnZf* thisx);
+void EnZf_SetupJumpBack(EnZf* thisx);
+void EnZf_SetupStunned(EnZf* thisx);
+void EnZf_SetupSheatheSword(EnZf* thisx, PlayState* play);
+void EnZf_SetupHopAndTaunt(EnZf* thisx);
+void EnZf_SetupHopAway(EnZf* thisx, PlayState* play);
+void EnZf_SetupDrawSword(EnZf* thisx, PlayState* play);
+void EnZf_SetupDamaged(EnZf* thisx);
+void EnZf_SetupJumpUp(EnZf* thisx);
+void EnZf_SetupDie(EnZf* thisx);
+void EnZf_SetupCircleAroundPlayer(EnZf* thisx, f32 speed);
+}
+
+extern "C" {
 void EnDekunuts_Wait(EnDekunuts* thisx, PlayState* play);
 void EnDekunuts_LookAround(EnDekunuts* thisx, PlayState* play);
 void EnDekunuts_Stand(EnDekunuts* thisx, PlayState* play);
@@ -976,6 +1014,71 @@ static void ApplyKarebabaAction(EnKarebaba* karebaba, s32 action) {
         case KAREBABA_ACTION_RETRACT: karebaba->actionFunc = EnKarebaba_Retract; break;
         case KAREBABA_ACTION_DEAD: EnKarebaba_SetupDead(karebaba); break;
         case KAREBABA_ACTION_REGROW: karebaba->actionFunc = EnKarebaba_Regrow; break;
+        default: break;
+    }
+}
+
+static void ApplyWfAction(EnWf* wf, s32 remoteAction) {
+    if (wf == nullptr || remoteAction < 0 || remoteAction == wf->action) {
+        return;
+    }
+
+    switch (remoteAction) {
+        case WOLFOS_ACTION_WAIT_TO_APPEAR: EnWf_SetupWaitToAppear(wf); break;
+        case WOLFOS_ACTION_DIE: EnWf_SetupDie(wf); break;
+        case WOLFOS_ACTION_DAMAGED: EnWf_SetupDamaged(wf); break;
+        case WOLFOS_ACTION_BACKFLIP_AWAY: EnWf_SetupBackflipAway(wf); break;
+        case WOLFOS_ACTION_WAIT: EnWf_SetupWait(wf); break;
+        case WOLFOS_ACTION_BLOCKING: EnWf_SetupBlocking(wf); break;
+        case WOLFOS_ACTION_SLASH: EnWf_SetupSlash(wf); break;
+        case WOLFOS_ACTION_RUN_AT_PLAYER: EnWf_SetupRunAtPlayer(wf, gPlayState); break;
+        case WOLFOS_ACTION_SEARCH_FOR_PLAYER: EnWf_SetupSearchForPlayer(wf); break;
+        case WOLFOS_ACTION_RUN_AROUND_PLAYER: EnWf_SetupRunAroundPlayer(wf); break;
+        case WOLFOS_ACTION_RECOIL_FROM_BLOCKED_SLASH: EnWf_SetupRecoilFromBlockedSlash(wf); break;
+        case WOLFOS_ACTION_SIDESTEP: EnWf_SetupSidestep(wf, gPlayState); break;
+        case WOLFOS_ACTION_STUNNED: EnWf_SetupStunned(wf); break;
+        default: break;
+    }
+}
+
+static void ApplyTiteAction(EnTite* tite, s32 remoteAction) {
+    if (tite == nullptr || remoteAction < 0 || remoteAction == tite->action) {
+        return;
+    }
+
+    switch (remoteAction) {
+        case 0: EnTite_SetupDeathCry(tite); break;     // TEKTITE_DEATH_CRY
+        case 3: EnTite_SetupRecoil(tite); break;        // TEKTITE_RECOIL
+        case 6: EnTite_SetupIdle(tite); break;          // TEKTITE_IDLE
+        case 7: EnTite_SetupStunned(tite); break;       // TEKTITE_STUNNED
+        case 9: EnTite_SetupAttack(tite); break;        // TEKTITE_ATTACK
+        case 0xA: EnTite_SetupTurnTowardPlayer(tite); break; // TEKTITE_TURN_TOWARD_PLAYER
+        case 0xC: EnTite_SetupMoveTowardPlayer(tite); break; // TEKTITE_MOVE_TOWARD_PLAYER
+        default: break;
+    }
+}
+
+static void ApplyZfAction(EnZf* zf, s32 remoteAction) {
+    if (zf == nullptr || remoteAction < 0 || remoteAction == zf->action) {
+        return;
+    }
+
+    switch (remoteAction) {
+        case ENZF_ACTION_DROP_IN: EnZf_SetupDropIn(zf); break;
+        case ENZF_ACTION_APPROACH_PLAYER: EnZf_SetupApproachPlayer(zf, gPlayState); break;
+        case ENZF_ACTION_JUMP_FORWARD: EnZf_SetupJumpForward(zf); break;
+        case ENZF_ACTION_SLASH: EnZf_SetupSlash(zf); break;
+        case ENZF_ACTION_RECOIL_FROM_BLOCKED_SLASH: EnZf_SetupRecoilFromBlockedSlash(zf); break;
+        case ENZF_ACTION_JUMP_BACK: EnZf_SetupJumpBack(zf); break;
+        case ENZF_ACTION_STUNNED: EnZf_SetupStunned(zf); break;
+        case ENZF_ACTION_SHEATHE_SWORD: EnZf_SetupSheatheSword(zf, gPlayState); break;
+        case ENZF_ACTION_HOP_AND_TAUNT: EnZf_SetupHopAndTaunt(zf); break;
+        case ENZF_ACTION_HOP_AWAY: EnZf_SetupHopAway(zf, gPlayState); break;
+        case ENZF_ACTION_DRAW_SWORD: EnZf_SetupDrawSword(zf, gPlayState); break;
+        case ENZF_ACTION_DAMAGED: EnZf_SetupDamaged(zf); break;
+        case ENZF_ACTION_JUMP_UP: EnZf_SetupJumpUp(zf); break;
+        case ENZF_ACTION_DIE: EnZf_SetupDie(zf); break;
+        case ENZF_ACTION_CIRCLE_AROUND_PLAYER: EnZf_SetupCircleAroundPlayer(zf, 0.0f); break;
         default: break;
     }
 }
@@ -2783,7 +2886,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         EnsureEnSwDeathState(sw);
     } else if (actor->id == ACTOR_EN_WF && kind == "EnWf") {
         EnWf* wf = (EnWf*)actor;
-        wf->action = extra.value("action", wf->action);
+        s32 remoteWfAction = extra.value("action", wf->action);
+        ApplyWfAction(wf, remoteWfAction);
+        wf->action = remoteWfAction;
         wf->actionTimer = extra.value("actionTimer", wf->actionTimer);
         wf->runSpeed = extra.value("runSpeed", wf->runSpeed);
         wf->slashStatus = extra.value("slashStatus", wf->slashStatus);
@@ -2794,7 +2899,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplySkelAnimeState(extra, &wf->skelAnime);
     } else if (actor->id == ACTOR_EN_ZF && kind == "EnZf") {
         EnZf* zf = (EnZf*)actor;
-        zf->action = extra.value("action", zf->action);
+        s32 remoteZfAction = extra.value("action", zf->action);
+        ApplyZfAction(zf, remoteZfAction);
+        zf->action = remoteZfAction;
         zf->hopAnimIndex = extra.value("hopAnimIndex", zf->hopAnimIndex);
         zf->headRot = extra.value("headRot", zf->headRot);
         zf->headRotTemp = extra.value("headRotTemp", zf->headRotTemp);
@@ -2843,7 +2950,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplySkelAnimeState(extra, &bb->skelAnime);
     } else if (actor->id == ACTOR_EN_TITE && kind == "EnTite") {
         EnTite* tite = (EnTite*)actor;
-        tite->action = extra.value("action", tite->action);
+        s32 remoteTiteAction = extra.value("action", (s32)tite->action);
+        ApplyTiteAction(tite, remoteTiteAction);
+        tite->action = (u8)remoteTiteAction;
         tite->flipState = extra.value("flipState", tite->flipState);
         tite->actionVar1 = extra.value("actionVar1", tite->actionVar1);
         tite->actionVar2 = extra.value("actionVar2", tite->actionVar2);

@@ -1125,19 +1125,21 @@ void Anchor::ProcessActorBuffers() {
             continue;
         }
 
-        // Generic death animation deferral: when the kill arrives before the health=0
-        // snapshot could trigger the enemy's native death sequence, the replica would
-        // just vanish. If the enemy still has ACTOR_FLAG_ATTENTION_ENABLED (cleared by
-        // nearly every enemy at the start of its death), the death hasn't triggered yet.
-        // Apply the extra state (syncs the death actionFunc + animation), initialize any
-        // BodyBreak the enemy needs, and defer the kill so the death animation plays.
-        if (!HasEnemySyncAuthority() && actor->colChkInfo.health == 0 &&
-            (actor->flags & ACTOR_FLAG_ATTENTION_ENABLED)) {
-            if (enemyExtraStates.contains(networkId)) {
-                ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
-            }
-            EnsureEnemyDeathSetup(actor, gPlayState);
+        // Death animation deferral: when an enemy is killed via the network (either a
+        // replica-initiated kill reaching the authority, or a KillEnemy arriving at a
+        // replica), the raw health=0 + Actor_Kill path skips the enemy's native death
+        // animation entirely. Defer the kill for up to 60 frames while
+        // EnsureEnemyDeathSetup triggers the enemy's death state. This applies to BOTH
+        // authority and replica: the authority needs it for replica-initiated kills, and
+        // replicas need it for authority-initiated kills.
+        if (actor->colChkInfo.health == 0) {
             u32& frames = deathDeferralFrames[networkId];
+            if (frames == 0) {
+                if (enemyExtraStates.contains(networkId)) {
+                    ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
+                }
+                EnsureEnemyDeathSetup(actor, gPlayState);
+            }
             if (frames < 60) {
                 frames++;
                 if (!EnemyKillBufferContains(deferredKillBuffer, networkId)) {

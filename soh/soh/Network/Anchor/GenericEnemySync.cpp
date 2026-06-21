@@ -52,6 +52,9 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Po_Sisters/z_en_po_sisters.h"
 #include "src/overlays/actors/ovl_En_Poh/z_en_poh.h"
 #include "src/overlays/actors/ovl_En_Karebaba/z_en_karebaba.h"
+#include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#include "src/overlays/actors/ovl_En_Wf/z_en_wf.h"
+#include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 #include "src/overlays/actors/ovl_En_Brob/z_en_brob.h"
 #include "src/overlays/actors/ovl_En_Reeba/z_en_reeba.h"
 #include "src/overlays/actors/ovl_Boss_Va/z_boss_va.h"
@@ -64,6 +67,13 @@ extern "C" {
 #include "src/overlays/actors/ovl_Boss_Ganon2/z_boss_ganon2.h"
 #undef this
 extern PlayState* gPlayState;
+
+void func_80AFD7B4(EnSkb* thisx, PlayState* play);
+void EnDekubaba_SetupShrinkDie(EnDekubaba* thisx);
+void EnWf_SetupDie(EnWf* thisx);
+void EnZf_SetupDie(EnZf* thisx);
+void EnTite_SetupDeathCry(EnTite* thisx);
+void EnBb_SetupDeath(EnBb* thisx, PlayState* play);
 }
 
 extern void AddSkelAnimeState(nlohmann::json& extra, SkelAnime* skelAnime);
@@ -258,9 +268,9 @@ void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
     switch (actor->id) {
         case ACTOR_EN_SKB: {
             EnSkb* skb = (EnSkb*)actor;
-            BodyBreak_Alloc(&skb->bodyBreak, 18, play);
-            skb->breakFlags |= 4;
-            skb->actionState = 1;
+            if (skb->actionState != 1) {
+                func_80AFD7B4(skb, play);
+            }
             break;
         }
         case ACTOR_EN_TEST: {
@@ -270,18 +280,45 @@ void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
         }
         case ACTOR_EN_TITE: {
             EnTite* tite = (EnTite*)actor;
-            BodyBreak_Alloc(&tite->bodyBreak, 24, play);
+            if (tite->action != 0) { // TEKTITE_DEATH_CRY
+                BodyBreak_Alloc(&tite->bodyBreak, 24, play);
+                EnTite_SetupDeathCry(tite);
+            }
             break;
         }
         case ACTOR_EN_BB: {
             EnBb* bb = (EnBb*)actor;
-            BodyBreak_Alloc(&bb->bodyBreak, 12, play);
+            if (bb->action != 1) { // BB_KILL
+                BodyBreak_Alloc(&bb->bodyBreak, 12, play);
+                EnBb_SetupDeath(bb, play);
+            }
             break;
         }
         case ACTOR_EN_SB: {
             EnSb* sb = (EnSb*)actor;
             BodyBreak_Alloc(&sb->bodyBreak, 8, play);
             sb->isDead = true;
+            break;
+        }
+        case ACTOR_EN_DEKUBABA: {
+            EnDekubaba* dekubaba = (EnDekubaba*)actor;
+            if (dekubaba->collider.base.acFlags & AC_ON) {
+                EnDekubaba_SetupShrinkDie(dekubaba);
+            }
+            break;
+        }
+        case ACTOR_EN_WF: {
+            EnWf* wf = (EnWf*)actor;
+            if (wf->action != WOLFOS_ACTION_DIE) {
+                EnWf_SetupDie(wf);
+            }
+            break;
+        }
+        case ACTOR_EN_ZF: {
+            EnZf* zf = (EnZf*)actor;
+            if (zf->action != ENZF_ACTION_DIE) {
+                EnZf_SetupDie(zf);
+            }
             break;
         }
         default:
