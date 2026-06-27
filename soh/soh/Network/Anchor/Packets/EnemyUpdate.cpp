@@ -1695,6 +1695,16 @@ static void EnsureEnSwDeathState(EnSw* sw) {
     sw->actionFunc = func_80B0DB00;
 }
 
+static bool IsCarryableActor(Actor* actor) {
+    return actor->id == ACTOR_EN_NIW || actor->id == ACTOR_OBJ_TSUBO ||
+           actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF ||
+           actor->id == ACTOR_EN_BOM;
+}
+
+static bool IsHeldByLocalPlayer(Actor* actor) {
+    return actor->parent != nullptr && actor->parent != actor;
+}
+
 bool ShouldReportEnemyExtraState(Actor* actor) {
     if (actor == nullptr) {
         return false;
@@ -1758,9 +1768,8 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
         return torch->litTimer > 0;
     }
 
-    if (actor->id == ACTOR_EN_NIW) {
-        // Only report when a real player (not self-reference) is holding the cucco
-        return actor->parent != nullptr && actor->parent != actor;
+    if (IsCarryableActor(actor)) {
+        return IsHeldByLocalPlayer(actor);
     }
 
     if (IsPuzzleActorActive(actor)) {
@@ -1797,11 +1806,8 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
         return torch->litTimer > 0 && authorityLitTimer <= 0;
     }
 
-    if (actor->id == ACTOR_EN_NIW) {
-        // Preserve local state when the LOCAL player is holding the cucco (parent is a real
-        // player, not the self-reference set by authority sync). This prevents the authority
-        // from yanking the cucco away from the local player's hands.
-        return actor->parent != nullptr && actor->parent != actor;
+    if (IsCarryableActor(actor)) {
+        return IsHeldByLocalPlayer(actor);
     }
 
     if (actor->id == ACTOR_EN_NUTSBALL) {
@@ -2469,7 +2475,6 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
         }
         case ACTOR_EN_NIW: {
             extra["kind"] = "EnNiw";
-            extra["niwHeld"] = actor->parent != nullptr;
             break;
         }
         case ACTOR_EN_VM: {
@@ -2640,6 +2645,15 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
 
     if (extra.is_object() && !extra.value("kind", std::string("")).empty()) {
         extra["reportActive"] = ShouldReportEnemyExtraState(actor);
+    }
+
+    // Generic carryable held state — applies to cuccos, pots, crates, bombs, bomb flowers.
+    // Synced as a boolean so replicas know when a remote player is holding the actor.
+    if (IsCarryableActor(actor)) {
+        if (!extra.is_object()) {
+            extra = nlohmann::json::object();
+        }
+        extra["held"] = IsHeldByLocalPlayer(actor);
     }
 
     return extra;
@@ -3426,13 +3440,6 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         if (remoteLitTimer > torch->litTimer) {
             torch->litTimer = remoteLitTimer;
         }
-    } else if (actor->id == ACTOR_EN_NIW && kind == "EnNiw") {
-        bool remoteHeld = extra.value("niwHeld", false);
-        if (remoteHeld && actor->parent == nullptr) {
-            actor->parent = actor;
-        } else if (!remoteHeld && actor->parent == actor) {
-            actor->parent = nullptr;
-        }
     } else if (actor->id == ACTOR_EN_VM && kind == "EnVm") {
         EnVm* vm = (EnVm*)actor;
         s32 remoteState = extra.value("vmState", (s32)-1);
@@ -3547,6 +3554,18 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         objects->cameraSetting = extra.value("cameraSetting", objects->cameraSetting);
     } else if (kind == "Generic") {
         ApplyGenericEnemyState(actor, extra);
+    }
+
+    // Generic carryable held state — applies to cuccos, pots, crates, bombs, bomb flowers.
+    // Sets parent to self-reference when held by a remote player so the actor's idle action
+    // detects Actor_HasParent and transitions to the held state locally.
+    if (IsCarryableActor(actor)) {
+        bool remoteHeld = extra.value("held", false);
+        if (remoteHeld && actor->parent == nullptr) {
+            actor->parent = actor;
+        } else if (!remoteHeld && actor->parent == actor) {
+            actor->parent = nullptr;
+        }
     }
 }
 
