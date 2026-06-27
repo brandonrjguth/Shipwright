@@ -573,6 +573,8 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_OBJ_TSUBO ||         // Pots
            actorId == ACTOR_OBJ_KIBAKO ||        // Small wooden crates
            actorId == ACTOR_EN_DNS ||            // Business Scrub (Dodongo's Cavern)
+           actorId == ACTOR_EN_BOMBF ||          // Bomb flowers (pick/throw sync)
+           actorId == ACTOR_EN_BOM ||            // Bombs (carried/thrown/explosion sync)
            // NPCs (position sync)
            actorId == ACTOR_EN_NIW ||            // Cuccos
            actorId == ACTOR_EN_HEISHI1 ||        // Courtyard guards

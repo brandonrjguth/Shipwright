@@ -428,6 +428,14 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
         } else if (!remoteHeld && target->parent == target) {
             target->parent = nullptr;
         }
+        // Apply reported position so the authority tracks the remote holder's position.
+        // Without this, the cucco stays at its original spot on the authority and all
+        // other replicas see it stuck in place instead of following the holding player.
+        if (remoteHeld) {
+            target->world.pos.x = payload.value("posX", target->world.pos.x);
+            target->world.pos.y = payload.value("posY", target->world.pos.y);
+            target->world.pos.z = payload.value("posZ", target->world.pos.z);
+        }
         return;
     }
 

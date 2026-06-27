@@ -416,6 +416,13 @@ void Anchor::RegisterHooks() {
         vm->beamRot.z = extra.value("beamRotZ", vm->beamRot.z);
         vm->beamTexScroll = extra.value("beamTexScroll", vm->beamTexScroll);
         vm->headRotY = extra.value("headRotY", vm->headRotY);
+        // Override timer to prevent the Attack action from exiting via timer == 0.
+        // The local Attack may have decremented it, but the authority's value keeps
+        // the attack alive on replicas until the authority transitions to Wait.
+        s32 remoteTimer = extra.value("vmTimer", (s32)-1);
+        if (remoteTimer > 0 && vm->unk_21C == 1) {
+            vm->timer = remoteTimer;
+        }
     });
 
     COND_HOOK(OnPlayerSfx, isConnected, [&](u16 sfxId) { SendPacket_PlayerSfx(sfxId); });
@@ -560,6 +567,24 @@ void Anchor::RegisterHooks() {
             if (!IsTransientProjectileActor(actor->id, actor->params) && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&
                 !hasPendingLocalExtraState) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
+            }
+            // After applying authority state, check if the local player is closer than the
+            // synced distance. This allows enemies (e.g. Beamos) to detect and target the
+            // local player on replicas, not just the authority's nearest player.
+            if ((actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) &&
+                !hasPendingLocalExtraState) {
+                Player* player = GET_PLAYER(gPlayState);
+                f32 dx = player->actor.world.pos.x - actor->world.pos.x;
+                f32 dz = player->actor.world.pos.z - actor->world.pos.z;
+                f32 xzDist = sqrtf(SQ(dx) + SQ(dz));
+                f32 yDist = player->actor.world.pos.y - actor->world.pos.y;
+                f32 xyzDistSq = SQ(xzDist) + SQ(yDist);
+                if (xyzDistSq < actor->xyzDistToPlayerSq) {
+                    actor->xzDistToPlayer = xzDist;
+                    actor->yDistToPlayer = yDist;
+                    actor->xyzDistToPlayerSq = xyzDistSq;
+                    actor->yawTowardsPlayer = Math_Vec3f_Yaw(&actor->world.pos, &player->actor.world.pos);
+                }
             }
             return;
         }

@@ -1759,7 +1759,8 @@ bool ShouldReportEnemyExtraState(Actor* actor) {
     }
 
     if (actor->id == ACTOR_EN_NIW) {
-        return actor->parent != nullptr;
+        // Only report when a real player (not self-reference) is holding the cucco
+        return actor->parent != nullptr && actor->parent != actor;
     }
 
     if (IsPuzzleActorActive(actor)) {
@@ -1797,7 +1798,10 @@ bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityEx
     }
 
     if (actor->id == ACTOR_EN_NIW) {
-        return actor->parent != nullptr && !authorityExtra.value("niwHeld", false);
+        // Preserve local state when the LOCAL player is holding the cucco (parent is a real
+        // player, not the self-reference set by authority sync). This prevents the authority
+        // from yanking the cucco away from the local player's hands.
+        return actor->parent != nullptr && actor->parent != actor;
     }
 
     if (actor->id == ACTOR_EN_NUTSBALL) {
@@ -2479,6 +2483,7 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
             extra["beamRotZ"] = vm->beamRot.z;
             extra["beamTexScroll"] = vm->beamTexScroll;
             extra["headRotY"] = vm->headRotY;
+            extra["vmTimer"] = vm->timer;
             break;
         }
         case ACTOR_OBJ_HSBLOCK: {
