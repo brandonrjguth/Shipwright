@@ -553,6 +553,9 @@ void Anchor::RegisterHooks() {
             // the local simulation extrapolates with the synced action/velocity instead of being dragged back to a
             // stale position, which is what caused fast actors (e.g. Gohma) to rubber-band and jitter.
             if (!ConsumeFreshEnemyAuthorityData(networkId)) {
+                // Even without fresh data, ensure enemies can detect the local player.
+                // The engine already set xzDistToPlayer from GET_PLAYER, so on non-fresh
+                // frames the distance is already correct. Nothing extra needed here.
                 return;
             }
             bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&

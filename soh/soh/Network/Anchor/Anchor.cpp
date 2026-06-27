@@ -582,14 +582,35 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_EN_MM ||             // Running man (child, runs)
            actorId == ACTOR_EN_MM2 ||            // Running man (adult, runs)
            actorId == ACTOR_EN_NIW_GIRL ||       // Girl chasing cucco (moves)
+           actorId == ACTOR_EN_NIW_LADY ||       // Cucco Lady (walks)
            actorId == ACTOR_EN_GO2 ||            // Gorons (rolling)
            actorId == ACTOR_EN_ZO ||             // Zoras (swim)
            actorId == ACTOR_EN_KO ||             // Kokiri children (wander)
            actorId == ACTOR_EN_HY ||             // Market NPCs (bag guy, townspeople)
+           actorId == ACTOR_EN_HEISHI1 ||        // Courtyard guards (patrol)
            actorId == ACTOR_EN_HEISHI2 ||        // Kakariko guards (patrol)
+           actorId == ACTOR_EN_HEISHI3 ||        // Gate guards
+           actorId == ACTOR_EN_HEISHI4 ||        // Hyrule guards
            actorId == ACTOR_EN_DAIKU_KAKARIKO || // Carpenters (Kakariko)
+           actorId == ACTOR_EN_DAIKU ||          // Carpenters (tent)
+           actorId == ACTOR_EN_TORYO ||          // Boss Carpenter
            actorId == ACTOR_EN_ANI ||            // Kakariko rooftop/scaffolding man
-           actorId == ACTOR_EN_GE2;              // Patrolling Gerudo
+           actorId == ACTOR_EN_CS ||             // Graveyard Boy
+           actorId == ACTOR_EN_HS ||             // Carpenter's Son (Grog)
+           actorId == ACTOR_EN_HS2 ||            // Carpenter's Son (child era)
+           actorId == ACTOR_EN_MA1 ||            // Malon (child)
+           actorId == ACTOR_EN_MA2 ||            // Malon (adult, ranch)
+           actorId == ACTOR_EN_MA3 ||            // Malon (adult, Lon Lon)
+           actorId == ACTOR_EN_IN ||             // Ingo
+           actorId == ACTOR_EN_TA ||             // Talon
+           actorId == ACTOR_EN_MU ||             // Haggling Townspeople
+           actorId == ACTOR_EN_TG ||             // Entwined Lovers
+           actorId == ACTOR_EN_GUEST ||          // Happy Mask Shop Customer
+           actorId == ACTOR_EN_GE1 ||            // Gerudo (white clothed)
+           actorId == ACTOR_EN_GE2 ||            // Patrolling Gerudo
+           actorId == ACTOR_EN_GE3 ||            // Gerudo Fortress Leader
+           actorId == ACTOR_EN_SKJ ||            // Skullkid
+           actorId == ACTOR_EN_FR;               // Frogs
 }
 
 bool Anchor::IsTransientProjectileActor(s16 actorId, s16 params) {
@@ -850,7 +871,10 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
 
     float distSq = AnchorVec3fDistSq(actor->world.pos, state.pos);
     float correction = 0.3f;
-    if (IsTransientProjectileActor(actor->id, actor->params) || immediate || distSq > 250000.0f) {
+    // Held carryable actors (parent != nullptr, includes self-reference) need exact
+    // positioning so the object snaps to the holder's hand instead of lagging behind.
+    if (IsTransientProjectileActor(actor->id, actor->params) || immediate || distSq > 250000.0f ||
+        actor->parent != nullptr) {
         correction = 1.0f;
     } else if (distSq > 40000.0f) {
         correction = 0.8f;
@@ -1194,17 +1218,33 @@ void Anchor::ProcessActorBuffers() {
     }
     enemyKillBuffer.insert(enemyKillBuffer.end(), deferredKillBuffer.begin(), deferredKillBuffer.end());
 
-    while (!enemyPruneBuffer.empty()) {
-        auto [actor, sceneNum, roomNum] = enemyPruneBuffer.front();
-        enemyPruneBuffer.erase(enemyPruneBuffer.begin());
-        if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
-            continue;
-        }
-        if (HasEnemySyncAuthority() || !AnchorIsActorInCurrentLists(actor) || actor->update == nullptr) {
-            continue;
-        }
-        if (IsEnemySyncActor(actor) && GetEnemyNetworkId(actor) == 0) {
-            Actor_Kill(actor);
+    // Prune buffer: kill synced actors that the authority doesn't know about (no network ID).
+    // A grace period after room entry prevents newly-loaded actors from being killed before
+    // the SendRoomEnemies matching has had time to assign their network IDs.
+    static s32 pruneGraceFrames = 0;
+    static s16 lastPruneScene = -1;
+    static s8 lastPruneRoom = -1;
+    if (gPlayState->sceneNum != lastPruneScene || gPlayState->roomCtx.curRoom.num != lastPruneRoom) {
+        lastPruneScene = gPlayState->sceneNum;
+        lastPruneRoom = gPlayState->roomCtx.curRoom.num;
+        pruneGraceFrames = 180; // 3 seconds at 60 FPS
+    }
+    if (pruneGraceFrames > 0) {
+        pruneGraceFrames--;
+        enemyPruneBuffer.clear();
+    } else {
+        while (!enemyPruneBuffer.empty()) {
+            auto [actor, sceneNum, roomNum] = enemyPruneBuffer.front();
+            enemyPruneBuffer.erase(enemyPruneBuffer.begin());
+            if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
+                continue;
+            }
+            if (HasEnemySyncAuthority() || !AnchorIsActorInCurrentLists(actor) || actor->update == nullptr) {
+                continue;
+            }
+            if (IsEnemySyncActor(actor) && GetEnemyNetworkId(actor) == 0) {
+                Actor_Kill(actor);
+            }
         }
     }
 
