@@ -59,6 +59,8 @@ typedef struct {
     f32 unk_85C;
     s16 unk_862;
     s8 actionVar1;
+    s8 meleeWeaponState;
+    s8 meleeWeaponAnimation;
     u8 ocarinaNote;
     f32 ocarinaModulator;
     s8 ocarinaBend;

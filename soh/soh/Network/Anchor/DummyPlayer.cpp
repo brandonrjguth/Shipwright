@@ -173,6 +173,8 @@ void DummyPlayer_Update(Actor* actor, PlayState* play) {
     player->unk_862 = client.unk_862;
     player->unk_85C = client.unk_85C;
     player->av1.actionVar1 = client.actionVar1;
+    player->meleeWeaponState = client.meleeWeaponState;
+    player->meleeWeaponAnimation = client.meleeWeaponAnimation;
 
     // Apply animation movement (Copied from Player_ApplyAnimMovementScaledByAge)
     Vec3f diff;
