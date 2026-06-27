@@ -269,7 +269,8 @@ static bool ApplyReportedBossGomaState(Actor* target, nlohmann::json payload) {
 
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
     nlohmann::json extraState = GetEnemyExtraState(actor);
-    if (!extraState.is_object() || extraState.value("kind", std::string("")).empty()) {
+    if (!extraState.is_object() ||
+        (extraState.value("kind", std::string("")).empty() && !extraState.value("held", false))) {
         return;
     }
 
@@ -430,13 +431,21 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
         } else if (!remoteHeld && target->parent == target) {
             target->parent = nullptr;
         }
-        // Apply reported position so the authority tracks the remote holder's position.
-        // Without this, the carried actor stays at its original spot on the authority and
-        // all other replicas see it stuck instead of following the holding player.
         if (remoteHeld) {
+            // Apply reported position so the authority tracks the remote holder's position.
             target->world.pos.x = payload.value("posX", target->world.pos.x);
             target->world.pos.y = payload.value("posY", target->world.pos.y);
             target->world.pos.z = payload.value("posZ", target->world.pos.z);
+        } else {
+            // Actor was released/thrown — apply throw velocity so it flies correctly
+            // on the authority and propagates to all other replicas.
+            target->world.pos.x = payload.value("posX", target->world.pos.x);
+            target->world.pos.y = payload.value("posY", target->world.pos.y);
+            target->world.pos.z = payload.value("posZ", target->world.pos.z);
+            target->velocity.x = payload.value("velocityX", target->velocity.x);
+            target->velocity.y = payload.value("velocityY", target->velocity.y);
+            target->velocity.z = payload.value("velocityZ", target->velocity.z);
+            target->speedXZ = payload.value("speedXZ", target->speedXZ);
         }
         return;
     }

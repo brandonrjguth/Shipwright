@@ -2648,12 +2648,14 @@ nlohmann::json GetEnemyExtraState(Actor* actor) {
     }
 
     // Generic carryable held state — applies to cuccos, pots, crates, bombs, bomb flowers.
-    // Synced as a boolean so replicas know when a remote player is holding the actor.
+    // Uses parent != nullptr (includes self-reference set by authority sync) so that when
+    // the authority receives a replica's held report and sets parent=self, it broadcasts
+    // held=true to all other replicas.
     if (IsCarryableActor(actor)) {
         if (!extra.is_object()) {
             extra = nlohmann::json::object();
         }
-        extra["held"] = IsHeldByLocalPlayer(actor);
+        extra["held"] = actor->parent != nullptr;
     }
 
     return extra;

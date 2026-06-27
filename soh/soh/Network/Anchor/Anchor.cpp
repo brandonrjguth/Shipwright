@@ -1,6 +1,7 @@
 #include "Anchor.h"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
+#include <unordered_set>
 #include "soh/OTRGlobals.h"
 #include "soh/Enhancements/nametag.h"
 #include "soh/ObjectExtension/ObjectExtension.h"
@@ -575,7 +576,7 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_EN_DNS ||            // Business Scrub (Dodongo's Cavern)
            actorId == ACTOR_EN_BOMBF ||          // Bomb flowers (pick/throw sync)
            actorId == ACTOR_EN_BOM ||            // Bombs (carried/thrown/explosion sync)
-           // NPCs (position sync — only NPCs that actually move/roam/patrol)
+           // NPCs (position sync — NPCs that move/roam/patrol)
            actorId == ACTOR_EN_NIW ||            // Cuccos (wander, pickup)
            actorId == ACTOR_EN_DOG ||            // Dog (roams)
            actorId == ACTOR_EN_MM ||             // Running man (child, runs)
@@ -583,7 +584,12 @@ bool Anchor::IsEnemySyncActor(ActorCategory category, s16 actorId) {
            actorId == ACTOR_EN_NIW_GIRL ||       // Girl chasing cucco (moves)
            actorId == ACTOR_EN_GO2 ||            // Gorons (rolling)
            actorId == ACTOR_EN_ZO ||             // Zoras (swim)
-           actorId == ACTOR_EN_KO;               // Kokiri children (wander)
+           actorId == ACTOR_EN_KO ||             // Kokiri children (wander)
+           actorId == ACTOR_EN_HY ||             // Market NPCs (bag guy, townspeople)
+           actorId == ACTOR_EN_HEISHI2 ||        // Kakariko guards (patrol)
+           actorId == ACTOR_EN_DAIKU_KAKARIKO || // Carpenters (Kakariko)
+           actorId == ACTOR_EN_ANI ||            // Kakariko rooftop/scaffolding man
+           actorId == ACTOR_EN_GE2;              // Patrolling Gerudo
 }
 
 bool Anchor::IsTransientProjectileActor(s16 actorId, s16 params) {
@@ -1329,6 +1335,27 @@ void Anchor::DetectEnemyDamage() {
                 }
             } else if (!HasEnemySyncAuthority() && currentHealth == lastHealth &&
                        ShouldPreserveLocalEnemyExtraState(act, authorityExtra) && ShouldReportEnemyExtraState(act)) {
+                SendPacket_ReportEnemyDamage(act, currentHealth);
+            }
+        }
+
+        // Detect carryable actor release: when the local player was holding an actor
+        // (parent was a real player) but has released it (parent is now null), send a
+        // report so the authority knows the actor is no longer held. Without this, the
+        // authority keeps broadcasting held=true, causing replicas to re-set parent=self
+        // on the thrown actor and yanking it back to the held state.
+        if (!HasEnemySyncAuthority()) {
+            static std::unordered_set<Actor*> previouslyHeldActors;
+            bool isCarryable = act->id == ACTOR_EN_NIW || act->id == ACTOR_OBJ_TSUBO ||
+                               act->id == ACTOR_OBJ_KIBAKO || act->id == ACTOR_EN_BOMBF ||
+                               act->id == ACTOR_EN_BOM;
+            bool isHeld = isCarryable && act->parent != nullptr && act->parent != act;
+            bool wasHeld = previouslyHeldActors.contains(act);
+
+            if (isHeld) {
+                previouslyHeldActors.insert(act);
+            } else if (wasHeld && !isHeld) {
+                previouslyHeldActors.erase(act);
                 SendPacket_ReportEnemyDamage(act, currentHealth);
             }
         }
