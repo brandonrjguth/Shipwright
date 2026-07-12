@@ -1,6 +1,8 @@
 #include "Network.h"
 #include <spdlog/spdlog.h>
 #include <libultraship/libultraship.h>
+#include <chrono>
+#include <cstring>
 
 // MARK: - Public
 
@@ -12,6 +14,7 @@ void Network::Enable(const char* host, uint16_t port) {
 
     if (SDLNet_ResolveHost(&networkAddress, host, port) == -1) {
         SPDLOG_ERROR("[Network] SDLNet_ResolveHost: {}", SDLNet_GetError());
+        return;
     }
 
     isEnabled = true;
@@ -31,7 +34,9 @@ void Network::Disable() {
     }
 
     isEnabled = false;
-    receiveThread.join();
+    if (receiveThread.joinable()) {
+        receiveThread.join();
+    }
 }
 
 void Network::OnIncomingData(char payload[512]) {
@@ -51,8 +56,23 @@ void Network::ProcessOutgoingPackets() {
 
 void Network::SendDataToRemote(const char* payload) {
 #ifdef ENABLE_REMOTE_CONTROL
-    SPDLOG_DEBUG("[Network] Sending data: {}", payload);
-    SDLNet_TCP_Send(networkSocket, payload, strlen(payload) + 1);
+    if (networkSocket == nullptr || payload == nullptr) {
+        return;
+    }
+
+    size_t bytesRemaining = strlen(payload) + 1;
+    const char* cursor = payload;
+    SPDLOG_TRACE("[Network] Sending {} bytes", bytesRemaining);
+    while (bytesRemaining > 0 && isConnected && isEnabled) {
+        int sent = SDLNet_TCP_Send(networkSocket, cursor, static_cast<int>(bytesRemaining));
+        if (sent <= 0) {
+            SPDLOG_ERROR("[Network] SDLNet_TCP_Send: {}", SDLNet_GetError());
+            socketError = true;
+            return;
+        }
+        cursor += sent;
+        bytesRemaining -= static_cast<size_t>(sent);
+    }
 #endif
 }
 
@@ -64,6 +84,8 @@ void Network::SendJsonToRemote(nlohmann::json payload) {
 
 void Network::ReceiveFromServer() {
 #ifdef ENABLE_REMOTE_CONTROL
+    constexpr size_t MAX_NETWORK_FRAME_SIZE = 1024 * 1024;
+
     while (isEnabled) {
         while (!isConnected && isEnabled) {
             SPDLOG_TRACE("[Network] Attempting to make connection to server...");
@@ -71,23 +93,28 @@ void Network::ReceiveFromServer() {
 
             if (networkSocket) {
                 isConnected = true;
+                socketError = false;
                 receivedData.clear();
                 SPDLOG_INFO("[Network] Connection to server established!");
 
                 OnConnected();
                 break;
             }
+
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
         SDLNet_SocketSet socketSet = SDLNet_AllocSocketSet(1);
-        if (networkSocket) {
-            SDLNet_TCP_AddSocket(socketSet, networkSocket);
+        if (socketSet == nullptr) {
+            SPDLOG_ERROR("[Network] SDLNet_AllocSocketSet: {}", SDLNet_GetError());
+        } else if (networkSocket && SDLNet_TCP_AddSocket(socketSet, networkSocket) == -1) {
+            SPDLOG_ERROR("[Network] SDLNet_TCP_AddSocket: {}", SDLNet_GetError());
         }
 
         // Listen to socket messages
-        while (isConnected && networkSocket && isEnabled) {
+        while (isConnected && networkSocket && isEnabled && !socketError) {
             // we check first if socket has data, to not block in the TCP_Recv
-            int socketsReady = SDLNet_CheckSockets(socketSet, 0);
+            int socketsReady = socketSet != nullptr ? SDLNet_CheckSockets(socketSet, 10) : 0;
 
             if (socketsReady == -1) {
                 SPDLOG_ERROR("[Network] SDLNet_CheckSockets: {}", SDLNet_GetError());
@@ -99,6 +126,7 @@ void Network::ReceiveFromServer() {
 
             if (socketsReady == 0) {
                 // No incoming data
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
 
@@ -113,10 +141,21 @@ void Network::ReceiveFromServer() {
             HandleRemoteData(remoteDataReceived);
 
             receivedData.append(remoteDataReceived, len);
+            if (receivedData.size() > MAX_NETWORK_FRAME_SIZE && receivedData.find('\0') == std::string::npos) {
+                SPDLOG_ERROR("[Network] Incoming frame exceeded {} bytes", MAX_NETWORK_FRAME_SIZE);
+                socketError = true;
+                break;
+            }
 
             // Proess all complete packets
             size_t delimiterPos = receivedData.find('\0');
             while (delimiterPos != std::string::npos) {
+                if (delimiterPos > MAX_NETWORK_FRAME_SIZE) {
+                    SPDLOG_ERROR("[Network] Incoming frame exceeded {} bytes", MAX_NETWORK_FRAME_SIZE);
+                    receivedData.clear();
+                    socketError = true;
+                    break;
+                }
                 // Extract the complete packet until the delimiter
                 std::string packet = receivedData.substr(0, delimiterPos);
                 // Remove the packet (including the delimiter) from the received data
@@ -148,7 +187,7 @@ void Network::HandleRemoteData(char payload[512]) {
 }
 
 void Network::HandleRemoteJson(std::string payload) {
-    SPDLOG_DEBUG("[Network] Received json: {}", payload);
+    SPDLOG_TRACE("[Network] Received {} bytes of JSON", payload.size());
     nlohmann::json jsonPayload;
     try {
         jsonPayload = nlohmann::json::parse(payload);

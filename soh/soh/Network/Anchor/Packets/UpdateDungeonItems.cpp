@@ -1,6 +1,7 @@
 #include "soh/Network/Anchor/Anchor.h"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
+#include <iterator>
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/OTRGlobals.h"
 
@@ -13,6 +14,9 @@
 
 void Anchor::SendPacket_UpdateDungeonItems() {
     if (!IsSaveLoaded() || !roomState.syncItemsAndFlags) {
+        return;
+    }
+    if (gSaveContext.mapIndex >= std::size(gSaveContext.inventory.dungeonItems)) {
         return;
     }
 
@@ -33,6 +37,10 @@ void Anchor::HandlePacket_UpdateDungeonItems(nlohmann::json payload) {
     }
 
     u16 mapIndex = payload.at("mapIndex").get<u16>();
+    if (mapIndex >= std::size(gSaveContext.inventory.dungeonItems) ||
+        mapIndex >= std::size(gSaveContext.inventory.dungeonKeys)) {
+        return;
+    }
     gSaveContext.inventory.dungeonItems[mapIndex] = payload.at("dungeonItems").get<u8>();
     s8 remoteDungeonKeys = payload.at("dungeonKeys").get<s8>();
     // Take the minimum to prevent key dupe from race conditions: if both players

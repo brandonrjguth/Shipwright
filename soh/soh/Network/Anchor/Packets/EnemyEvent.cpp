@@ -108,9 +108,10 @@ void Anchor::SendPacket_HintnutsDialogue(Actor* actor, std::string phase) {
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = authorityClientId;
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["enemySessionId"] = enemySessionId;
     payload["networkId"] = networkId;
     payload["actorId"] = actor->id;
-    payload["actorParams"] = actor->params;
+    payload["actorParams"] = GetEnemySpawnParams(actor);
     payload["category"] = actor->category;
     payload["posX"] = actor->world.pos.x;
     payload["posY"] = actor->world.pos.y;
@@ -119,6 +120,10 @@ void Anchor::SendPacket_HintnutsDialogue(Actor* actor, std::string phase) {
     payload["textId"] = hintnuts->textIdCopy != 0 ? hintnuts->textIdCopy : actor->textId;
     if (authorityClientId != ownClientId) {
         payload["targetClientId"] = authorityClientId;
+        payload["sourceSessionId"] = enemySessionId;
+        payload["authoritySessionId"] = clients.contains(authorityClientId)
+                                            ? clients[authorityClientId].enemySessionId
+                                            : 0;
     }
     payload["quiet"] = true;
 
@@ -153,7 +158,15 @@ void Anchor::HandlePacket_HintnutsDialogue(nlohmann::json payload) {
         if (!client.online || !client.isSaveLoaded || client.sceneNum != sceneNum || client.curRoomNum != roomNum) {
             return;
         }
+        if (payload.value("sourceSessionId", (uint64_t)0) != client.enemySessionId ||
+            payload.value("authoritySessionId", (uint64_t)0) != enemySessionId ||
+            payload.value("authorityGeneration", (uint32_t)0) !=
+                GetEnemyRoomAuthorityGeneration(sceneNum, roomNum)) {
+            return;
+        }
     } else if (!fromAuthority) {
+        return;
+    } else if (!IsValidEnemyAuthorityPacket(payload)) {
         return;
     }
 
@@ -191,6 +204,9 @@ void Anchor::HandlePacket_HintnutsDialogue(nlohmann::json payload) {
         forward.erase("targetClientId");
         forward["authorityClientId"] = ownClientId;
         forward["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum);
+        forward["enemySessionId"] = enemySessionId;
+        forward.erase("sourceSessionId");
+        forward.erase("authoritySessionId");
         forward["quiet"] = true;
         SendJsonToRemote(forward);
     }
@@ -211,6 +227,7 @@ void Anchor::SendPacket_EnemyEvent(Actor* actor, std::string eventType, nlohmann
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = ownClientId;
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["enemySessionId"] = enemySessionId;
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["posX"] = actor->world.pos.x;

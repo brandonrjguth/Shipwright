@@ -239,6 +239,11 @@ void Anchor::RegisterHooks() {
         }
     });
 
+    COND_HOOK(ShouldActorInit, isConnected, [&](void* actorRef, bool* should) {
+        Actor* actor = static_cast<Actor*>(actorRef);
+        CaptureEnemySpawnParams(actor);
+    });
+
     auto suppressReplicaEnemyDrop = [&](void* actorRef, bool* should) {
         Actor* actor = (Actor*)actorRef;
         if (!IsRoomStable() || spawningNetworkedEnemyDropId != 0 || HasEnemySyncAuthority()) {
@@ -377,7 +382,7 @@ void Anchor::RegisterHooks() {
              actor->id == ACTOR_EN_SHOPNUTS || actor->id == ACTOR_EN_NUTSBALL || actor->id == ACTOR_EN_GOMA ||
              actor->id == ACTOR_BOSS_GOMA || actor->id == ACTOR_EN_FHG_FIRE || actor->id == ACTOR_BOSS_GANON) &&
             hasPendingLocalExtraState) {
-            SendPacket_ReportEnemyDamage(actor, GetReportedEnemyHealth(actor));
+            SendPacket_ReportEnemyState(actor);
         }
     });
 
@@ -517,7 +522,28 @@ void Anchor::RegisterHooks() {
         if (HasEnemySyncAuthority()) {
             SendPacket_KillEnemy(actor);
         } else {
-            SendPacket_ReportEnemyDamage(actor, 0);
+            u8 health = GetReportedEnemyHealth(actor);
+            auto tracked = enemyHealthTracker.find(actor);
+            if (tracked != enemyHealthTracker.end() && health < tracked->second) {
+                ReportLocalEnemyDamage(actor, health);
+            } else if (!pendingEnemyDamageOperations.contains(networkId)) {
+                // Actor-becomes-collectible enemies can be removed after health already reached zero.
+                SendPacket_ReportEnemyDamage(actor, 0);
+            }
+        }
+    });
+
+    COND_HOOK(OnActorDestroy, isConnected, [&](void* refActor) {
+        Actor* actor = static_cast<Actor*>(refActor);
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        enemyHealthTracker.erase(actor);
+        if (networkId != 0) {
+            enemyAuthorityTargets.erase(networkId);
+            enemyExtraStates.erase(networkId);
+            freshEnemyAuthorityData.erase(networkId);
+            enemyCarryOwnership.erase(networkId);
+            enemyDeathDeferralFrames.erase(networkId);
+            previouslyHeldEnemyIds.erase(networkId);
         }
     });
 
@@ -533,6 +559,10 @@ void Anchor::RegisterHooks() {
         }
 
         if (IsEnemyMarkedDead(networkId)) {
+            QueueEnemyKill(networkId);
+            if (actor->category != ACTORCAT_ENEMY && actor->category != ACTORCAT_BOSS) {
+                *should = false;
+            }
             return;
         }
 
@@ -564,7 +594,7 @@ void Anchor::RegisterHooks() {
                 enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             bool hasPendingLocalExtraState = ShouldPreserveLocalEnemyExtraState(actor, authorityExtra);
             if (!IsTransientProjectileActor(actor->id, actor->params) && enemyAuthorityTargets.contains(networkId) &&
-                !hasPendingLocalExtraState) {
+                !hasPendingLocalDamage && !hasPendingLocalExtraState) {
                 ApplyEnemyAuthorityState(actor, enemyAuthorityTargets[networkId], false);
             }
             if (!IsTransientProjectileActor(actor->id, actor->params) && enemyExtraStates.contains(networkId) && !hasPendingLocalDamage &&

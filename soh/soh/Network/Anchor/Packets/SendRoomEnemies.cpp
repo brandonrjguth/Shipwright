@@ -1,6 +1,7 @@
 #include "soh/Network/Anchor/Anchor.h"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
+#include <cmath>
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 
 extern "C" {
@@ -24,7 +25,7 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
 
     Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
     while (currAct != nullptr) {
-        if (IsEnemySyncActor(currAct)) {
+        if (IsEnemySyncActor(currAct) && IsActorInCurrentEnemyRoom(currAct)) {
             actors.push_back(currAct);
         }
         currAct = currAct->next;
@@ -37,7 +38,7 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
     for (Actor* currAct : actors) {
         enemiesNetworkId.push_back(GetEnemyNetworkId(currAct));
         enemiesId.push_back(currAct->id);
-        enemiesParams.push_back(currAct->params);
+        enemiesParams.push_back(GetEnemySpawnParams(currAct));
         enemiesX.push_back(currAct->world.pos.x);
         enemiesY.push_back(currAct->world.pos.y);
         enemiesZ.push_back(currAct->world.pos.z);
@@ -50,10 +51,13 @@ void Anchor::SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory catego
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = ownClientId;
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["snapshotSequence"] = NextEnemySnapshotSequence(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["enemySessionId"] = enemySessionId;
     payload["category"] = category;
     payload["enemiesNetworkId"] = enemiesNetworkId;
-    payload["deadEnemiesNetworkId"] = std::vector<uint64_t>(deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].begin(),
-                                                             deadEnemyLedger[GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)].end());
+    auto& sceneTombstones = deadEnemyLedger[(uint16_t)gPlayState->sceneNum];
+    payload["deadEnemiesNetworkId"] =
+        std::vector<uint64_t>(sceneTombstones.begin(), sceneTombstones.end());
     payload["enemiesId"] = enemiesId;
     payload["enemiesParams"] = enemiesParams;
     payload["enemiesX"] = enemiesX;
@@ -73,7 +77,11 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         return;
     }
 
-    ActorCategory category = (ActorCategory)payload.at("category").get<s16>();
+    s16 rawCategory = payload.at("category").get<s16>();
+    if (rawCategory < ACTORCAT_SWITCH || rawCategory >= ACTORCAT_MAX) {
+        return;
+    }
+    ActorCategory category = (ActorCategory)rawCategory;
     s8 authorityRoomNum = payload.value("roomNum", (s8)-1);
     auto enemiesNetworkId = payload.value("enemiesNetworkId", std::vector<uint64_t>{});
     auto deadEnemiesNetworkId = payload.value("deadEnemiesNetworkId", std::vector<uint64_t>{});
@@ -83,7 +91,14 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
     auto enemiesZ = payload.at("enemiesZ").get<std::vector<float>>();
     auto enemiesParams = payload.value("enemiesParams", std::vector<s16>{});
 
-    if (!enemiesNetworkId.empty() && enemiesNetworkId.size() != enemiesId.size()) {
+    size_t enemyCount = enemiesId.size();
+    if (enemyCount > 1024 || deadEnemiesNetworkId.size() > 4096 || enemiesNetworkId.size() != enemyCount ||
+        enemiesX.size() != enemyCount ||
+        enemiesY.size() != enemyCount || enemiesZ.size() != enemyCount ||
+        (!enemiesParams.empty() && enemiesParams.size() != enemyCount)) {
+        return;
+    }
+    if (!IsNewEnemySnapshotPacket(payload)) {
         return;
     }
 
@@ -101,12 +116,19 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
     std::vector<Actor*> localActors;
     Actor* currAct = gPlayState->actorCtx.actorLists[category].head;
     while (currAct != nullptr) {
-        localActors.push_back(currAct);
+        if (IsActorInCurrentEnemyRoom(currAct)) {
+            localActors.push_back(currAct);
+        }
         currAct = currAct->next;
     }
 
     for (size_t ri = 0; ri < enemiesId.size(); ri++) {
         if (enemiesNetworkId.empty() || enemiesNetworkId[ri] == 0) {
+            continue;
+        }
+        if (enemiesId[ri] < 0 || enemiesId[ri] >= ACTOR_ID_MAX || !std::isfinite(enemiesX[ri]) ||
+            !std::isfinite(enemiesY[ri]) || !std::isfinite(enemiesZ[ri]) ||
+            IsEnemyMarkedDead(enemiesNetworkId[ri])) {
             continue;
         }
         if (IsTransientProjectileActor(enemiesId[ri], enemiesParams.empty() ? (s16)0 : enemiesParams[ri])) {
@@ -119,12 +141,15 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
         }
 
         Vec3f remotePos = { enemiesX[ri], enemiesY[ri], enemiesZ[ri] };
-        float closestDist = -1.0f;
+        float closestDist = 100000.0f;
         Actor* closestActor = nullptr;
 
         for (size_t li = 0; li < localActors.size(); li++) {
             Actor* local = localActors[li];
             if (local->id != enemiesId[ri] || !IsEnemySyncActor(local)) {
+                continue;
+            }
+            if (authorityRoomNum >= 0 && local->room >= 0 && local->room != authorityRoomNum) {
                 continue;
             }
             if (IsEnemyMarkedDead(GetEnemyNetworkId(local))) {
@@ -133,14 +158,14 @@ void Anchor::HandlePacket_SendRoomEnemies(nlohmann::json payload) {
             if (GetEnemyNetworkId(local) != 0) {
                 continue;
             }
-            if (!enemiesParams.empty() && local->params != enemiesParams[ri]) {
+            if (!enemiesParams.empty() && GetEnemySpawnParams(local) != enemiesParams[ri]) {
                 continue;
             }
             float dx = local->world.pos.x - remotePos.x;
             float dy = local->world.pos.y - remotePos.y;
             float dz = local->world.pos.z - remotePos.z;
             float distance = dx * dx + dy * dy + dz * dz;
-            if (closestDist < 0.0f || distance < closestDist) {
+            if (distance < closestDist) {
                 closestDist = distance;
                 closestActor = local;
             }

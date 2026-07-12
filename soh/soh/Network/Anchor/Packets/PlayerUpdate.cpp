@@ -2,6 +2,7 @@
 #include "soh/Network/Anchor/JsonConversions.hpp"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
+#include <cmath>
 
 extern "C" {
 #include "macros.h"
@@ -87,7 +88,12 @@ void Anchor::HandlePacket_PlayerUpdate(nlohmann::json payload) {
     if (clients.contains(clientId)) {
         auto& client = clients[clientId];
 
-        if (client.linkAge != payload.value("linkAge", (s32)LINK_AGE_ADULT)) {
+        s32 linkAge = payload.value("linkAge", (s32)LINK_AGE_ADULT);
+        if (linkAge != LINK_AGE_CHILD && linkAge != LINK_AGE_ADULT) {
+            return;
+        }
+
+        if (client.linkAge != linkAge) {
             shouldRefreshActors = true;
         }
 
@@ -95,8 +101,12 @@ void Anchor::HandlePacket_PlayerUpdate(nlohmann::json payload) {
         client.curRoomNum = payload.value("curRoomNum", (s8)-1);
         client.roomStable = payload.value("roomStable", true);
         client.entranceIndex = payload.value("entranceIndex", (s32)0);
-        client.linkAge = payload.value("linkAge", (s32)LINK_AGE_ADULT);
+        client.linkAge = linkAge;
         PosRot newPosRot = payload.value("posRot", PosRot{ 0 });
+        if (!std::isfinite(newPosRot.pos.x) || !std::isfinite(newPosRot.pos.y) ||
+            !std::isfinite(newPosRot.pos.z)) {
+            return;
+        }
         f32 dx = newPosRot.pos.x - client.posRot.pos.x;
         f32 dy = newPosRot.pos.y - client.posRot.pos.y;
         f32 dz = newPosRot.pos.z - client.posRot.pos.z;
@@ -104,6 +114,9 @@ void Anchor::HandlePacket_PlayerUpdate(nlohmann::json payload) {
         client.moveSpeed = sqrtf(dx * dx + dz * dz);
         client.posRot = newPosRot;
         std::vector<int> jointArray = payload.value("jointTable", std::vector<int>{});
+        if (jointArray.size() > 24 * 3) {
+            return;
+        }
         jointArray.resize(24 * 3); // Ensure it has enough elements, in case of missing data
         for (int i = 0; i < 24; i++) {
             client.jointTable[i].x = jointArray[i * 3];

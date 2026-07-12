@@ -3,6 +3,7 @@
 #ifdef __cplusplus
 
 #include <thread>
+#include <atomic>
 #ifdef ENABLE_REMOTE_CONTROL
 #include <SDL2/SDL_net.h>
 #endif
@@ -16,14 +17,15 @@ class Network {
 #endif
     std::thread receiveThread;
     std::string receivedData;
+    std::atomic_bool socketError = false;
 
     void ReceiveFromServer();
     void HandleRemoteData(char payload[512]);
     void HandleRemoteJson(std::string payload);
 
   public:
-    bool isEnabled;
-    bool isConnected;
+    std::atomic_bool isEnabled = false;
+    std::atomic_bool isConnected = false;
 
     void Enable(const char* host, uint16_t port);
     void Disable();

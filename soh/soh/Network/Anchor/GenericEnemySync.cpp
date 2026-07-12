@@ -5,10 +5,8 @@
 #include "soh/ResourceManagerHelpers.h"
 
 #include <cstddef>
-#include <cstring>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 
 extern "C" {
 #include "macros.h"
@@ -91,15 +89,12 @@ extern void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime);
 namespace {
 
 struct GenericEnemySyncEntry {
-    // Byte offset of the actor's actionFunc member, or -1 to sync only the skeleton (used for actors whose
-    // action functions manipulate cameras/cutscenes and are unsafe to jump into raw).
-    ptrdiff_t actionFuncOffset;
     // Byte offset of the actor's SkelAnime member, or -1 when the actor has no skeleton.
     ptrdiff_t skelAnimeOffset;
 };
 
-#define GENERIC_SYNC(structName) { (ptrdiff_t)offsetof(structName, actionFunc), (ptrdiff_t)offsetof(structName, skelAnime) }
-#define GENERIC_SYNC_NO_SKEL(structName) { (ptrdiff_t)offsetof(structName, actionFunc), (ptrdiff_t)-1 }
+#define GENERIC_SYNC(structName) { (ptrdiff_t)offsetof(structName, skelAnime) }
+#define GENERIC_SYNC_NO_SKEL(structName) { (ptrdiff_t)-1 }
 
 const std::unordered_map<int16_t, GenericEnemySyncEntry>& Registry() {
     static const std::unordered_map<int16_t, GenericEnemySyncEntry> registry = {
@@ -131,15 +126,15 @@ const std::unordered_map<int16_t, GenericEnemySyncEntry>& Registry() {
         { ACTOR_EN_POH, GENERIC_SYNC(EnPoh) },
         { ACTOR_EN_KAREBABA, GENERIC_SYNC(EnKarebaba) },
         { ACTOR_EN_RR, GENERIC_SYNC_NO_SKEL(EnRr) },
-        { ACTOR_EN_REEBA, { (ptrdiff_t)offsetof(EnReeba, actionfunc), (ptrdiff_t)offsetof(EnReeba, skelanime) } },
+        { ACTOR_EN_REEBA, { (ptrdiff_t)offsetof(EnReeba, skelanime) } },
         // Fire Temple
         { ACTOR_EN_BW, GENERIC_SYNC(EnBw) },
         { ACTOR_EN_FD, GENERIC_SYNC(EnFd) },
         { ACTOR_EN_FW, GENERIC_SYNC(EnFw) },
-        { ACTOR_BOSS_FD, { (ptrdiff_t)offsetof(BossFd, actionFunc), (ptrdiff_t)offsetof(BossFd, skelAnimeHead) } },
+        { ACTOR_BOSS_FD, { (ptrdiff_t)offsetof(BossFd, skelAnimeHead) } },
         { ACTOR_BOSS_FD2, GENERIC_SYNC(BossFd2) },
         // Water Temple
-        { ACTOR_EN_EIYER, { (ptrdiff_t)offsetof(EnEiyer, actionFunc), (ptrdiff_t)offsetof(EnEiyer, skelanime) } },
+        { ACTOR_EN_EIYER, { (ptrdiff_t)offsetof(EnEiyer, skelanime) } },
         { ACTOR_EN_WEIYER, GENERIC_SYNC(EnWeiyer) },
         { ACTOR_EN_NY, GENERIC_SYNC_NO_SKEL(EnNy) },
         { ACTOR_BOSS_MO, GENERIC_SYNC_NO_SKEL(BossMo) },
@@ -155,28 +150,14 @@ const std::unordered_map<int16_t, GenericEnemySyncEntry>& Registry() {
         { ACTOR_EN_ANUBICE, GENERIC_SYNC(EnAnubice) },
         { ACTOR_EN_IK, GENERIC_SYNC(EnIk) },
         { ACTOR_BOSS_TW, GENERIC_SYNC(BossTw) },
-        // Ganon's Castle: action functions drive cameras and cutscenes, so only animations are mirrored;
-        // motion/health sync and local AI carry the rest.
-        { ACTOR_BOSS_GANON, { (ptrdiff_t)-1, (ptrdiff_t)offsetof(BossGanon, skelAnime) } },
-        { ACTOR_BOSS_GANON2, { (ptrdiff_t)-1, (ptrdiff_t)offsetof(BossGanon2, skelAnime) } },
+        { ACTOR_BOSS_GANON, { (ptrdiff_t)offsetof(BossGanon, skelAnime) } },
+        { ACTOR_BOSS_GANON2, { (ptrdiff_t)offsetof(BossGanon2, skelAnime) } },
     };
     return registry;
 }
 
 #undef GENERIC_SYNC
 #undef GENERIC_SYNC_NO_SKEL
-
-// Code offsets are exchanged relative to a fixed anchor function. Two additional well-separated functions act
-// as a build fingerprint: if their relative offsets match, both clients run the same binary and raw actionFunc
-// pointers can be reconstructed safely; otherwise action sync silently degrades to motion + animation sync.
-int64_t CodeOffset(void* fn) {
-    return (int64_t)((intptr_t)fn - (intptr_t)(void*)&Actor_Spawn);
-}
-
-void GetCodeFingerprint(int64_t* fpA, int64_t* fpB) {
-    *fpA = CodeOffset((void*)&Actor_Kill);
-    *fpB = CodeOffset((void*)&SkelAnime_Update);
-}
 
 SkelAnime* GetEntrySkelAnime(Actor* actor, const GenericEnemySyncEntry& entry) {
     if (entry.skelAnimeOffset < 0) {
@@ -200,18 +181,6 @@ nlohmann::json GetGenericEnemyState(Actor* actor) {
 
     extra["kind"] = "Generic";
 
-    if (it->second.actionFuncOffset >= 0) {
-        void* actionFunc = nullptr;
-        memcpy(&actionFunc, (uint8_t*)actor + it->second.actionFuncOffset, sizeof(void*));
-        if (actionFunc != nullptr) {
-            int64_t fpA, fpB;
-            GetCodeFingerprint(&fpA, &fpB);
-            extra["fpA"] = fpA;
-            extra["fpB"] = fpB;
-            extra["afOff"] = CodeOffset(actionFunc);
-        }
-    }
-
     SkelAnime* skelAnime = GetEntrySkelAnime(actor, it->second);
     if (skelAnime != nullptr) {
         AddSkelAnimeState(extra, skelAnime);
@@ -234,46 +203,16 @@ void ApplyGenericEnemyState(Actor* actor, nlohmann::json extra) {
     SkelAnime* skelAnime = GetEntrySkelAnime(actor, it->second);
     if (skelAnime != nullptr) {
         std::string animPath = extra.value("animPath", std::string(""));
-        if (!animPath.empty()) {
-            bool sameAnim = skelAnime->animation != nullptr && ResourceMgr_OTRSigCheck((char*)skelAnime->animation) &&
-                            animPath == (const char*)skelAnime->animation;
-            if (!sameAnim) {
-                // Animation clips are addressed by OTR resource path; interned copies stay alive for the
-                // pointer's lifetime and resolve lazily inside the SkelAnime system like the originals.
-                static std::unordered_set<std::string> internedAnimPaths;
-                const std::string& interned = *internedAnimPaths.insert(animPath).first;
-                skelAnime->animation = (void*)interned.c_str();
-                skelAnime->curFrame = extra.value("skelCurFrame", 0.0f);
-            }
+        if (!animPath.empty() &&
+            (skelAnime->animation == nullptr || !ResourceMgr_OTRSigCheck((char*)skelAnime->animation) ||
+             animPath != (const char*)skelAnime->animation)) {
+            return;
         }
         ApplySkelAnimeState(extra, skelAnime);
     }
-
-    if (it->second.actionFuncOffset < 0 || !extra.contains("afOff")) {
-        return;
-    }
-
-    // Never jump action functions while a cutscene is playing locally; both clients run their own cutscene
-    // staging and stomping the actor's state mid-script can soft-lock it.
-    if (gPlayState != nullptr && gPlayState->csCtx.state != 0) {
-        return;
-    }
-
-    int64_t localFpA, localFpB;
-    GetCodeFingerprint(&localFpA, &localFpB);
-    if (extra.value("fpA", (int64_t)0) != localFpA || extra.value("fpB", (int64_t)0) != localFpB) {
-        return;
-    }
-
-    void* remoteFunc = (void*)((intptr_t)(void*)&Actor_Spawn + (intptr_t)extra.value("afOff", (int64_t)0));
-    void* localFunc = nullptr;
-    memcpy(&localFunc, (uint8_t*)actor + it->second.actionFuncOffset, sizeof(void*));
-    if (remoteFunc != localFunc) {
-        memcpy((uint8_t*)actor + it->second.actionFuncOffset, &remoteFunc, sizeof(void*));
-    }
 }
 
-void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
+bool EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
     switch (actor->id) {
         case ACTOR_EN_SKB: {
             EnSkb* skb = (EnSkb*)actor;
@@ -294,7 +233,6 @@ void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
         case ACTOR_EN_TITE: {
             EnTite* tite = (EnTite*)actor;
             if (tite->action != 0) { // TEKTITE_DEATH_CRY
-                BodyBreak_Alloc(&tite->bodyBreak, 24, play);
                 EnTite_SetupDeathCry(tite);
             }
             break;
@@ -357,7 +295,8 @@ void EnsureEnemyDeathSetup(Actor* actor, PlayState* play) {
             break;
         }
         default:
-            return;
+            return false;
     }
     actor->flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
+    return true;
 }

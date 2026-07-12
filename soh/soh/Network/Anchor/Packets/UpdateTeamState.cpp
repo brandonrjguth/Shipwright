@@ -2,6 +2,7 @@
 #include "soh/Network/Anchor/JsonConversions.hpp"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
+#include <algorithm>
 #include "soh/OTRGlobals.h"
 #include "soh/Notification/Notification.h"
 #include "soh/Enhancements/randomizer/randomizer.h"
@@ -123,7 +124,15 @@ void Anchor::HandlePacket_UpdateTeamState(nlohmann::json payload) {
         return;
     }
 
-    isHandlingUpdateTeamState = true;
+    struct TeamStateHandlingGuard {
+        bool& active;
+        explicit TeamStateHandlingGuard(bool& value) : active(value) {
+            active = true;
+        }
+        ~TeamStateHandlingGuard() {
+            active = false;
+        }
+    } handlingGuard(isHandlingUpdateTeamState);
     // This can happen in between file select and the game starting, so we can't use this check, but we need to ensure
     // we be careful to wrap PlayState usage in this check
     //
@@ -134,6 +143,7 @@ void Anchor::HandlePacket_UpdateTeamState(nlohmann::json payload) {
     if (payload.contains("state")) {
         SaveContext loadedData = payload["state"].get<SaveContext>();
 
+        gSaveContext.healthCapacity = std::max(gSaveContext.healthCapacity, loadedData.healthCapacity);
         gSaveContext.magicLevel = loadedData.magicLevel;
         gSaveContext.magicCapacity = gSaveContext.magic = loadedData.magicCapacity;
         gSaveContext.isMagicAcquired = loadedData.isMagicAcquired;
@@ -193,6 +203,9 @@ void Anchor::HandlePacket_UpdateTeamState(nlohmann::json payload) {
 
         gSaveContext.ship.stats.firstInput = loadedData.ship.stats.firstInput;
         gSaveContext.ship.stats.fileCreatedAt = loadedData.ship.stats.fileCreatedAt;
+        for (size_t i = 0; i < ARRAY_COUNT(gSaveContext.ship.stats.entrancesDiscovered); i++) {
+            gSaveContext.ship.stats.entrancesDiscovered[i] |= loadedData.ship.stats.entrancesDiscovered[i];
+        }
 
         // Restore master sword state
         // Disabling this for now, not really sure I understand why I did this in the past
@@ -300,5 +313,4 @@ void Anchor::HandlePacket_UpdateTeamState(nlohmann::json payload) {
             incomingPacketQueue.push(itemPayload);
         }
     }
-    isHandlingUpdateTeamState = false;
 }

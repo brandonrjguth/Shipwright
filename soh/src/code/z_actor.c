@@ -2591,7 +2591,8 @@ void Actor_UpdateAll(PlayState* play, ActorContext* actorCtx) {
             Actor* spawnedActor = Actor_SpawnEntry(&play->actorCtx, actorEntry++, play);
 
             // #region SOH [ObjectExtension] ActorListIndex tracking
-            SetActorListIndex(spawnedActor, (s16)i);
+            SetActorListIndexWithMetadata(spawnedActor, (s16)i, play->sceneNum, play->roomCtx.curRoom.num,
+                                          gSaveContext.sceneSetupIndex, play->setupActorList[i].params);
             // #endregion
         }
         play->numSetupActors = 0;

@@ -17,6 +17,7 @@ void Anchor::SendPacket_EntranceDiscovered(u16 entranceIndex) {
     nlohmann::json payload;
     payload["type"] = ENTRANCE_DISCOVERED;
     payload["targetTeamId"] = CVarGetString(CVAR_REMOTE_ANCHOR("TeamId"), "default");
+    payload["addToQueue"] = true;
     payload["entranceIndex"] = entranceIndex;
     payload["quiet"] = true;
 

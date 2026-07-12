@@ -7,7 +7,13 @@ extern "C" {
 #endif
 
 int16_t GetActorListIndex(const Actor* actor);
+int16_t GetActorListSceneNum(const Actor* actor);
+int8_t GetActorListOriginRoom(const Actor* actor);
+int32_t GetActorListSceneSetupIndex(const Actor* actor);
+int16_t GetActorListSpawnParams(const Actor* actor);
 void SetActorListIndex(const Actor* actor, int16_t index);
+void SetActorListIndexWithMetadata(const Actor* actor, int16_t index, int16_t sceneNum, int8_t originRoom,
+                                   int32_t sceneSetupIndex, int16_t spawnParams);
 
 #ifdef __cplusplus
 }

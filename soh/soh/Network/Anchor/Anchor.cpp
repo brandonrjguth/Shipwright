@@ -2,9 +2,13 @@
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
 #include <unordered_set>
+#include <stdexcept>
+#include <chrono>
 #include "soh/OTRGlobals.h"
 #include "soh/Enhancements/nametag.h"
+#include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/ObjectExtension/ObjectExtension.h"
+#include "soh/ObjectExtension/ActorListIndex.h"
 #include "soh/Enhancements/randomizer/randomizer.h"
 #include "soh/Network/Anchor/GenericEnemySync.h"
 
@@ -26,6 +30,8 @@ void ObjKibako_AirBreak(ObjKibako* thisx, PlayState* play);
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 extern bool ShouldReportEnemyExtraState(Actor* actor);
 extern bool ShouldPreserveLocalEnemyExtraState(Actor* actor, nlohmann::json authorityExtra);
+
+static bool AnchorIsActorInCurrentLists(Actor* actor);
 
 // Picks a random ambush target among all players for field enemy spawners. Returns 0 when the local player
 // was picked (or no co-op session), letting the caller use its vanilla local-player path; remote players are
@@ -178,32 +184,100 @@ extern "C" Player* Anchor_GetNearestEnemyTargetPlayer(Actor* actor) {
 // MARK: - Overrides
 
 void Anchor::Enable() {
-    Network::Enable(CVarGetString(CVAR_REMOTE_ANCHOR("Host"), "anchor.hm64.org"),
-                    CVarGetInteger(CVAR_REMOTE_ANCHOR("Port"), 43383));
     ownClientId = CVarGetInteger(CVAR_REMOTE_ANCHOR("LastClientId"), 0);
     roomState.ownerClientId = 0;
+    connectedEventPending = false;
+    disconnectedEventPending = false;
+    if (networkLifecycleHookId == 0) {
+        networkLifecycleHookId =
+            GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([this]() {
+                ProcessConnectionEvents();
+            });
+    }
+    Network::Enable(CVarGetString(CVAR_REMOTE_ANCHOR("Host"), "anchor.hm64.org"),
+                    CVarGetInteger(CVAR_REMOTE_ANCHOR("Port"), 43383));
 }
 
 void Anchor::Disable() {
     Network::Disable();
-
-    clients.clear();
-    RefreshClientActors();
-}
-
-void Anchor::OnConnected() {
-    SendPacket_Handshake();
+    connectedEventPending = false;
+    disconnectedEventPending = false;
     RegisterHooks();
-    pendingCutsceneReplayFlags.clear();
-    pendingQuestItemReplays.clear();
-
-    if (IsSaveLoaded()) {
-        SendPacket_RequestTeamState();
+    ResetEnemySessionState(false);
+    if (networkLifecycleHookId != 0) {
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnGameFrameUpdate>(networkLifecycleHookId);
+        networkLifecycleHookId = 0;
     }
 }
 
+void Anchor::OnConnected() {
+    connectedEventPending = true;
+}
+
 void Anchor::OnDisconnected() {
-    RegisterHooks();
+    disconnectedEventPending = true;
+}
+
+void Anchor::ProcessConnectionEvents() {
+    bool disconnected = disconnectedEventPending.exchange(false);
+    bool connected = connectedEventPending.exchange(false);
+
+    if (disconnected) {
+        RegisterHooks();
+        ResetEnemySessionState(true);
+    }
+
+    if (connected && isConnected) {
+        if (enemySessionId == 0) {
+            enemySessionId = ((uint64_t)std::chrono::steady_clock::now().time_since_epoch().count() << 1) ^
+                             ((uint64_t)ownClientId << 32) ^ (uintptr_t)this;
+            if (enemySessionId == 0) {
+                enemySessionId = 1;
+            }
+            enemySnapshotSequences.clear();
+            nextEnemyOperationId = 0;
+        }
+        pendingCutsceneReplayFlags.clear();
+        pendingQuestItemReplays.clear();
+        enemyRoomSyncPending = true;
+        SendPacket_Handshake();
+        RegisterHooks();
+        if (IsSaveLoaded()) {
+            SendPacket_RequestTeamState();
+        }
+    }
+}
+
+void Anchor::ResetEnemySessionState(bool preserveWorldState) {
+    clients.clear();
+    RefreshClientActors();
+    ResetEnemyRoomTransientState();
+    if (!preserveWorldState) {
+        pendingEnemyDamageOperations.clear();
+        appliedEnemyDamageOperations.clear();
+        enemyCarryOwnership.clear();
+        deadEnemyLedger.clear();
+        dynamicEnemyTombstoneOrder.clear();
+        enemySnapshotSequences.clear();
+        lastEnemySnapshotSequences.clear();
+        nextEnemyOperationId = 0;
+        nextDynamicEnemyIncarnation = 0;
+        enemySessionId = 0;
+    }
+    enemyRoomAuthorities.clear();
+    enemyRoomAuthorityGenerations.clear();
+    enemyRoomAuthoritySessions.clear();
+    enemySyncSceneNum = SCENE_ID_MAX;
+    enemySyncRoomNum = -1;
+    enemyRoomSyncPending = true;
+    {
+        std::lock_guard<std::mutex> lock(incomingPacketQueueMutex);
+        std::queue<nlohmann::json>().swap(incomingPacketQueue);
+    }
+    {
+        std::lock_guard<std::mutex> lock(outgoingPacketQueueMutex);
+        std::queue<nlohmann::json>().swap(outgoingPacketQueue);
+    }
 }
 
 void Anchor::ProcessOutgoingPackets() {
@@ -236,37 +310,21 @@ void Anchor::SendJsonToRemote(nlohmann::json payload) {
         SPDLOG_DEBUG("[Anchor] Queuing payload:\n{}", payload.dump());
     }
 
-    if (payload["type"] == HANDSHAKE) {
-        Network::SendJsonToRemote(payload);
-        return;
-    }
-
     // Queue the packet to be sent on the network thread
     std::lock_guard<std::mutex> lock(outgoingPacketQueueMutex);
     outgoingPacketQueue.push(payload);
 }
 
 void Anchor::OnIncomingJson(nlohmann::json payload) {
-    // If it doesn't contain a type, it's not a valid payload
-    if (!payload.contains("type")) {
+    // The network thread only validates the envelope. Client/version checks happen on the game thread,
+    // which exclusively owns the clients map.
+    if (!payload.is_object() || !payload.contains("type") || !payload["type"].is_string()) {
         return;
     }
 
     // If it's not a quiet payload, log it
     if (!payload.contains("quiet")) {
         SPDLOG_DEBUG("[Anchor] Received payload:\n{}", payload.dump());
-    }
-
-    std::string packetType = payload["type"].get<std::string>();
-
-    // Ignore packets from mismatched clients, except for ALL_CLIENT_STATE, UPDATE_CLIENT_STATE, and PLAYER_UPDATE
-    if (packetType != ALL_CLIENT_STATE && packetType != UPDATE_CLIENT_STATE && packetType != PLAYER_UPDATE) {
-        if (payload.contains("clientId")) {
-            uint32_t clientId = payload["clientId"].get<uint32_t>();
-            if (clients.contains(clientId) && clients[clientId].clientVersion != clientVersion) {
-                return;
-            }
-        }
     }
 
     // Queue all packets to be processed on the game thread
@@ -287,11 +345,21 @@ void Anchor::ProcessIncomingPacketQueue() {
         nlohmann::json payload = packetsToProcess.front();
         packetsToProcess.pop();
 
-        std::string packetType = payload["type"].get<std::string>();
-
         isProcessingIncomingPacket = true;
 
         try {
+            if (!payload.is_object() || !payload.contains("type") || !payload["type"].is_string()) {
+                throw std::runtime_error("invalid packet envelope");
+            }
+            std::string packetType = payload["type"].get<std::string>();
+            if (packetType != ALL_CLIENT_STATE && packetType != UPDATE_CLIENT_STATE && packetType != PLAYER_UPDATE &&
+                payload.contains("clientId") && payload["clientId"].is_number_unsigned()) {
+                uint32_t clientId = payload["clientId"].get<uint32_t>();
+                if (clients.contains(clientId) && clients[clientId].clientVersion != clientVersion) {
+                    isProcessingIncomingPacket = false;
+                    continue;
+                }
+            }
             // packetType here is a string so we can't use a switch statement
             if (packetType == ALL_CLIENT_STATE)
                 HandlePacket_AllClientState(payload);
@@ -377,6 +445,14 @@ struct EnemyNetworkId {
     uint64_t networkId = 0;
 };
 static ObjectExtension::Register<EnemyNetworkId> EnemyNetworkIdRegister;
+
+struct EnemySpawnMetadata {
+    s16 params = 0;
+    s16 sceneNum = SCENE_ID_MAX;
+    s8 originRoom = -1;
+    u16 sceneSetupIndex = 0;
+};
+static ObjectExtension::Register<EnemySpawnMetadata> EnemySpawnMetadataRegister;
 
 uint32_t Anchor::GetDummyPlayerClientId(const Actor* actor) {
     const DummyPlayerClientId* clientId = ObjectExtension::GetInstance().Get<DummyPlayerClientId>(actor);
@@ -490,7 +566,7 @@ Actor* Anchor::FindClosestUnassignedActorByCategoryAndId(ActorCategory category,
                 currAct = currAct->next;
                 continue;
             }
-            if (actorParams != (s16)-0x8000 && currAct->params != actorParams) {
+            if (actorParams != (s16)-0x8000 && GetEnemySpawnParams(currAct) != actorParams) {
                 currAct = currAct->next;
                 continue;
             }
@@ -535,6 +611,31 @@ void Anchor::SetEnemyNetworkId(Actor* actor, uint64_t networkId) {
         return;
     }
     ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
+}
+
+void Anchor::CaptureEnemySpawnParams(Actor* actor) {
+    if (actor != nullptr && ObjectExtension::GetInstance().Get<EnemySpawnMetadata>(actor) == nullptr) {
+        s16 actorListIndex = GetActorListIndex(actor);
+        s16 sceneNum = actorListIndex >= 0 ? GetActorListSceneNum(actor)
+                                          : (gPlayState != nullptr ? gPlayState->sceneNum : (s16)SCENE_ID_MAX);
+        s8 originRoom = actorListIndex >= 0 ? GetActorListOriginRoom(actor) : actor->room;
+        u16 sceneSetupIndex = actorListIndex >= 0 ? (u16)GetActorListSceneSetupIndex(actor)
+                                                  : (u16)gSaveContext.sceneSetupIndex;
+        s16 spawnParams = actorListIndex >= 0 ? GetActorListSpawnParams(actor) : actor->params;
+        ObjectExtension::GetInstance().Set<EnemySpawnMetadata>(
+            actor, EnemySpawnMetadata{ spawnParams, sceneNum, originRoom, sceneSetupIndex });
+    }
+}
+
+s16 Anchor::GetEnemySpawnParams(Actor* actor) {
+    if (actor == nullptr) {
+        return 0;
+    }
+    if (GetActorListIndex(actor) >= 0) {
+        return GetActorListSpawnParams(actor);
+    }
+    CaptureEnemySpawnParams(actor);
+    return ObjectExtension::GetInstance().Get<EnemySpawnMetadata>(actor)->params;
 }
 
 Actor* Anchor::FindActorByEnemyNetworkId(uint64_t networkId) {
@@ -628,14 +729,24 @@ bool Anchor::IsIndependentDuelActor(s16 actorId) {
     return actorId == ACTOR_EN_TORCH2;
 }
 
-bool Anchor::IsParentDependentEnemy(s16 actorId) {
+bool Anchor::IsParentDependentEnemy(s16 actorId, s16 params) {
     // These dereference actor->parent in their update paths, so a parentless network-spawned orphan would
     // crash. They are never spawned by the ENEMY_UPDATE fallback; replicas only associate the copies their
     // own simulation spawned (the spawning parent's actions are synced, so local copies always appear).
     return actorId == ACTOR_EN_FHG_FIRE || actorId == ACTOR_EN_DHA || actorId == ACTOR_EN_FW ||
            actorId == ACTOR_BOSS_FD2 || actorId == ACTOR_BOSS_VA || actorId == ACTOR_BOSS_SST ||
            actorId == ACTOR_BOSS_TW || actorId == ACTOR_EN_GOMA || actorId == ACTOR_EN_DODOJR ||
-           actorId == ACTOR_BOSS_GANON || actorId == ACTOR_EN_PO_SISTERS || actorId == ACTOR_EN_FLOORMAS;
+           actorId == ACTOR_BOSS_GANON || actorId == ACTOR_EN_PO_SISTERS || actorId == ACTOR_EN_FLOORMAS ||
+           actorId == ACTOR_EN_TP || (actorId == ACTOR_EN_EIYER && params >= 1 && params <= 3) ||
+           (actorId == ACTOR_EN_BB && (params == 0 || params == 11));
+}
+
+bool Anchor::IsActorInCurrentEnemyRoom(Actor* actor) {
+    if (actor == nullptr || !IsRoomStable()) {
+        return false;
+    }
+
+    return actor->room < 0 || actor->room == gPlayState->roomCtx.curRoom.num;
 }
 
 bool Anchor::IsLocallySimulatedEffectActor(s16 actorId) {
@@ -698,29 +809,51 @@ Actor* Anchor::FindNearbyDeadEnemyDropSource(Actor* dropActor) {
     return closest;
 }
 
+uint64_t Anchor::AllocateDynamicEnemyNetworkId(uint64_t sourceNetworkId) {
+    if (enemySessionId == 0) {
+        return 0;
+    }
+
+    uint64_t networkId = 0;
+    do {
+        nextDynamicEnemyIncarnation++;
+        if (nextDynamicEnemyIncarnation == 0) {
+            nextDynamicEnemyIncarnation++;
+        }
+        uint64_t hash = 1469598103934665603ULL;
+        auto hashValue = [&](uint64_t value) {
+            hash ^= value;
+            hash *= 1099511628211ULL;
+        };
+        hashValue(0x44594E414D494331ULL); // "DYNAMIC1"
+        hashValue(ownClientId);
+        hashValue(enemySessionId);
+        hashValue(nextDynamicEnemyIncarnation);
+        hashValue(sourceNetworkId);
+        networkId = hash & ~(1ULL << 63);
+
+        bool isTombstoned = false;
+        for (const auto& [sceneNum, deadIds] : deadEnemyLedger) {
+            if (deadIds.contains(networkId)) {
+                isTombstoned = true;
+                break;
+            }
+        }
+        if (networkId == 0 || FindActorByEnemyNetworkId(networkId) != nullptr || isTombstoned) {
+            networkId = 0;
+        }
+    } while (networkId == 0);
+
+    return networkId;
+}
+
 uint64_t Anchor::CreateEnemyDropNetworkId(Actor* source, Actor* dropActor) {
     uint64_t sourceNetworkId = GetEnemyNetworkId(source);
     if (sourceNetworkId == 0 || dropActor == nullptr) {
         return 0;
     }
 
-    uint16_t occurrence = enemyDropCounters[sourceNetworkId]++;
-    uint64_t networkId = 0;
-    do {
-        uint64_t hash = 1469598103934665603ULL;
-        auto hashValue = [&](uint64_t value) {
-            hash ^= value;
-            hash *= 1099511628211ULL;
-        };
-        hashValue(sourceNetworkId);
-        hashValue((uint16_t)dropActor->id);
-        hashValue((uint16_t)dropActor->params);
-        hashValue(occurrence++);
-        networkId = hash;
-    } while (FindActorByEnemyNetworkId(networkId) != nullptr);
-
-    enemyDropCounters[sourceNetworkId] = occurrence;
-    return networkId;
+    return AllocateDynamicEnemyNetworkId(sourceNetworkId);
 }
 
 void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
@@ -728,63 +861,58 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
         return;
     }
 
-    std::unordered_set<uint64_t> usedNetworkIds;
-    std::unordered_map<uint32_t, uint16_t> nextOccurrence;
-
-    for (Actor* actor : actors) {
-        uint64_t existingNetworkId = GetEnemyNetworkId(actor);
-        if (existingNetworkId != 0) {
-            usedNetworkIds.insert(existingNetworkId);
-        }
-    }
-
     for (Actor* actor : actors) {
         if (actor == nullptr || GetEnemyNetworkId(actor) != 0) {
             continue;
         }
 
-        s16 homeX = (s16)(actor->home.pos.x / 20.0f);
-        s16 homeY = (s16)(actor->home.pos.y / 20.0f);
-        s16 homeZ = (s16)(actor->home.pos.z / 20.0f);
-        uint32_t counterKey = ((uint32_t)actor->category << 16) | (uint16_t)actor->id;
-        uint16_t occurrence = nextOccurrence[counterKey];
-        uint64_t networkId = 0;
-        do {
-            uint64_t hash = 1469598103934665603ULL;
-            auto hashValue = [&](uint64_t value) {
-                hash ^= value;
-                hash *= 1099511628211ULL;
-            };
-            hashValue((uint16_t)gPlayState->sceneNum);
-            hashValue((uint8_t)gPlayState->roomCtx.curRoom.num);
-            hashValue(actor->category);
-            hashValue((uint16_t)actor->id);
-            hashValue((uint16_t)actor->params);
-            hashValue((uint16_t)homeX);
-            hashValue((uint16_t)homeY);
-            hashValue((uint16_t)homeZ);
-            if (IsTransientProjectileActor(actor->id, actor->params)) {
-                hashValue(ownClientId);
-                hashValue(GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num));
-                hashValue(transientEnemyCounter++);
-            } else {
-                hashValue(occurrence);
+        CaptureEnemySpawnParams(actor);
+        const EnemySpawnMetadata* metadata = ObjectExtension::GetInstance().Get<EnemySpawnMetadata>(actor);
+        s16 actorListIndex = GetActorListIndex(actor);
+        uint64_t networkId;
+        if (actorListIndex >= 0) {
+            constexpr uint64_t STATIC_ENEMY_ID_BIT = 1ULL << 63;
+            networkId = STATIC_ENEMY_ID_BIT | ((uint64_t)(uint16_t)metadata->sceneNum << 47) |
+                        ((uint64_t)metadata->sceneSetupIndex << 31) |
+                        ((uint64_t)(uint8_t)metadata->originRoom << 23) |
+                        ((uint64_t)(uint16_t)actorListIndex << 7) | 1;
+            Actor* existingActor = FindActorByEnemyNetworkId(networkId);
+            if (existingActor != nullptr && existingActor != actor) {
+                if (existingActor->update != nullptr) {
+                    // A roomless carried actor can outlive its origin room. Keep that incarnation and discard the
+                    // duplicate scene-list copy produced when the origin room reloads.
+                    Actor_Kill(actor);
+                }
+                continue;
             }
-            networkId = hash;
-            if (!IsTransientProjectileActor(actor->id, actor->params)) {
-                occurrence++;
+        } else {
+            if (!HasEnemySyncAuthority()) {
+                continue;
             }
-        } while (usedNetworkIds.contains(networkId));
-
-        if (!IsTransientProjectileActor(actor->id, actor->params)) {
-            nextOccurrence[counterKey] = occurrence;
+            networkId = AllocateDynamicEnemyNetworkId();
         }
-        usedNetworkIds.insert(networkId);
-        ObjectExtension::GetInstance().Set<EnemyNetworkId>(actor, EnemyNetworkId{ networkId });
+        SetEnemyNetworkId(actor, networkId);
     }
 }
 
 void Anchor::ResetEnemyRoomTransientState() {
+    if (gPlayState != nullptr) {
+        for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
+            for (Actor* actor = gPlayState->actorCtx.actorLists[category].head; actor != nullptr; actor = actor->next) {
+                bool isCarryable = actor->id == ACTOR_EN_NIW || actor->id == ACTOR_OBJ_TSUBO ||
+                                   actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF ||
+                                   actor->id == ACTOR_EN_BOM;
+                if (isCarryable && actor->parent == actor) {
+                    actor->parent = nullptr;
+                }
+            }
+        }
+    }
+    for (Actor* actor : enemyCullOverrides) {
+        if (AnchorIsActorInCurrentLists(actor)) {
+            actor->flags &= ~ACTOR_FLAG_UPDATE_CULLING_DISABLED;
+        }
+    }
     enemyKillBuffer.clear();
     enemyPruneBuffer.clear();
     enemySpawnBuffer.clear();
@@ -793,8 +921,8 @@ void Anchor::ResetEnemyRoomTransientState() {
     enemyExtraStates.clear();
     freshEnemyAuthorityData.clear();
     enemyCullOverrides.clear();
-    enemyDropCounters.clear();
-    transientEnemyCounter = 0;
+    enemyDeathDeferralFrames.clear();
+    previouslyHeldEnemyIds.clear();
     hintnutsDialogueActive.clear();
     enemyTransformFrameCounter = 0;
 }
@@ -924,7 +1052,9 @@ void Anchor::ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, b
     if (!HasEnemySyncAuthority() && actor->colChkInfo.health < state.health) {
         // The local player may have damaged this replica during its update. Keep that lower health long enough for
         // DetectEnemyDamage to report it to the room authority instead of immediately rolling it back.
-        enemyHealthTracker[actor] = state.health;
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        enemyHealthTracker[actor] = pendingEnemyDamageOperations.contains(networkId) ? actor->colChkInfo.health
+                                                                                     : state.health;
     } else {
         actor->colChkInfo.health = state.health;
         enemyHealthTracker[actor] = state.health;
@@ -1004,7 +1134,8 @@ uint32_t Anchor::GetEnemySyncAuthorityClientId(s16 sceneNum, s8 roomNum) {
     uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
     uint32_t authorityClientId = ownClientId;
     for (auto& [clientId, client] : clients) {
-        if (!client.online || client.self || !client.isSaveLoaded || !client.roomStable) {
+        if (!client.online || client.self || !client.isSaveLoaded || !client.roomStable ||
+            client.clientVersion != clientVersion || client.enemySessionId == 0) {
             continue;
         }
         if (client.sceneNum == sceneNum && client.curRoomNum == roomNum && clientId < authorityClientId) {
@@ -1014,11 +1145,18 @@ uint32_t Anchor::GetEnemySyncAuthorityClientId(s16 sceneNum, s8 roomNum) {
 
     if (!enemyRoomAuthorities.contains(roomKey)) {
         enemyRoomAuthorities[roomKey] = authorityClientId;
-        enemyRoomAuthorityGenerations[roomKey] = 1;
+        enemyRoomAuthorityGenerations[roomKey] = authorityClientId;
     } else if (enemyRoomAuthorities[roomKey] != authorityClientId) {
         enemyRoomAuthorities[roomKey] = authorityClientId;
-        enemyRoomAuthorityGenerations[roomKey] = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum) + 1;
+        // Every client derives the same epoch even if it observes a different number of intermediate elections.
+        // Snapshot session/sequence fields provide ordering when the same client later becomes authority again.
+        enemyRoomAuthorityGenerations[roomKey] = authorityClientId;
     }
+    enemyRoomAuthoritySessions[roomKey] = authorityClientId == ownClientId
+                                             ? enemySessionId
+                                             : (clients.contains(authorityClientId)
+                                                    ? clients[authorityClientId].enemySessionId
+                                                    : 0);
 
     return authorityClientId;
 }
@@ -1045,6 +1183,7 @@ bool Anchor::IsValidEnemyAuthorityPacket(nlohmann::json payload) {
     s8 roomNum = payload.value("roomNum", (s8)-1);
     uint32_t authorityClientId = payload.value("authorityClientId", (uint32_t)0);
     uint32_t authorityGeneration = payload.value("authorityGeneration", (uint32_t)0);
+    uint64_t authoritySessionId = payload.value("enemySessionId", (uint64_t)0);
 
     if (sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num) {
         return false;
@@ -1052,16 +1191,50 @@ bool Anchor::IsValidEnemyAuthorityPacket(nlohmann::json payload) {
     if (authorityClientId == 0) {
         authorityClientId = clientId;
     }
-    uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
     if (clientId != authorityClientId || authorityClientId != GetEnemySyncAuthorityClientId(sceneNum, roomNum)) {
         return false;
     }
 
     uint32_t localGeneration = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum);
-    if (authorityGeneration > localGeneration) {
-        enemyRoomAuthorityGenerations[roomKey] = authorityGeneration;
+    if (authorityGeneration == 0) {
+        return false;
+    }
+    if (authorityGeneration != localGeneration) {
+        return false;
+    }
+    uint64_t expectedSessionId = enemyRoomAuthoritySessions[GetEnemyRoomKey(sceneNum, roomNum)];
+    if (authoritySessionId == 0 || authoritySessionId != expectedSessionId) {
+        return false;
     }
 
+    return true;
+}
+
+uint64_t Anchor::NextEnemySnapshotSequence(s16 sceneNum, s8 roomNum) {
+    uint64_t& sequence = enemySnapshotSequences[GetEnemyRoomKey(sceneNum, roomNum)];
+    sequence++;
+    if (sequence == 0) {
+        sequence++;
+    }
+    return sequence;
+}
+
+bool Anchor::IsNewEnemySnapshotPacket(const nlohmann::json& payload) {
+    uint64_t sequence = payload.value("snapshotSequence", (uint64_t)0);
+    uint64_t sessionId = payload.value("enemySessionId", (uint64_t)0);
+    if (sequence == 0 || sessionId == 0) {
+        return false;
+    }
+
+    s16 sceneNum = payload.value("sceneNum", (s16)SCENE_ID_MAX);
+    s8 roomNum = payload.value("roomNum", (s8)-1);
+    uint32_t authorityClientId = payload.value("authorityClientId", payload.value("clientId", (uint32_t)0));
+    uint64_t streamKey = ((uint64_t)GetEnemyRoomKey(sceneNum, roomNum) << 32) | authorityClientId;
+    uint64_t& lastSequence = lastEnemySnapshotSequences[sessionId][streamKey];
+    if (sequence <= lastSequence) {
+        return false;
+    }
+    lastSequence = sequence;
     return true;
 }
 
@@ -1078,10 +1251,20 @@ void Anchor::MarkEnemyDead(s16 sceneNum, s8 roomNum, uint64_t networkId) {
         return;
     }
 
-    deadEnemyLedger[GetEnemyRoomKey(sceneNum, roomNum)].insert(networkId);
-    enemyAuthorityTargets.erase(networkId);
-    enemyExtraStates.erase(networkId);
+    uint32_t sceneKey = (uint16_t)sceneNum;
+    auto& tombstones = deadEnemyLedger[sceneKey];
+    bool inserted = tombstones.insert(networkId).second;
+    if (inserted && (networkId & (1ULL << 63)) == 0) {
+        constexpr size_t MAX_DYNAMIC_TOMBSTONES_PER_SCENE = 2048;
+        auto& order = dynamicEnemyTombstoneOrder[sceneKey];
+        order.push_back(networkId);
+        while (order.size() > MAX_DYNAMIC_TOMBSTONES_PER_SCENE) {
+            tombstones.erase(order.front());
+            order.pop_front();
+        }
+    }
     freshEnemyAuthorityData.erase(networkId);
+    pendingEnemyDamageOperations.erase(networkId);
 }
 
 bool Anchor::IsEnemyMarkedDead(uint64_t networkId) {
@@ -1097,8 +1280,8 @@ bool Anchor::IsEnemyMarkedDead(s16 sceneNum, s8 roomNum, uint64_t networkId) {
         return false;
     }
 
-    uint32_t roomKey = GetEnemyRoomKey(sceneNum, roomNum);
-    return deadEnemyLedger.contains(roomKey) && deadEnemyLedger[roomKey].contains(networkId);
+    uint32_t sceneKey = (uint16_t)sceneNum;
+    return deadEnemyLedger.contains(sceneKey) && deadEnemyLedger[sceneKey].contains(networkId);
 }
 
 static bool ShouldDeferKillForLocalDialogue(Actor* actor) {
@@ -1157,12 +1340,133 @@ static bool EnemyKillBufferContains(const std::vector<uint64_t>& buffer, uint64_
     return false;
 }
 
+void Anchor::QueueEnemyKill(uint64_t networkId) {
+    if (networkId != 0 && !EnemyKillBufferContains(enemyKillBuffer, networkId)) {
+        enemyKillBuffer.push_back(networkId);
+    }
+}
+
+void Anchor::ReportLocalEnemyDamage(Actor* actor, u8 health) {
+    if (actor == nullptr || HasEnemySyncAuthority()) {
+        return;
+    }
+
+    uint64_t networkId = GetEnemyNetworkId(actor);
+    auto tracked = enemyHealthTracker.find(actor);
+    if (networkId == 0 || IsEnemyMarkedDead(networkId) || tracked == enemyHealthTracker.end() ||
+        health >= tracked->second) {
+        return;
+    }
+
+    uint32_t authorityClientId = GetEnemySyncAuthorityClientId();
+    if (authorityClientId == 0 || authorityClientId == ownClientId) {
+        return;
+    }
+
+    uint64_t operationId = ++nextEnemyOperationId;
+    if (operationId == 0) {
+        operationId = ++nextEnemyOperationId;
+    }
+    PendingEnemyDamageOperation operation = {
+        { ownClientId, enemySessionId, operationId },
+        static_cast<u8>(tracked->second - health),
+        authorityClientId,
+        GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num),
+        gPlayState->state.frames,
+        nlohmann::json::object(),
+    };
+    SendPacket_ReportEnemyDamageOperation(actor, health, operation.damageAmount, operation);
+    pendingEnemyDamageOperations[networkId].push_back(operation);
+    enemyHealthTracker[actor] = health;
+}
+
+void Anchor::ResendPendingEnemyDamageOperations() {
+    if (!IsRoomStable() || pendingEnemyDamageOperations.empty()) {
+        return;
+    }
+
+    uint32_t authorityClientId = GetEnemySyncAuthorityClientId();
+    uint32_t authorityGeneration =
+        GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    if (authorityClientId == 0 || authorityGeneration == 0) {
+        return;
+    }
+
+    if (authorityClientId == ownClientId) {
+        // The local actor already contains these hits. Adopt their keys when authority changes instead of
+        // subtracting them again if an old report is relayed later.
+        std::vector<nlohmann::json> fatalOperationContexts;
+        for (auto it = pendingEnemyDamageOperations.begin(); it != pendingEnemyDamageOperations.end();) {
+            uint64_t networkId = it->first;
+            auto& operations = it->second;
+            if (operations.empty() ||
+                operations.front().reportPayload.value("sceneNum", (s16)SCENE_ID_MAX) != gPlayState->sceneNum ||
+                operations.front().reportPayload.value("roomNum", (s8)-1) != gPlayState->roomCtx.curRoom.num) {
+                ++it;
+                continue;
+            }
+            auto& appliedOperations = appliedEnemyDamageOperations[networkId];
+            Actor* actor = FindActorByEnemyNetworkId(networkId);
+            for (const PendingEnemyDamageOperation& operation : operations) {
+                if (appliedOperations.size() >= 512) {
+                    appliedOperations.erase(appliedOperations.begin());
+                }
+                appliedOperations.insert(operation.key);
+                if (actor != nullptr && !IsEnemyMarkedDead(networkId)) {
+                    SendPacket_DamageEnemy(actor, actor->colChkInfo.health, &operation.key);
+                } else if (operation.reportPayload.value("health", (u8)1) == 0 &&
+                           !IsEnemyMarkedDead(networkId)) {
+                    fatalOperationContexts.push_back(operation.reportPayload);
+                }
+            }
+            if (actor != nullptr) {
+                enemyHealthTracker[actor] = actor->colChkInfo.health;
+            }
+            it = pendingEnemyDamageOperations.erase(it);
+        }
+        for (const nlohmann::json& context : fatalOperationContexts) {
+            SendPacket_KillEnemy(context);
+        }
+        return;
+    }
+
+    constexpr u32 DAMAGE_OPERATION_RETRY_FRAMES = 30;
+    u32 currentFrame = gPlayState->state.frames;
+    for (auto it = pendingEnemyDamageOperations.begin(); it != pendingEnemyDamageOperations.end();) {
+        uint64_t networkId = it->first;
+        auto& operations = it->second;
+        if (!operations.empty() &&
+            (operations.front().reportPayload.value("sceneNum", (s16)SCENE_ID_MAX) != gPlayState->sceneNum ||
+             operations.front().reportPayload.value("roomNum", (s8)-1) != gPlayState->roomCtx.curRoom.num)) {
+            ++it;
+            continue;
+        }
+        Actor* actor = FindActorByEnemyNetworkId(networkId);
+        if (IsEnemyMarkedDead(networkId)) {
+            it = pendingEnemyDamageOperations.erase(it);
+            continue;
+        }
+        for (PendingEnemyDamageOperation& operation : operations) {
+            bool authorityChanged = operation.authorityClientId != authorityClientId ||
+                                    operation.authorityGeneration != authorityGeneration;
+            if (!authorityChanged && currentFrame - operation.lastSentFrame < DAMAGE_OPERATION_RETRY_FRAMES) {
+                continue;
+            }
+            operation.authorityClientId = authorityClientId;
+            operation.authorityGeneration = authorityGeneration;
+            operation.lastSentFrame = currentFrame;
+            u8 reportedHealth = actor == nullptr ? operation.reportPayload.value("health", (u8)0)
+                                                 : actor->colChkInfo.health;
+            SendPacket_ReportEnemyDamageOperation(actor, reportedHealth, operation.damageAmount, operation);
+        }
+        ++it;
+    }
+}
+
 void Anchor::ProcessActorBuffers() {
     if (!IsSaveLoaded()) {
         return;
     }
-
-    static std::unordered_map<uint64_t, u32> deathDeferralFrames;
 
     std::vector<uint64_t> deferredKillBuffer;
     while (!enemyKillBuffer.empty()) {
@@ -1170,7 +1474,7 @@ void Anchor::ProcessActorBuffers() {
         enemyKillBuffer.erase(enemyKillBuffer.begin());
         Actor* actor = FindActorByEnemyNetworkId(networkId);
         if (actor == nullptr || actor->update == nullptr) {
-            deathDeferralFrames.erase(networkId);
+            enemyDeathDeferralFrames.erase(networkId);
             continue;
         }
         if (ShouldDeferKillForLocalDialogue(actor)) {
@@ -1190,14 +1494,16 @@ void Anchor::ProcessActorBuffers() {
         // deferral — props (pots, torches, etc.) should be destroyed immediately.
         if (actor->colChkInfo.health == 0 &&
             (actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS)) {
-            u32& frames = deathDeferralFrames[networkId];
+            u32& frames = enemyDeathDeferralFrames[networkId];
+            bool deathStateActive = (actor->flags & ACTOR_FLAG_ATTENTION_ENABLED) == 0;
             if (frames == 0) {
                 if (enemyExtraStates.contains(networkId)) {
                     ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
                 }
-                EnsureEnemyDeathSetup(actor, gPlayState);
+                deathStateActive = deathStateActive || (actor->flags & ACTOR_FLAG_ATTENTION_ENABLED) == 0 ||
+                                   EnsureEnemyDeathSetup(actor, gPlayState);
             }
-            if (frames < 60) {
+            if (deathStateActive && frames < 60) {
                 frames++;
                 if (!EnemyKillBufferContains(deferredKillBuffer, networkId)) {
                     deferredKillBuffer.push_back(networkId);
@@ -1214,7 +1520,7 @@ void Anchor::ProcessActorBuffers() {
             ObjKibako_AirBreak((ObjKibako*)actor, gPlayState);
         }
         Actor_Kill(actor);
-        deathDeferralFrames.erase(networkId);
+        enemyDeathDeferralFrames.erase(networkId);
     }
     enemyKillBuffer.insert(enemyKillBuffer.end(), deferredKillBuffer.begin(), deferredKillBuffer.end());
 
@@ -1312,12 +1618,14 @@ void Anchor::DetectEnemyDamage() {
         return;
     }
 
+    ResendPendingEnemyDamageOperations();
+
     std::vector<Actor*> currentEnemies;
 
     for (s32 cat = ACTORCAT_SWITCH; cat < ACTORCAT_MAX; cat++) {
         Actor* currAct = gPlayState->actorCtx.actorLists[cat].head;
         while (currAct != nullptr) {
-            if (IsEnemySyncActor(currAct) || GetEnemyNetworkId(currAct) != 0) {
+            if ((IsEnemySyncActor(currAct) || GetEnemyNetworkId(currAct) != 0) && IsActorInCurrentEnemyRoom(currAct)) {
                 currentEnemies.push_back(currAct);
             }
             currAct = currAct->next;
@@ -1330,9 +1638,7 @@ void Anchor::DetectEnemyDamage() {
             assignableEnemies.push_back(act);
         }
     }
-    if (HasEnemySyncAuthority()) {
-        AssignEnemyNetworkIds(assignableEnemies);
-    }
+    AssignEnemyNetworkIds(assignableEnemies);
 
     UpdateEnemyCullOverrides(currentEnemies);
 
@@ -1362,41 +1668,72 @@ void Anchor::DetectEnemyDamage() {
             currentHealth = 0;
         }
 
+        uint64_t networkId = GetEnemyNetworkId(act);
+        if (IsEnemyMarkedDead(networkId)) {
+            enemyHealthTracker[act] = currentHealth;
+            continue;
+        }
+
         if (enemyHealthTracker.contains(act)) {
             u8 lastHealth = enemyHealthTracker[act];
-            uint64_t networkId = GetEnemyNetworkId(act);
             nlohmann::json authorityExtra =
                 enemyExtraStates.contains(networkId) ? enemyExtraStates[networkId] : nlohmann::json::object();
             if (currentHealth < lastHealth) {
                 if (HasEnemySyncAuthority()) {
                     SendPacket_DamageEnemy(act, currentHealth);
                 } else {
-                    SendPacket_ReportEnemyDamage(act, currentHealth);
+                    ReportLocalEnemyDamage(act, currentHealth);
                 }
             } else if (!HasEnemySyncAuthority() && currentHealth == lastHealth &&
                        ShouldPreserveLocalEnemyExtraState(act, authorityExtra) && ShouldReportEnemyExtraState(act)) {
-                SendPacket_ReportEnemyDamage(act, currentHealth);
+                SendPacket_ReportEnemyState(act);
             }
         }
 
-        // Detect carryable actor release: when the local player was holding an actor
-        // (parent was a real player) but has released it (parent is now null), send a
-        // report so the authority knows the actor is no longer held. Without this, the
-        // authority keeps broadcasting held=true, causing replicas to re-set parent=self
-        // on the thrown actor and yanking it back to the held state.
-        if (!HasEnemySyncAuthority()) {
-            static std::unordered_set<Actor*> previouslyHeldActors;
-            bool isCarryable = act->id == ACTOR_EN_NIW || act->id == ACTOR_OBJ_TSUBO ||
-                               act->id == ACTOR_OBJ_KIBAKO || act->id == ACTOR_EN_BOMBF ||
-                               act->id == ACTOR_EN_BOM;
-            bool isHeld = isCarryable && act->parent != nullptr && act->parent != act;
-            bool wasHeld = previouslyHeldActors.contains(act);
+        bool isCarryable = act->id == ACTOR_EN_NIW || act->id == ACTOR_OBJ_TSUBO ||
+                            act->id == ACTOR_OBJ_KIBAKO || act->id == ACTOR_EN_BOMBF || act->id == ACTOR_EN_BOM;
+        if (isCarryable && networkId != 0) {
+            bool isHeldByLocalPlayer = act->parent != nullptr && act->parent != act;
+            bool wasHeldByLocalPlayer = previouslyHeldEnemyIds.contains(networkId);
+            EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkId];
 
-            if (isHeld) {
-                previouslyHeldActors.insert(act);
-            } else if (wasHeld && !isHeld) {
-                previouslyHeldActors.erase(act);
-                SendPacket_ReportEnemyDamage(act, currentHealth);
+            if (HasEnemySyncAuthority()) {
+                if (isHeldByLocalPlayer && ownership.ownerClientId != ownClientId) {
+                    ownership.ownerClientId = ownClientId;
+                    ownership.generation++;
+                    if (ownership.generation == 0) {
+                        ownership.generation++;
+                    }
+                } else if (!isHeldByLocalPlayer && ownership.ownerClientId == ownClientId) {
+                    ownership.ownerClientId = 0;
+                    ownership.generation++;
+                    if (ownership.generation == 0) {
+                        ownership.generation++;
+                    }
+                } else if (ownership.ownerClientId != 0 && ownership.ownerClientId != ownClientId &&
+                           (!clients.contains(ownership.ownerClientId) || !clients[ownership.ownerClientId].online ||
+                            clients[ownership.ownerClientId].sceneNum != gPlayState->sceneNum ||
+                            clients[ownership.ownerClientId].curRoomNum != gPlayState->roomCtx.curRoom.num)) {
+                    ownership.ownerClientId = 0;
+                    ownership.generation++;
+                    if (act->parent == act) {
+                        act->parent = nullptr;
+                    }
+                }
+            } else if (isHeldByLocalPlayer && !wasHeldByLocalPlayer) {
+                previouslyHeldEnemyIds.insert(networkId);
+                SendPacket_ReportEnemyState(act);
+            } else if (isHeldByLocalPlayer && ownership.ownerClientId != ownClientId &&
+                       gPlayState->state.frames % 10 == 0) {
+                SendPacket_ReportEnemyState(act);
+            } else if (!isHeldByLocalPlayer && wasHeldByLocalPlayer) {
+                previouslyHeldEnemyIds.erase(networkId);
+                SendPacket_ReportEnemyState(act);
+            } else if (!isHeldByLocalPlayer && ownership.ownerClientId == ownClientId &&
+                       gPlayState->state.frames % 10 == 0) {
+                // A quick pickup/release can race the acquire acknowledgement. Keep requesting release until the
+                // authority snapshot confirms that this client no longer owns the actor.
+                SendPacket_ReportEnemyState(act);
             }
         }
 

@@ -7,6 +7,7 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 extern PlayState* gPlayState;
+void Player_DetachHeldActor(PlayState* play, Player* thisx);
 }
 
 void Anchor::SendPacket_KillEnemy(Actor* actor) {
@@ -19,25 +20,43 @@ void Anchor::SendPacket_KillEnemy(Actor* actor) {
         return;
     }
 
-    if (!IsTransientProjectileActor(actor->id, actor->params)) {
-        MarkEnemyDead(networkId);
+    SendPacket_KillEnemy({
+        { "sceneNum", gPlayState->sceneNum },
+        { "roomNum", gPlayState->roomCtx.curRoom.num },
+        { "networkId", networkId },
+        { "actorId", actor->id },
+        { "actorParams", GetEnemySpawnParams(actor) },
+        { "posX", actor->world.pos.x },
+        { "posY", actor->world.pos.y },
+        { "posZ", actor->world.pos.z },
+        { "category", actor->category },
+    });
+}
+
+void Anchor::SendPacket_KillEnemy(const nlohmann::json& actorContext) {
+    if (!IsSaveLoaded()) {
+        return;
     }
 
-    nlohmann::json payload;
-    payload["type"] = KILL_ENEMY;
-    payload["sceneNum"] = gPlayState->sceneNum;
-    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
-    payload["authorityClientId"] = ownClientId;
-    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
-    payload["networkId"] = networkId;
-    payload["actorId"] = actor->id;
-    payload["actorParams"] = actor->params;
-    payload["posX"] = actor->world.pos.x;
-    payload["posY"] = actor->world.pos.y;
-    payload["posZ"] = actor->world.pos.z;
-    payload["category"] = actor->category;
-    payload["quiet"] = true;
+    uint64_t networkId = actorContext.value("networkId", (uint64_t)0);
+    s16 actorId = actorContext.value("actorId", (s16)-1);
+    s16 actorParams = actorContext.value("actorParams", (s16)0);
+    s16 sceneNum = actorContext.value("sceneNum", gPlayState->sceneNum);
+    s8 roomNum = actorContext.value("roomNum", gPlayState->roomCtx.curRoom.num);
+    if (networkId == 0 || sceneNum != gPlayState->sceneNum || roomNum != gPlayState->roomCtx.curRoom.num ||
+        !HasEnemySyncAuthority(sceneNum, roomNum)) {
+        return;
+    }
+    if (!IsTransientProjectileActor(actorId, actorParams)) {
+        MarkEnemyDead(sceneNum, roomNum, networkId);
+    }
 
+    nlohmann::json payload = actorContext;
+    payload["type"] = KILL_ENEMY;
+    payload["authorityClientId"] = ownClientId;
+    payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(sceneNum, roomNum);
+    payload["enemySessionId"] = enemySessionId;
+    payload["quiet"] = true;
     SendJsonToRemote(payload);
 }
 
@@ -70,10 +89,16 @@ void Anchor::HandlePacket_KillEnemy(nlohmann::json payload) {
         return;
     }
 
-    MarkEnemyDead(sceneNum, roomNum, networkId);
-
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target != nullptr) {
-        enemyKillBuffer.push_back(networkId);
+        Player* player = GET_PLAYER(gPlayState);
+        if (player->heldActor == target) {
+            Player_DetachHeldActor(gPlayState, player);
+        } else if (target->parent == target) {
+            target->parent = nullptr;
+        }
+        target->colChkInfo.health = 0;
+        QueueEnemyKill(networkId);
     }
+    MarkEnemyDead(sceneNum, roomNum, networkId);
 }

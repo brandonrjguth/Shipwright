@@ -57,6 +57,10 @@ void DummyPlayer_Init(Actor* actor, PlayState* play) {
     }
 
     AnchorClient& client = Anchor::Instance->clients[clientId];
+    if (client.linkAge != LINK_AGE_CHILD && client.linkAge != LINK_AGE_ADULT) {
+        Actor_Kill(actor);
+        return;
+    }
 
     // Hack to account for usage of gSaveContext in Player_Init
     s32 originalAge = gSaveContext.linkAge;
@@ -175,28 +179,6 @@ void DummyPlayer_Update(Actor* actor, PlayState* play) {
     player->av1.actionVar1 = client.actionVar1;
     player->meleeWeaponState = client.meleeWeaponState;
     player->meleeWeaponAnimation = client.meleeWeaponAnimation;
-
-    // Apply animation movement (Copied from Player_ApplyAnimMovementScaledByAge)
-    Vec3f diff;
-    SkelAnime_UpdateTranslation(&player->skelAnime, &diff, player->actor.shape.rot.y);
-
-    if (player->skelAnime.movementFlags & 1) {
-        if (!LINK_IS_ADULT) {
-            diff.x *= 0.64f;
-            diff.z *= 0.64f;
-        }
-
-        player->actor.world.pos.x += diff.x * player->actor.scale.x;
-        player->actor.world.pos.z += diff.z * player->actor.scale.z;
-    }
-
-    if (player->skelAnime.movementFlags & 2) {
-        if (!(player->skelAnime.movementFlags & 4)) {
-            diff.y *= player->ageProperties->unk_08;
-        }
-
-        player->actor.world.pos.y += diff.y * player->actor.scale.y;
-    }
 
     if (player->modelGroup != client.modelGroup) {
         // Hack to account for usage of gSaveContext

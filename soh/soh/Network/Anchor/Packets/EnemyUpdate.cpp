@@ -2,6 +2,7 @@
 #include "soh/Network/Anchor/GenericEnemySync.h"
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
+#include <cmath>
 
 extern "C" {
 #include "variables.h"
@@ -74,6 +75,7 @@ void EnKarebaba_SetupDead(EnKarebaba* thisx);
 void EnVm_SetupWait(EnVm* thisx);
 void EnVm_SetupAttack(EnVm* thisx);
 void EnVm_SetupStun(EnVm* thisx);
+void Player_DetachHeldActor(PlayState* play, Player* thisx);
 }
 
 extern "C" {
@@ -85,6 +87,7 @@ void EnWf_SetupRunAroundPlayer(EnWf* thisx);
 void EnWf_SetupSlash(EnWf* thisx);
 void EnWf_SetupRecoilFromBlockedSlash(EnWf* thisx);
 void EnWf_SetupBackflipAway(EnWf* thisx);
+void EnWf_SetupSomersaultAndAttack(EnWf* thisx);
 void EnWf_SetupStunned(EnWf* thisx);
 void EnWf_SetupDamaged(EnWf* thisx);
 void EnWf_SetupBlocking(EnWf* thisx);
@@ -112,6 +115,8 @@ void EnZf_SetupDamaged(EnZf* thisx);
 void EnZf_SetupJumpUp(EnZf* thisx);
 void EnZf_SetupDie(EnZf* thisx);
 void EnZf_SetupCircleAroundPlayer(EnZf* thisx, f32 speed);
+void func_80B45384(EnZf* thisx);
+void func_80B4604C(EnZf* thisx);
 }
 
 extern "C" {
@@ -1024,15 +1029,16 @@ static void ApplyKarebabaAction(EnKarebaba* karebaba, s32 action) {
     }
 }
 
-static void ApplyWfAction(EnWf* wf, s32 remoteAction) {
+static bool ApplyWfAction(EnWf* wf, s32 remoteAction) {
     if (wf == nullptr || remoteAction < 0 || remoteAction == wf->action) {
-        return;
+        return wf != nullptr && remoteAction == wf->action;
     }
 
     switch (remoteAction) {
         case WOLFOS_ACTION_WAIT_TO_APPEAR: EnWf_SetupWaitToAppear(wf); break;
         case WOLFOS_ACTION_DIE: EnWf_SetupDie(wf); break;
         case WOLFOS_ACTION_DAMAGED: EnWf_SetupDamaged(wf); break;
+        case WOLFOS_ACTION_TURN_TOWARDS_PLAYER: EnWf_SetupSomersaultAndAttack(wf); break;
         case WOLFOS_ACTION_BACKFLIP_AWAY: EnWf_SetupBackflipAway(wf); break;
         case WOLFOS_ACTION_WAIT: EnWf_SetupWait(wf); break;
         case WOLFOS_ACTION_BLOCKING: EnWf_SetupBlocking(wf); break;
@@ -1043,13 +1049,14 @@ static void ApplyWfAction(EnWf* wf, s32 remoteAction) {
         case WOLFOS_ACTION_RECOIL_FROM_BLOCKED_SLASH: EnWf_SetupRecoilFromBlockedSlash(wf); break;
         case WOLFOS_ACTION_SIDESTEP: EnWf_SetupSidestep(wf, gPlayState); break;
         case WOLFOS_ACTION_STUNNED: EnWf_SetupStunned(wf); break;
-        default: break;
+        default: return false;
     }
+    return true;
 }
 
-static void ApplyTiteAction(EnTite* tite, s32 remoteAction) {
+static bool ApplyTiteAction(EnTite* tite, s32 remoteAction) {
     if (tite == nullptr || remoteAction < 0 || remoteAction == tite->action) {
-        return;
+        return tite != nullptr && remoteAction == tite->action;
     }
 
     switch (remoteAction) {
@@ -1060,18 +1067,21 @@ static void ApplyTiteAction(EnTite* tite, s32 remoteAction) {
         case 9: EnTite_SetupAttack(tite); break;        // TEKTITE_ATTACK
         case 0xA: EnTite_SetupTurnTowardPlayer(tite); break; // TEKTITE_TURN_TOWARD_PLAYER
         case 0xC: EnTite_SetupMoveTowardPlayer(tite); break; // TEKTITE_MOVE_TOWARD_PLAYER
-        default: break;
+        default: return false;
     }
+    return true;
 }
 
-static void ApplyZfAction(EnZf* zf, s32 remoteAction) {
+static bool ApplyZfAction(EnZf* zf, s32 remoteAction) {
     if (zf == nullptr || remoteAction < 0 || remoteAction == zf->action) {
-        return;
+        return zf != nullptr && remoteAction == zf->action;
     }
 
     switch (remoteAction) {
         case ENZF_ACTION_DROP_IN: EnZf_SetupDropIn(zf); break;
+        case ENZF_ACTION_3: func_80B45384(zf); break;
         case ENZF_ACTION_APPROACH_PLAYER: EnZf_SetupApproachPlayer(zf, gPlayState); break;
+        case ENZF_ACTION_6: func_80B4604C(zf); break;
         case ENZF_ACTION_JUMP_FORWARD: EnZf_SetupJumpForward(zf); break;
         case ENZF_ACTION_SLASH: EnZf_SetupSlash(zf); break;
         case ENZF_ACTION_RECOIL_FROM_BLOCKED_SLASH: EnZf_SetupRecoilFromBlockedSlash(zf); break;
@@ -1084,9 +1094,10 @@ static void ApplyZfAction(EnZf* zf, s32 remoteAction) {
         case ENZF_ACTION_DAMAGED: EnZf_SetupDamaged(zf); break;
         case ENZF_ACTION_JUMP_UP: EnZf_SetupJumpUp(zf); break;
         case ENZF_ACTION_DIE: EnZf_SetupDie(zf); break;
-        case ENZF_ACTION_CIRCLE_AROUND_PLAYER: EnZf_SetupCircleAroundPlayer(zf, 0.0f); break;
-        default: break;
+        case ENZF_ACTION_CIRCLE_AROUND_PLAYER: EnZf_SetupCircleAroundPlayer(zf, zf->actor.speedXZ); break;
+        default: return false;
     }
+    return true;
 }
 
 static f32 GetDekubabaNativeSize(Actor* actor) {
@@ -1435,7 +1446,6 @@ static void AddDynaPolyState(nlohmann::json& extra, DynaPolyActor* dyna) {
         return;
     }
 
-    extra["dynaBgId"] = dyna->bgId;
     extra["dynaUnk150"] = dyna->unk_150;
     extra["dynaUnk154"] = dyna->unk_154;
     extra["dynaUnk158"] = dyna->unk_158;
@@ -1455,7 +1465,6 @@ static void ApplyDynaPolyState(nlohmann::json extra, DynaPolyActor* dyna) {
         return;
     }
 
-    dyna->bgId = extra.value("dynaBgId", dyna->bgId);
     dyna->unk_150 = extra.value("dynaUnk150", dyna->unk_150);
     dyna->unk_154 = extra.value("dynaUnk154", dyna->unk_154);
     dyna->unk_158 = extra.value("dynaUnk158", dyna->unk_158);
@@ -1585,16 +1594,42 @@ void ApplySkelAnimeState(nlohmann::json extra, SkelAnime* skelAnime) {
     f32 remoteCurFrame = extra.value("skelCurFrame", skelAnime->curFrame);
     f32 remoteStartFrame = extra.value("skelStartFrame", skelAnime->startFrame);
     f32 remoteEndFrame = extra.value("skelEndFrame", skelAnime->endFrame);
-    u8 remoteMode = extra.value("skelMode", skelAnime->mode);
-    bool animChanged = remoteMode != skelAnime->mode || fabsf(remoteStartFrame - skelAnime->startFrame) > 0.01f ||
+    int64_t remoteModeValue = skelAnime->mode;
+    if (extra.contains("skelMode")) {
+        if (extra["skelMode"].is_number_unsigned()) {
+            uint64_t encodedMode = extra["skelMode"].get<uint64_t>();
+            if (encodedMode > ANIMMODE_LOOP_PARTIAL_INTERP) {
+                return;
+            }
+            remoteModeValue = static_cast<int64_t>(encodedMode);
+        } else if (extra["skelMode"].is_number_integer()) {
+            remoteModeValue = extra["skelMode"].get<int64_t>();
+        } else {
+            return;
+        }
+    }
+    u8 remoteMode = static_cast<u8>(remoteModeValue);
+    f32 remotePlaySpeed = extra.value("skelPlaySpeed", skelAnime->playSpeed);
+    f32 remoteMorphWeight = extra.value("skelMorphWeight", skelAnime->morphWeight);
+    f32 remoteMorphRate = extra.value("skelMorphRate", skelAnime->morphRate);
+    if (!std::isfinite(remoteCurFrame) || !std::isfinite(remoteStartFrame) || !std::isfinite(remoteEndFrame) ||
+        !std::isfinite(remotePlaySpeed) || !std::isfinite(remoteMorphWeight) || !std::isfinite(remoteMorphRate) ||
+        remoteModeValue < ANIMMODE_LOOP || remoteModeValue > ANIMMODE_LOOP_PARTIAL_INTERP ||
+        remoteMode != skelAnime->mode ||
+        !std::isfinite(skelAnime->animLength) || skelAnime->animLength <= 0.0f || remoteCurFrame < 0.0f ||
+        remoteStartFrame < 0.0f || remoteEndFrame < 0.0f || remoteCurFrame > skelAnime->animLength ||
+        remoteStartFrame > skelAnime->animLength || remoteEndFrame > skelAnime->animLength ||
+        fabsf(remotePlaySpeed) > 100.0f) {
+        return;
+    }
+    bool animChanged = fabsf(remoteStartFrame - skelAnime->startFrame) > 0.01f ||
                        fabsf(remoteEndFrame - skelAnime->endFrame) > 0.01f;
 
-    skelAnime->playSpeed = extra.value("skelPlaySpeed", skelAnime->playSpeed);
-    skelAnime->mode = remoteMode;
+    skelAnime->playSpeed = remotePlaySpeed;
     skelAnime->startFrame = remoteStartFrame;
     skelAnime->endFrame = remoteEndFrame;
-    skelAnime->morphWeight = extra.value("skelMorphWeight", skelAnime->morphWeight);
-    skelAnime->morphRate = extra.value("skelMorphRate", skelAnime->morphRate);
+    skelAnime->morphWeight = remoteMorphWeight;
+    skelAnime->morphRate = remoteMorphRate;
 
     // The local animation advances at the same speed as the authority's, so let it play freely while it stays
     // close; re-snapping the frame on every packet reads as stutter because packets and frames aren't phase-locked.
@@ -2957,8 +2992,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     } else if (actor->id == ACTOR_EN_WF && kind == "EnWf") {
         EnWf* wf = (EnWf*)actor;
         s32 remoteWfAction = extra.value("action", wf->action);
-        ApplyWfAction(wf, remoteWfAction);
-        wf->action = remoteWfAction;
+        if (ApplyWfAction(wf, remoteWfAction)) {
+            wf->action = remoteWfAction;
+        }
         wf->actionTimer = extra.value("actionTimer", wf->actionTimer);
         wf->runSpeed = extra.value("runSpeed", wf->runSpeed);
         wf->slashStatus = extra.value("slashStatus", wf->slashStatus);
@@ -2970,8 +3006,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     } else if (actor->id == ACTOR_EN_ZF && kind == "EnZf") {
         EnZf* zf = (EnZf*)actor;
         s32 remoteZfAction = extra.value("action", zf->action);
-        ApplyZfAction(zf, remoteZfAction);
-        zf->action = remoteZfAction;
+        if (ApplyZfAction(zf, remoteZfAction)) {
+            zf->action = remoteZfAction;
+        }
         zf->hopAnimIndex = extra.value("hopAnimIndex", zf->hopAnimIndex);
         zf->headRot = extra.value("headRot", zf->headRot);
         zf->headRotTemp = extra.value("headRotTemp", zf->headRotTemp);
@@ -3021,8 +3058,9 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
     } else if (actor->id == ACTOR_EN_TITE && kind == "EnTite") {
         EnTite* tite = (EnTite*)actor;
         s32 remoteTiteAction = extra.value("action", (s32)tite->action);
-        ApplyTiteAction(tite, remoteTiteAction);
-        tite->action = (u8)remoteTiteAction;
+        if (ApplyTiteAction(tite, remoteTiteAction)) {
+            tite->action = (u8)remoteTiteAction;
+        }
         tite->flipState = extra.value("flipState", tite->flipState);
         tite->actionVar1 = extra.value("actionVar1", tite->actionVar1);
         tite->actionVar2 = extra.value("actionVar2", tite->actionVar2);
@@ -3558,17 +3596,6 @@ void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra) {
         ApplyGenericEnemyState(actor, extra);
     }
 
-    // Generic carryable held state — applies to cuccos, pots, crates, bombs, bomb flowers.
-    // Sets parent to self-reference when held by a remote player so the actor's idle action
-    // detects Actor_HasParent and transitions to the held state locally.
-    if (IsCarryableActor(actor)) {
-        bool remoteHeld = extra.value("held", false);
-        if (remoteHeld && actor->parent == nullptr) {
-            actor->parent = actor;
-        } else if (!remoteHeld && actor->parent == actor) {
-            actor->parent = nullptr;
-        }
-    }
 }
 
 void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
@@ -3628,7 +3655,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         }
 
         actorIds.push_back(actor->id);
-        actorParams.push_back(actor->params);
+        actorParams.push_back(GetEnemySpawnParams(actor));
         networkIds.push_back(GetEnemyNetworkId(actor));
         categories.push_back(actor->category);
         posX.push_back(actor->world.pos.x);
@@ -3660,7 +3687,34 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         colorFilterTimer.push_back(actor->colorFilterTimer);
         colorFilterParams.push_back(actor->colorFilterParams);
         health.push_back(actor->colChkInfo.health);
-        extraStates.push_back(GetEnemyExtraState(actor));
+        nlohmann::json extraState = GetEnemyExtraState(actor);
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        if (IsCarryableActor(actor)) {
+            EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkId];
+            if (ownership.authoritySessionId != enemySessionId) {
+                ownership.authoritySessionId = enemySessionId;
+                ownership.generation++;
+                if (ownership.generation == 0) {
+                    ownership.generation++;
+                }
+            }
+            extraState["carryOwnerClientId"] = ownership.ownerClientId;
+            extraState["carryGeneration"] = ownership.generation;
+            extraState["carryAuthoritySessionId"] = ownership.authoritySessionId;
+            extraState["held"] = ownership.ownerClientId != 0;
+        }
+        if (appliedEnemyDamageOperations.contains(networkId) &&
+            !appliedEnemyDamageOperations[networkId].empty()) {
+            extraState["appliedDamageOperations"] = nlohmann::json::array();
+            for (const EnemyDamageOperationKey& operation : appliedEnemyDamageOperations[networkId]) {
+                extraState["appliedDamageOperations"].push_back({
+                    { "clientId", operation.clientId },
+                    { "sessionId", operation.sessionId },
+                    { "operationId", operation.operationId },
+                });
+            }
+        }
+        extraStates.push_back(extraState);
     }
 
     if (actorIds.empty()) {
@@ -3673,6 +3727,8 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = ownClientId;
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["snapshotSequence"] = NextEnemySnapshotSequence(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["enemySessionId"] = enemySessionId;
     payload["networkIds"] = networkIds;
     payload["actorIds"] = actorIds;
     payload["actorParams"] = actorParams;
@@ -3729,6 +3785,76 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
 
     s8 authorityRoomNum = payload.value("roomNum", (s8)-1);
 
+    constexpr size_t MAX_ENEMY_SNAPSHOT_ACTORS = 1024;
+    constexpr const char* requiredArrays[] = {
+        "networkIds",       "actorIds",       "categories",       "posX",             "posY",
+        "posZ",             "worldRotX",      "worldRotY",        "worldRotZ",        "shapeRotX",
+        "shapeRotY",        "shapeRotZ",      "velocityX",        "velocityY",        "velocityZ",
+        "speedXZ",          "gravity",        "minVelocityY",     "freezeTimer",       "colorFilterTimer",
+        "health",
+    };
+    for (const char* field : requiredArrays) {
+        if (!payload.contains(field) || !payload[field].is_array() ||
+            payload[field].size() > MAX_ENEMY_SNAPSHOT_ACTORS) {
+            return;
+        }
+    }
+    constexpr const char* optionalArrays[] = {
+        "actorParams",       "homeX",            "homeY",          "homeZ",       "scaleX",
+        "scaleY",            "scaleZ",           "yawTowardsPlayer", "xzDistToPlayer", "yDistToPlayer",
+        "xyzDistToPlayerSq", "colorFilterParams", "extraStates",
+    };
+    for (const char* field : optionalArrays) {
+        if (payload.contains(field) && (!payload[field].is_array() ||
+                                       payload[field].size() > MAX_ENEMY_SNAPSHOT_ACTORS)) {
+            return;
+        }
+    }
+
+    auto validSignedArray = [&](const char* field, int64_t minimum, int64_t maximum, bool optional = false) {
+        if (optional && !payload.contains(field)) {
+            return true;
+        }
+        for (const nlohmann::json& value : payload[field]) {
+            if (value.is_number_unsigned()) {
+                uint64_t integer = value.get<uint64_t>();
+                if ((minimum > 0 && integer < static_cast<uint64_t>(minimum)) ||
+                    integer > static_cast<uint64_t>(maximum)) {
+                    return false;
+                }
+            } else if (value.is_number_integer()) {
+                int64_t integer = value.get<int64_t>();
+                if (integer < minimum || integer > maximum) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        return true;
+    };
+    for (const nlohmann::json& value : payload["networkIds"]) {
+        if (!value.is_number_unsigned() || value.get<uint64_t>() == 0) {
+            return;
+        }
+    }
+    if (!validSignedArray("actorIds", 0, ACTOR_ID_MAX - 1) ||
+        !validSignedArray("categories", ACTORCAT_SWITCH, ACTORCAT_MAX - 1) ||
+        !validSignedArray("actorParams", INT16_MIN, INT16_MAX, true) ||
+        !validSignedArray("worldRotX", INT16_MIN, INT16_MAX) ||
+        !validSignedArray("worldRotY", INT16_MIN, INT16_MAX) ||
+        !validSignedArray("worldRotZ", INT16_MIN, INT16_MAX) ||
+        !validSignedArray("shapeRotX", INT16_MIN, INT16_MAX) ||
+        !validSignedArray("shapeRotY", INT16_MIN, INT16_MAX) ||
+        !validSignedArray("shapeRotZ", INT16_MIN, INT16_MAX) ||
+        !validSignedArray("yawTowardsPlayer", INT16_MIN, INT16_MAX, true) ||
+        !validSignedArray("freezeTimer", 0, UINT16_MAX) ||
+        !validSignedArray("colorFilterTimer", 0, UINT8_MAX) ||
+        !validSignedArray("colorFilterParams", 0, UINT16_MAX, true) ||
+        !validSignedArray("health", 0, UINT8_MAX)) {
+        return;
+    }
+
     auto networkIds = payload.at("networkIds").get<std::vector<uint64_t>>();
     auto actorIds = payload.at("actorIds").get<std::vector<s16>>();
     auto actorParams = payload.value("actorParams", std::vector<s16>{});
@@ -3765,7 +3891,11 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     auto extraStates = payload.value("extraStates", std::vector<nlohmann::json>{});
 
     size_t enemyCount = actorIds.size();
-    if (networkIds.size() != enemyCount || (!actorParams.empty() && actorParams.size() != enemyCount) ||
+    if (enemyCount > MAX_ENEMY_SNAPSHOT_ACTORS || networkIds.size() != enemyCount || (!actorParams.empty() && actorParams.size() != enemyCount) ||
+        (homeX.empty() != homeY.empty()) || (homeX.empty() != homeZ.empty()) ||
+        (scaleX.empty() != scaleY.empty()) || (scaleX.empty() != scaleZ.empty()) ||
+        (xzDistToPlayer.empty() != yDistToPlayer.empty()) ||
+        (xzDistToPlayer.empty() != xyzDistToPlayerSq.empty()) ||
         categories.size() != enemyCount || posX.size() != enemyCount ||
         posY.size() != enemyCount || posZ.size() != enemyCount || worldRotX.size() != enemyCount ||
         worldRotY.size() != enemyCount || worldRotZ.size() != enemyCount || shapeRotX.size() != enemyCount ||
@@ -3787,12 +3917,36 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         health.size() != enemyCount) {
         return;
     }
+    if (!IsNewEnemySnapshotPacket(payload)) {
+        return;
+    }
 
     for (size_t i = 0; i < enemyCount; i++) {
+        if (networkIds[i] == 0 || actorIds[i] < 0 || actorIds[i] >= ACTOR_ID_MAX ||
+            categories[i] < ACTORCAT_SWITCH || categories[i] >= ACTORCAT_MAX || !std::isfinite(posX[i]) ||
+            !std::isfinite(posY[i]) || !std::isfinite(posZ[i]) ||
+            (!homeX.empty() && (!std::isfinite(homeX[i]) || !std::isfinite(homeY[i]) || !std::isfinite(homeZ[i]))) ||
+            (!scaleX.empty() && (!std::isfinite(scaleX[i]) || !std::isfinite(scaleY[i]) || !std::isfinite(scaleZ[i]))) ||
+            !std::isfinite(velocityX[i]) || !std::isfinite(velocityY[i]) || !std::isfinite(velocityZ[i]) ||
+            !std::isfinite(speedXZ[i]) || !std::isfinite(gravity[i]) || !std::isfinite(minVelocityY[i]) ||
+            (!xzDistToPlayer.empty() && (!std::isfinite(xzDistToPlayer[i]) || !std::isfinite(yDistToPlayer[i]) ||
+                                         !std::isfinite(xyzDistToPlayerSq[i])))) {
+            continue;
+        }
         ActorCategory category = (ActorCategory)categories[i];
 
         Vec3f pos = { posX[i], posY[i], posZ[i] };
         Actor* target = FindActorByEnemyNetworkId(networkIds[i]);
+        if (IsEnemyMarkedDead(networkIds[i])) {
+            if (target != nullptr) {
+                QueueEnemyKill(networkIds[i]);
+            }
+            continue;
+        }
+        if (target != nullptr && (target->id != actorIds[i] || !IsActorInCurrentEnemyRoom(target) ||
+                                  (!actorParams.empty() && GetEnemySpawnParams(target) != actorParams[i]))) {
+            continue;
+        }
         bool isNewAssociation = target == nullptr;
         s16 params = actorParams.empty() ? (s16)0 : actorParams[i];
         if (target == nullptr && IsEnemySyncActor(category, actorIds[i])) {
@@ -3805,7 +3959,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
             // Duel actors come with the room on every client, and parent-dependent enemies would crash if
             // spawned parentless from the network; both only associate with locally simulated copies.
             if (target == nullptr && !actorParams.empty() && !IsIndependentDuelActor(actorIds[i]) &&
-                !IsParentDependentEnemy(actorIds[i])) {
+                !IsParentDependentEnemy(actorIds[i], params)) {
                 target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorIds[i], pos.x, pos.y, pos.z, worldRotX[i],
                                      worldRotY[i], worldRotZ[i], actorParams[i]);
                 SetEnemyNetworkId(target, networkIds[i]);
@@ -3846,7 +4000,72 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                       health[i] };
         enemyAuthorityTargets[networkIds[i]] = state;
         nlohmann::json extraState = extraStates.empty() ? nlohmann::json::object() : extraStates[i];
-        bool hasExtraState = extraState.is_object() && !extraState.value("kind", std::string("")).empty();
+        if (IsCarryableActor(target) && extraState.is_object() && extraState.contains("carryOwnerClientId") &&
+            extraState["carryOwnerClientId"].is_number_unsigned() && extraState.contains("carryGeneration") &&
+            extraState["carryGeneration"].is_number_unsigned() &&
+            extraState.contains("carryAuthoritySessionId") &&
+            extraState["carryAuthoritySessionId"].is_number_unsigned() &&
+            extraState["carryOwnerClientId"].get<uint64_t>() <= UINT32_MAX &&
+            extraState["carryGeneration"].get<uint64_t>() <= UINT32_MAX) {
+            uint32_t ownerClientId = extraState["carryOwnerClientId"].get<uint32_t>();
+            uint32_t generation = extraState["carryGeneration"].get<uint32_t>();
+            uint64_t carryAuthoritySessionId = extraState["carryAuthoritySessionId"].get<uint64_t>();
+            EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkIds[i]];
+            if (carryAuthoritySessionId == payload.value("enemySessionId", (uint64_t)0) &&
+                (ownership.authoritySessionId != carryAuthoritySessionId || generation > ownership.generation)) {
+                Player* player = GET_PLAYER(gPlayState);
+                bool heldByLocalPlayer = target->parent != nullptr && target->parent != target;
+                if (ownerClientId != ownClientId && heldByLocalPlayer && player->heldActor == target) {
+                    Player_DetachHeldActor(gPlayState, player);
+                }
+                ownership = { ownerClientId, generation, carryAuthoritySessionId };
+                if (ownerClientId == 0) {
+                    if (target->parent == target) {
+                        target->parent = nullptr;
+                    }
+                } else if (ownerClientId != ownClientId && target->parent == nullptr) {
+                    target->parent = target;
+                } else if (ownerClientId == ownClientId && target->parent == target) {
+                    target->parent = nullptr;
+                }
+            }
+        }
+        if (extraState.is_object() && extraState.contains("appliedDamageOperations") &&
+            extraState["appliedDamageOperations"].is_array()) {
+            auto& appliedOperations = appliedEnemyDamageOperations[networkIds[i]];
+            size_t encodedOperationCount = 0;
+            for (const nlohmann::json& encoded : extraState["appliedDamageOperations"]) {
+                if (encodedOperationCount++ >= 512 || appliedOperations.size() >= 512) {
+                    break;
+                }
+                if (!encoded.is_object() || !encoded.contains("clientId") ||
+                    !encoded["clientId"].is_number_unsigned() || !encoded.contains("sessionId") ||
+                    !encoded["sessionId"].is_number_unsigned() || !encoded.contains("operationId") ||
+                    !encoded["operationId"].is_number_unsigned()) {
+                    continue;
+                }
+                EnemyDamageOperationKey operation = {
+                    encoded.value("clientId", (uint32_t)0),
+                    encoded.value("sessionId", (uint64_t)0),
+                    encoded.value("operationId", (uint64_t)0),
+                };
+                if (operation.clientId != 0 && operation.sessionId != 0 && operation.operationId != 0) {
+                    appliedOperations.insert(operation);
+                }
+            }
+            auto pending = pendingEnemyDamageOperations.find(networkIds[i]);
+            if (pending != pendingEnemyDamageOperations.end()) {
+                std::erase_if(pending->second, [&](const PendingEnemyDamageOperation& operation) {
+                    return appliedOperations.contains(operation.key);
+                });
+                if (pending->second.empty()) {
+                    pendingEnemyDamageOperations.erase(pending);
+                }
+            }
+        }
+        bool hasExtraState = extraState.is_object() &&
+                             (!extraState.value("kind", std::string("")).empty() ||
+                              extraState.contains("appliedDamageOperations"));
         if (!extraStates.empty()) {
             if (hasExtraState) {
                 enemyExtraStates[networkIds[i]] = extraState;

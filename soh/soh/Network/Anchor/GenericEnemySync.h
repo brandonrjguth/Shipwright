@@ -18,4 +18,4 @@ void ApplyGenericEnemyState(Actor* actor, nlohmann::json extra);
 // triggered yet (the kill arrived before the health=0 snapshot). Allocates BodyBreak and
 // sets any per-enemy death flags so the enemy's own death animation plays correctly.
 struct PlayState;
-void EnsureEnemyDeathSetup(Actor* actor, PlayState* play);
+bool EnsureEnemyDeathSetup(Actor* actor, PlayState* play);

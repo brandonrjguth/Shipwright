@@ -5,6 +5,7 @@
 #include "soh/Network/Network.h"
 #include <libultraship/libultraship.h>
 #include <queue>
+#include <deque>
 #include <mutex>
 #include <vector>
 #include <tuple>
@@ -26,6 +27,7 @@ typedef struct {
     std::string name;
     Color_RGB8 color;
     std::string clientVersion;
+    uint64_t enemySessionId;
     std::string teamId;
     bool online;
     bool self;
@@ -102,6 +104,40 @@ typedef struct {
     u8 health;
 } EnemyAuthorityState;
 
+struct EnemyDamageOperationKey {
+    uint32_t clientId;
+    uint64_t sessionId;
+    uint64_t operationId;
+
+    bool operator==(const EnemyDamageOperationKey& other) const {
+        return clientId == other.clientId && sessionId == other.sessionId && operationId == other.operationId;
+    }
+};
+
+struct EnemyDamageOperationKeyHash {
+    size_t operator()(const EnemyDamageOperationKey& key) const {
+        size_t hash = std::hash<uint64_t>{}(key.sessionId);
+        hash ^= std::hash<uint64_t>{}(key.operationId) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        hash ^= std::hash<uint32_t>{}(key.clientId) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        return hash;
+    }
+};
+
+struct PendingEnemyDamageOperation {
+    EnemyDamageOperationKey key;
+    u8 damageAmount;
+    uint32_t authorityClientId;
+    uint32_t authorityGeneration;
+    u32 lastSentFrame;
+    nlohmann::json reportPayload;
+};
+
+struct EnemyCarryOwnershipState {
+    uint32_t ownerClientId = 0;
+    uint32_t generation = 0;
+    uint64_t authoritySessionId = 0;
+};
+
 class Anchor : public Network {
   private:
     uint32_t spawningDummyPlayerForClientId = 0;
@@ -140,18 +176,35 @@ class Anchor : public Network {
     uint32_t GetTimeSyncAuthorityClientId();
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorities;
     std::unordered_map<uint32_t, uint32_t> enemyRoomAuthorityGenerations;
+    std::unordered_map<uint32_t, uint64_t> enemyRoomAuthoritySessions;
+    std::unordered_map<uint32_t, uint64_t> enemySnapshotSequences;
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>> lastEnemySnapshotSequences;
+    uint64_t enemySessionId = 0;
+    uint64_t nextEnemyOperationId = 0;
+    std::unordered_map<uint64_t, std::vector<PendingEnemyDamageOperation>> pendingEnemyDamageOperations;
+    std::unordered_map<uint64_t,
+                       std::unordered_set<EnemyDamageOperationKey, EnemyDamageOperationKeyHash>>
+        appliedEnemyDamageOperations;
+    std::unordered_map<uint64_t, EnemyCarryOwnershipState> enemyCarryOwnership;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> deadEnemyLedger;
-    std::unordered_map<uint64_t, uint16_t> enemyDropCounters;
-    uint32_t transientEnemyCounter = 0;
+    std::unordered_map<uint32_t, std::deque<uint64_t>> dynamicEnemyTombstoneOrder;
+    uint64_t nextDynamicEnemyIncarnation = 0;
     std::unordered_set<uint64_t> hintnutsDialogueActive;
     s16 enemySyncSceneNum = SCENE_ID_MAX;
     s8 enemySyncRoomNum = -1;
     bool enemyRoomSyncPending = true;
     u8 enemyTransformFrameCounter = 0;
+    std::unordered_map<uint64_t, u32> enemyDeathDeferralFrames;
+    std::unordered_set<uint64_t> previouslyHeldEnemyIds;
+    std::atomic_bool connectedEventPending = false;
+    std::atomic_bool disconnectedEventPending = false;
+    uint32_t networkLifecycleHookId = 0;
 
     nlohmann::json PrepClientState();
     nlohmann::json PrepRoomState();
     void RegisterHooks();
+    void ProcessConnectionEvents();
+    void ResetEnemySessionState(bool preserveWorldState = false);
     void RefreshClientActors();
     void SetDummyPlayerClientId(const Actor* actor, uint32_t clientId);
     Actor* FindClosestActorByCategoryAndId(ActorCategory category, s16 actorId, Vec3f pos);
@@ -164,8 +217,12 @@ class Anchor : public Network {
     bool IsTransientProjectileActor(s16 actorId, s16 params);
     bool IsLocallySimulatedEffectActor(s16 actorId);
     bool IsIndependentDuelActor(s16 actorId);
-    bool IsParentDependentEnemy(s16 actorId);
+    bool IsParentDependentEnemy(s16 actorId, s16 params);
+    bool IsActorInCurrentEnemyRoom(Actor* actor);
     uint64_t GetEnemyNetworkId(Actor* actor);
+    s16 GetEnemySpawnParams(Actor* actor);
+    void CaptureEnemySpawnParams(Actor* actor);
+    uint64_t AllocateDynamicEnemyNetworkId(uint64_t sourceNetworkId = 0);
     uint64_t CreateEnemyDropNetworkId(Actor* source, Actor* dropActor);
     void SetEnemyNetworkId(Actor* actor, uint64_t networkId);
     void AssignEnemyNetworkIds(std::vector<Actor*> actors);
@@ -173,6 +230,9 @@ class Anchor : public Network {
     void ResetEnemyRoomTransientState();
     void DetectEnemyRoomChange();
     void ProcessActorBuffers();
+    void QueueEnemyKill(uint64_t networkId);
+    void ReportLocalEnemyDamage(Actor* actor, u8 health);
+    void ResendPendingEnemyDamageOperations();
     void DetectEnemyDamage();
     void ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate);
     bool ConsumeFreshEnemyAuthorityData(uint64_t networkId);
@@ -185,6 +245,8 @@ class Anchor : public Network {
     bool HasEnemySyncAuthority();
     bool HasEnemySyncAuthority(s16 sceneNum, s8 roomNum);
     bool IsValidEnemyAuthorityPacket(nlohmann::json payload);
+    uint64_t NextEnemySnapshotSequence(s16 sceneNum, s8 roomNum);
+    bool IsNewEnemySnapshotPacket(const nlohmann::json& payload);
     void MarkEnemyDead(uint64_t networkId);
     void MarkEnemyDead(s16 sceneNum, s8 roomNum, uint64_t networkId);
     bool IsEnemyMarkedDead(uint64_t networkId);
@@ -303,13 +365,17 @@ class Anchor : public Network {
     void SendPacket_UpdateDungeonItems();
     void SendPacket_UpdateRoomState();
     void SendPacket_UpdateTeamState();
-    void SendPacket_DamageEnemy(Actor* actor, u8 health);
+    void SendPacket_DamageEnemy(Actor* actor, u8 health, const EnemyDamageOperationKey* operation = nullptr);
     void SendPacket_KillEnemy(Actor* actor);
+    void SendPacket_KillEnemy(const nlohmann::json& actorContext);
     void SendPacket_RequestRoomEnemies();
     void SendPacket_SendRoomEnemies(u32 targetClientId, ActorCategory category);
     void SendPacket_EnemyUpdate(std::vector<Actor*> actors);
     void SendPacket_EnemyEvent(Actor* actor, std::string eventType, nlohmann::json eventData);
     void SendPacket_ReportEnemyDamage(Actor* actor, u8 health);
+    void SendPacket_ReportEnemyDamageOperation(Actor* actor, u8 health, u8 damageAmount,
+                                               PendingEnemyDamageOperation& operation);
+    void SendPacket_ReportEnemyState(Actor* actor);
     void SendPacket_HintnutsDialogue(Actor* actor, std::string phase);
 };
 

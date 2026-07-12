@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
+#include <stdexcept>
 #include "Anchor.h"
 
 extern "C" {
@@ -56,6 +57,7 @@ inline void from_json(const json& j, AnchorClient& client) {
     client.name = j.value("name", "???");
     client.color = j.value("color", Color_RGB8{ 255, 255, 255 });
     client.clientVersion = j.value("clientVersion", "???");
+    client.enemySessionId = j.value("enemySessionId", (uint64_t)0);
     client.teamId = j.value("teamId", "default");
     client.online = j.value("online", false);
     client.seed = j.value("seed", (u32)0);
@@ -198,6 +200,9 @@ inline void from_json(const json& j, SaveContext& saveContext) {
     j.at("rupees").get_to(saveContext.rupees);
     std::vector<u32> sceneFlagsArray;
     j.at("sceneFlags").get_to(sceneFlagsArray);
+    if (sceneFlagsArray.size() != 124 * 4) {
+        throw std::invalid_argument("sceneFlags must contain exactly 496 values");
+    }
     for (int i = 0; i < 124; i++) {
         saveContext.sceneFlags[i].chest = sceneFlagsArray[i * 4];
         saveContext.sceneFlags[i].swch = sceneFlagsArray[i * 4 + 1];

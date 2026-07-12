@@ -1,4 +1,5 @@
 #include "soh/Network/Anchor/Anchor.h"
+#include <cmath>
 #include <nlohmann/json.hpp>
 #include <libultraship/libultraship.h>
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
@@ -218,6 +219,56 @@ static bool IsReportedBossGomaState(Actor* target, nlohmann::json payload) {
     return false;
 }
 
+static bool HasFiniteReportedMotion(const nlohmann::json& payload) {
+    constexpr const char* fields[] = { "posX", "posY", "posZ", "velocityX", "velocityY", "velocityZ", "speedXZ",
+                                       "gravity", "minVelocityY" };
+    for (const char* field : fields) {
+        if (payload.contains(field)) {
+            if (!payload[field].is_number()) {
+                return false;
+            }
+            f32 value = payload[field].get<f32>();
+            if (!std::isfinite(value) || fabsf(value) > 10000000.0f) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool IsAllowedReportedEnemyState(Actor* target, const nlohmann::json& payload) {
+    if (!HasReportedEnemyState(payload) || !HasFiniteReportedMotion(payload)) {
+        return false;
+    }
+
+    if (IsReportedDekunutsState(target, payload) || IsReportedHintnutsState(target, payload) ||
+        IsReportedShopnutsCaughtState(target, payload) || IsReportedNutsballReflectedState(target, payload) ||
+        IsReportedFhgFireVolleyState(target, payload) || IsReportedBossGanonVolleyState(target, payload) ||
+        IsReportedMovableBlockState(target, payload) || IsReportedPuzzleActorState(target, payload) ||
+        IsReportedBossGomaState(target, payload)) {
+        return true;
+    }
+
+    const nlohmann::json& extraState = payload["extraState"];
+    std::string kind = extraState.value("kind", std::string(""));
+    if (target->id == ACTOR_EN_KAREBABA && kind == "EnKarebaba") {
+        s32 action = extraState.value("action", (s32)-1);
+        return action == 5 || action == 8;
+    }
+    if (target->id == ACTOR_OBJ_SYOKUDAI && kind == "ObjSyokudai") {
+        return extraState.value("litTimer", (s16)0) > ((ObjSyokudai*)target)->litTimer;
+    }
+    if (target->id == ACTOR_EN_GOMA && kind == "EnGoma") {
+        return payload.value("health", (u8)target->colChkInfo.health) == 0;
+    }
+    if ((target->id == ACTOR_EN_NIW || target->id == ACTOR_OBJ_TSUBO || target->id == ACTOR_OBJ_KIBAKO ||
+         target->id == ACTOR_EN_BOMBF || target->id == ACTOR_EN_BOM) &&
+        extraState.contains("held") && extraState["held"].is_boolean()) {
+        return true;
+    }
+    return false;
+}
+
 static bool ApplyReportedBossGomaState(Actor* target, nlohmann::json payload) {
     if (target == nullptr || target->id != ACTOR_BOSS_GOMA || !HasReportedEnemyState(payload)) {
         return false;
@@ -269,8 +320,10 @@ static bool ApplyReportedBossGomaState(Actor* target, nlohmann::json payload) {
 
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
     nlohmann::json extraState = GetEnemyExtraState(actor);
+    bool isCarryable = actor->id == ACTOR_EN_NIW || actor->id == ACTOR_OBJ_TSUBO ||
+                       actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF || actor->id == ACTOR_EN_BOM;
     if (!extraState.is_object() ||
-        (extraState.value("kind", std::string("")).empty() && !extraState.value("held", false))) {
+        (extraState.value("kind", std::string("")).empty() && !isCarryable)) {
         return;
     }
 
@@ -459,7 +512,7 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
     }
 }
 
-void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
+void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health, const EnemyDamageOperationKey* operation) {
     if (!IsSaveLoaded()) {
         return;
     }
@@ -474,6 +527,7 @@ void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = ownClientId;
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["enemySessionId"] = enemySessionId;
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -481,6 +535,11 @@ void Anchor::SendPacket_DamageEnemy(Actor* actor, u8 health) {
     payload["posY"] = actor->world.pos.y;
     payload["posZ"] = actor->world.pos.z;
     payload["category"] = actor->category;
+    if (operation != nullptr) {
+        payload["damageSourceClientId"] = operation->clientId;
+        payload["damageSourceSessionId"] = operation->sessionId;
+        payload["damageOperationId"] = operation->operationId;
+    }
     if (health == 0) {
         AddReportedEnemyContextPayload(actor, payload);
     }
@@ -498,14 +557,39 @@ void Anchor::HandlePacket_DamageEnemy(nlohmann::json payload) {
         return;
     }
 
-    uint64_t networkId = payload.value("networkId", (uint64_t)0);
+    if (!payload.contains("health") || !payload["health"].is_number_unsigned() ||
+        payload["health"].get<uint64_t>() > UINT8_MAX) {
+        return;
+    }
 
-    if (IsEnemyMarkedDead(networkId)) {
+    uint64_t networkId = payload.value("networkId", (uint64_t)0);
+    uint32_t sourceClientId = payload.value("damageSourceClientId", (uint32_t)0);
+    uint64_t sourceSessionId = payload.value("damageSourceSessionId", (uint64_t)0);
+    uint64_t operationId = payload.value("damageOperationId", (uint64_t)0);
+    if (sourceClientId != 0 && sourceSessionId != 0 && operationId != 0) {
+        auto& appliedOperations = appliedEnemyDamageOperations[networkId];
+        if (appliedOperations.size() >= 512) {
+            appliedOperations.erase(appliedOperations.begin());
+        }
+        appliedOperations.insert({ sourceClientId, sourceSessionId, operationId });
+    }
+    if (sourceClientId == ownClientId && sourceSessionId == enemySessionId && operationId != 0) {
+        auto pending = pendingEnemyDamageOperations.find(networkId);
+        if (pending != pendingEnemyDamageOperations.end()) {
+            std::erase_if(pending->second, [&](const PendingEnemyDamageOperation& operation) {
+                return operation.key.operationId == operationId && operation.key.sessionId == sourceSessionId;
+            });
+            if (pending->second.empty()) {
+                pendingEnemyDamageOperations.erase(pending);
+            }
+        }
+    }
+
+    if (networkId == 0 || IsEnemyMarkedDead(networkId)) {
         return;
     }
 
     u8 health = payload.at("health").get<u8>();
-
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
         return;
@@ -551,6 +635,7 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
     payload["authorityClientId"] = authorityClientId;
     payload["authorityGeneration"] = GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["authoritySessionId"] = clients.contains(authorityClientId) ? clients[authorityClientId].enemySessionId : 0;
     payload["networkId"] = GetEnemyNetworkId(actor);
     payload["actorId"] = actor->id;
     payload["health"] = health;
@@ -574,6 +659,96 @@ void Anchor::SendPacket_ReportEnemyDamage(Actor* actor, u8 health) {
     SendJsonToRemote(payload);
 }
 
+void Anchor::SendPacket_ReportEnemyDamageOperation(Actor* actor, u8 health, u8 damageAmount,
+                                                     PendingEnemyDamageOperation& operation) {
+    if (!IsSaveLoaded() || damageAmount == 0 || operation.key.operationId == 0 ||
+        operation.key.sessionId == 0) {
+        return;
+    }
+
+    if (operation.reportPayload.empty()) {
+        if (actor == nullptr || GetEnemyNetworkId(actor) == 0) {
+            return;
+        }
+        nlohmann::json& payload = operation.reportPayload;
+        payload["type"] = REPORT_ENEMY_DAMAGE;
+        payload["reportKind"] = "damage";
+        payload["sceneNum"] = gPlayState->sceneNum;
+        payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+        payload["operationSessionId"] = operation.key.sessionId;
+        payload["operationId"] = operation.key.operationId;
+        payload["damageAmount"] = damageAmount;
+        payload["networkId"] = GetEnemyNetworkId(actor);
+        payload["actorId"] = actor->id;
+        payload["actorParams"] = GetEnemySpawnParams(actor);
+        payload["health"] = health;
+        payload["posX"] = actor->world.pos.x;
+        payload["posY"] = actor->world.pos.y;
+        payload["posZ"] = actor->world.pos.z;
+        payload["category"] = actor->category;
+        if (actor->id == ACTOR_EN_HINTNUTS && health == 0 && actor->params == 3) {
+            payload["hintnutsClearRoom"] = true;
+        }
+        if (actor->id == ACTOR_EN_NUTSBALL && health == 0) {
+            EnNutsball* nutsball = (EnNutsball*)actor;
+            payload["projectileKilled"] = (actor->bgCheckFlags & (1 | 8)) ||
+                                           (nutsball->collider.base.atFlags & AT_HIT) ||
+                                           (nutsball->collider.base.acFlags & AC_HIT) ||
+                                           (nutsball->collider.base.ocFlags1 & OC1_HIT);
+        }
+        AddReportedEnemyContextPayload(actor, payload);
+        payload["quiet"] = true;
+    }
+
+    nlohmann::json payload = operation.reportPayload;
+    payload["targetClientId"] = operation.authorityClientId;
+    payload["authorityClientId"] = operation.authorityClientId;
+    payload["authorityGeneration"] = operation.authorityGeneration;
+    payload["authoritySessionId"] = clients.contains(operation.authorityClientId)
+                                         ? clients[operation.authorityClientId].enemySessionId
+                                         : 0;
+    SendJsonToRemote(payload);
+}
+
+void Anchor::SendPacket_ReportEnemyState(Actor* actor) {
+    if (!IsSaveLoaded() || actor == nullptr) {
+        return;
+    }
+
+    uint32_t authorityClientId = GetEnemySyncAuthorityClientId();
+    uint64_t networkId = GetEnemyNetworkId(actor);
+    if (authorityClientId == 0 || authorityClientId == ownClientId || networkId == 0) {
+        return;
+    }
+
+    nlohmann::json payload;
+    payload["type"] = REPORT_ENEMY_DAMAGE;
+    payload["reportKind"] = "state";
+    payload["targetClientId"] = authorityClientId;
+    payload["sceneNum"] = gPlayState->sceneNum;
+    payload["roomNum"] = gPlayState->roomCtx.curRoom.num;
+    payload["authorityClientId"] = authorityClientId;
+    payload["authorityGeneration"] =
+        GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+    payload["authoritySessionId"] = clients.contains(authorityClientId) ? clients[authorityClientId].enemySessionId : 0;
+    payload["networkId"] = networkId;
+    payload["actorId"] = actor->id;
+    payload["health"] = actor->colChkInfo.health;
+    payload["posX"] = actor->world.pos.x;
+    payload["posY"] = actor->world.pos.y;
+    payload["posZ"] = actor->world.pos.z;
+    payload["category"] = actor->category;
+    AddReportedEnemyContextPayload(actor, payload);
+    bool isCarryable = actor->id == ACTOR_EN_NIW || actor->id == ACTOR_OBJ_TSUBO ||
+                       actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF || actor->id == ACTOR_EN_BOM;
+    if (isCarryable) {
+        payload["carryAction"] = actor->parent != nullptr && actor->parent != actor ? "acquire" : "release";
+        payload["carryGeneration"] = enemyCarryOwnership[networkId].generation;
+    }
+    payload["quiet"] = true;
+    SendJsonToRemote(payload);
+}
+
 void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     if (!IsRoomStable() || !HasEnemySyncAuthority()) {
         return;
@@ -585,12 +760,19 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
 
     AnchorClient& client = clients[clientId];
-    if (client.sceneNum != gPlayState->sceneNum ||
+    if (!client.online || !client.isSaveLoaded || !client.roomStable || client.sceneNum != gPlayState->sceneNum ||
         client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
         return;
     }
 
     if (payload.value("authorityClientId", (uint32_t)0) != ownClientId) {
+        return;
+    }
+    if (payload.value("authorityGeneration", (uint32_t)0) !=
+        GetEnemyRoomAuthorityGeneration(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num)) {
+        return;
+    }
+    if (payload.value("authoritySessionId", (uint64_t)0) != enemySessionId) {
         return;
     }
 
@@ -603,10 +785,152 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
+    if (!payload.contains("health") || !payload["health"].is_number_unsigned() ||
+        payload["health"].get<uint64_t>() > UINT8_MAX || !HasFiniteReportedMotion(payload)) {
+        return;
+    }
     u8 health = payload.at("health").get<u8>();
 
     Actor* target = FindActorByEnemyNetworkId(networkId);
     if (target == nullptr) {
+        return;
+    }
+
+    if (payload.value("actorId", target->id) != target->id) {
+        return;
+    }
+
+    std::string reportKind = payload.value("reportKind", std::string(""));
+    if (reportKind == "state") {
+        if (health != target->colChkInfo.health) {
+            return;
+        }
+        bool isCarryable = target->id == ACTOR_EN_NIW || target->id == ACTOR_OBJ_TSUBO ||
+                           target->id == ACTOR_OBJ_KIBAKO || target->id == ACTOR_EN_BOMBF ||
+                           target->id == ACTOR_EN_BOM;
+        if (isCarryable && payload.contains("carryAction") && payload["carryAction"].is_string()) {
+            std::string carryAction = payload["carryAction"].get<std::string>();
+            uint32_t reportedGeneration = payload.value("carryGeneration", UINT32_MAX);
+            EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkId];
+            if (ownership.authoritySessionId != enemySessionId) {
+                ownership = { 0, 0, enemySessionId };
+            }
+            const nlohmann::json& extraState = payload["extraState"];
+            bool reportedHeld = extraState.value("held", false);
+            Vec3f reportedPos = { payload.value("posX", target->world.pos.x),
+                                  payload.value("posY", target->world.pos.y),
+                                  payload.value("posZ", target->world.pos.z) };
+            Vec3f clientPos = client.posRot.pos;
+            float distanceSq = SQ(reportedPos.x - clientPos.x) + SQ(reportedPos.y - clientPos.y) +
+                               SQ(reportedPos.z - clientPos.z);
+            float targetDistanceSq = SQ(target->world.pos.x - clientPos.x) + SQ(target->world.pos.y - clientPos.y) +
+                                     SQ(target->world.pos.z - clientPos.z);
+            float velocityX = payload.value("velocityX", 0.0f);
+            float velocityY = payload.value("velocityY", 0.0f);
+            float velocityZ = payload.value("velocityZ", 0.0f);
+            float speedXZ = payload.value("speedXZ", 0.0f);
+            bool validCarryState = extraState.is_object() && extraState.contains("held") &&
+                                   extraState["held"].is_boolean() && distanceSq <= SQ(600.0f) &&
+                                   fabsf(velocityX) <= 100.0f && fabsf(velocityY) <= 100.0f &&
+                                   fabsf(velocityZ) <= 100.0f && fabsf(speedXZ) <= 100.0f &&
+                                   ((carryAction == "acquire" && reportedHeld) ||
+                                    (carryAction == "release" && !reportedHeld)) &&
+                                   (carryAction != "acquire" || ownership.ownerClientId == clientId ||
+                                    targetDistanceSq <= SQ(200.0f));
+            if (!validCarryState) {
+                return;
+            }
+
+            // A newly elected authority may have missed the previous authority's last ownership snapshot. The
+            // holder's generation is monotonic and the report is bound to this authority session, so adopt a newer
+            // generation before evaluating the requested transition.
+            if (reportedGeneration > ownership.generation) {
+                ownership = { clientId, reportedGeneration, enemySessionId };
+            }
+
+            if (target->parent != nullptr && target->parent != target && ownership.ownerClientId != ownClientId) {
+                ownership.ownerClientId = ownClientId;
+                ownership.generation++;
+                if (ownership.generation == 0) {
+                    ownership.generation++;
+                }
+            }
+
+            if (carryAction == "acquire" && reportedGeneration == ownership.generation &&
+                (ownership.ownerClientId == 0 || ownership.ownerClientId == clientId)) {
+                if (ownership.ownerClientId == 0) {
+                    ownership.ownerClientId = clientId;
+                    ownership.generation++;
+                    if (ownership.generation == 0) {
+                        ownership.generation++;
+                    }
+                }
+                ApplyReportedEnemyState(target, payload);
+            } else if (carryAction == "release" && reportedGeneration == ownership.generation &&
+                       ownership.ownerClientId == clientId) {
+                ownership.ownerClientId = 0;
+                ownership.generation++;
+                if (ownership.generation == 0) {
+                    ownership.generation++;
+                }
+                ApplyReportedEnemyState(target, payload);
+            }
+            enemyHealthTracker[target] = target->colChkInfo.health;
+            return;
+        }
+        if (IsAllowedReportedEnemyState(target, payload)) {
+            ApplyReportedEnemyState(target, payload);
+            enemyHealthTracker[target] = target->colChkInfo.health;
+        }
+        return;
+    }
+
+    if (reportKind == "damage") {
+        uint64_t operationSessionId = payload.value("operationSessionId", (uint64_t)0);
+        uint64_t operationId = payload.value("operationId", (uint64_t)0);
+        constexpr u8 MAX_REPORTED_DAMAGE_AMOUNT = 32;
+        if (operationSessionId != client.enemySessionId || !payload.contains("damageAmount") ||
+            !payload["damageAmount"].is_number_unsigned()) {
+            return;
+        }
+        uint64_t encodedDamageAmount = payload["damageAmount"].get<uint64_t>();
+        if (operationSessionId == 0 || operationId == 0 || encodedDamageAmount == 0 ||
+            encodedDamageAmount > MAX_REPORTED_DAMAGE_AMOUNT) {
+            return;
+        }
+        u8 damageAmount = static_cast<u8>(encodedDamageAmount);
+
+        EnemyDamageOperationKey operation = { clientId, operationSessionId, operationId };
+        auto& appliedOperations = appliedEnemyDamageOperations[networkId];
+        if (appliedOperations.contains(operation)) {
+            SendPacket_DamageEnemy(target, target->colChkInfo.health, &operation);
+            return;
+        }
+        if (appliedOperations.size() >= 512) {
+            appliedOperations.erase(appliedOperations.begin());
+        }
+        appliedOperations.insert(operation);
+
+        u8 oldHealth = target->colChkInfo.health;
+        target->colChkInfo.health = damageAmount >= oldHealth ? 0 : static_cast<u8>(oldHealth - damageAmount);
+        bool hasReportedState = IsAllowedReportedEnemyState(target, payload);
+        if (hasReportedState) {
+            ApplyReportedEnemyState(target, payload);
+        } else if (target->colChkInfo.health == 0) {
+            // Generic native death setup is safe; generic network-provided action pointers are not.
+            ApplyEnemyExtraState(target, nlohmann::json::object());
+        }
+        enemyHealthTracker[target] = target->colChkInfo.health;
+        SendPacket_DamageEnemy(target, target->colChkInfo.health, &operation);
+
+        if (target->colChkInfo.health == 0) {
+            if (payload.value("hintnutsClearRoom", false) && target->id == ACTOR_EN_HINTNUTS) {
+                Flags_SetClear(gPlayState, target->room);
+            }
+            if (!IsEnemySyncActor(target) || !hasReportedState) {
+                QueueEnemyKill(networkId);
+            }
+        }
         return;
     }
 
@@ -620,7 +944,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
-    bool hasReportedState = HasReportedEnemyState(payload);
+    bool hasReportedState = IsAllowedReportedEnemyState(target, payload);
     if (target->id == ACTOR_EN_NUTSBALL && health == 0 && hasReportedState &&
         payload.value("projectileKilled", false)) {
         ApplyReportedEnemyState(target, payload);
