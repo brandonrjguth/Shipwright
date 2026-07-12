@@ -18,6 +18,12 @@ void EnAnubice_Init(Actor* thisx, PlayState* play);
 void EnAnubice_Destroy(Actor* thisx, PlayState* play);
 void EnAnubice_Update(Actor* thisx, PlayState* play);
 void EnAnubice_Draw(Actor* thisx, PlayState* play);
+Player* Anchor_GetEnemyTargetPlayer(Actor* actor);
+
+static Player* EnAnubice_GetTargetPlayer(EnAnubice* this, PlayState* play) {
+    Player* player = Anchor_GetEnemyTargetPlayer(&this->actor);
+    return player != NULL ? player : GET_PLAYER(play);
+}
 
 void EnAnubice_FindFlameCircles(EnAnubice* this, PlayState* play);
 void EnAnubice_SetupIdle(EnAnubice* this, PlayState* play);
@@ -102,7 +108,7 @@ static DamageTable sDamageTable[] = {
 };
 
 void EnAnubice_Hover(EnAnubice* this, PlayState* play) {
-    Player* player = GET_PLAYER(play);
+    Player* player = EnAnubice_GetTargetPlayer(this, play);
 
     this->hoverVelocityTimer += 1500.0f;
     this->targetHeight = player->actor.world.pos.y + this->playerHeightOffset;
@@ -116,7 +122,7 @@ void EnAnubice_SetFireballRot(EnAnubice* this, PlayState* play) {
     f32 x;
     f32 y;
     f32 z;
-    Player* player = GET_PLAYER(play);
+    Player* player = EnAnubice_GetTargetPlayer(this, play);
 
     x = player->actor.world.pos.x - this->fireballPos.x;
     y = player->actor.world.pos.y + 10.0f - this->fireballPos.y;
@@ -213,7 +219,7 @@ void EnAnubice_SetupIdle(EnAnubice* this, PlayState* play) {
 }
 
 void EnAnubice_Idle(EnAnubice* this, PlayState* play) {
-    Player* player = GET_PLAYER(play);
+    Player* player = EnAnubice_GetTargetPlayer(this, play);
 
     SkelAnime_Update(&this->skelAnime);
     Math_ApproachZeroF(&this->actor.shape.yOffset, 0.5f, 300.0f);

@@ -3643,6 +3643,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     std::vector<float> xzDistToPlayer;
     std::vector<float> yDistToPlayer;
     std::vector<float> xyzDistToPlayerSq;
+    std::vector<uint32_t> enemyTargetClientIds;
     std::vector<u16> freezeTimer;
     std::vector<u8> colorFilterTimer;
     std::vector<u16> colorFilterParams;
@@ -3683,12 +3684,15 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         xzDistToPlayer.push_back(actor->xzDistToPlayer);
         yDistToPlayer.push_back(actor->yDistToPlayer);
         xyzDistToPlayerSq.push_back(actor->xyzDistToPlayerSq);
+        uint64_t networkId = GetEnemyNetworkId(actor);
+        enemyTargetClientIds.push_back(this->enemyTargetClientIds.contains(networkId)
+                                           ? this->enemyTargetClientIds[networkId]
+                                           : ownClientId);
         freezeTimer.push_back(actor->freezeTimer);
         colorFilterTimer.push_back(actor->colorFilterTimer);
         colorFilterParams.push_back(actor->colorFilterParams);
         health.push_back(actor->colChkInfo.health);
         nlohmann::json extraState = GetEnemyExtraState(actor);
-        uint64_t networkId = GetEnemyNetworkId(actor);
         if (IsCarryableActor(actor)) {
             EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkId];
             if (ownership.authoritySessionId != enemySessionId) {
@@ -3758,6 +3762,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
     payload["xzDistToPlayer"] = xzDistToPlayer;
     payload["yDistToPlayer"] = yDistToPlayer;
     payload["xyzDistToPlayerSq"] = xyzDistToPlayerSq;
+    payload["enemyTargetClientIds"] = enemyTargetClientIds;
     payload["freezeTimer"] = freezeTimer;
     payload["colorFilterTimer"] = colorFilterTimer;
     payload["colorFilterParams"] = colorFilterParams;
@@ -3802,7 +3807,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     constexpr const char* optionalArrays[] = {
         "actorParams",       "homeX",            "homeY",          "homeZ",       "scaleX",
         "scaleY",            "scaleZ",           "yawTowardsPlayer", "xzDistToPlayer", "yDistToPlayer",
-        "xyzDistToPlayerSq", "colorFilterParams", "extraStates",
+        "xyzDistToPlayerSq", "enemyTargetClientIds", "colorFilterParams", "extraStates",
     };
     for (const char* field : optionalArrays) {
         if (payload.contains(field) && (!payload[field].is_array() ||
@@ -3848,6 +3853,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         !validSignedArray("shapeRotY", INT16_MIN, INT16_MAX) ||
         !validSignedArray("shapeRotZ", INT16_MIN, INT16_MAX) ||
         !validSignedArray("yawTowardsPlayer", INT16_MIN, INT16_MAX, true) ||
+        !validSignedArray("enemyTargetClientIds", 0, UINT32_MAX, true) ||
         !validSignedArray("freezeTimer", 0, UINT16_MAX) ||
         !validSignedArray("colorFilterTimer", 0, UINT8_MAX) ||
         !validSignedArray("colorFilterParams", 0, UINT16_MAX, true) ||
@@ -3884,6 +3890,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
     auto xzDistToPlayer = payload.value("xzDistToPlayer", std::vector<float>{});
     auto yDistToPlayer = payload.value("yDistToPlayer", std::vector<float>{});
     auto xyzDistToPlayerSq = payload.value("xyzDistToPlayerSq", std::vector<float>{});
+    auto enemyTargetClientIds = payload.value("enemyTargetClientIds", std::vector<uint32_t>{});
     auto freezeTimer = payload.at("freezeTimer").get<std::vector<u16>>();
     auto colorFilterTimer = payload.at("colorFilterTimer").get<std::vector<u8>>();
     auto colorFilterParams = payload.value("colorFilterParams", std::vector<u16>{});
@@ -3911,6 +3918,7 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
         (!xzDistToPlayer.empty() && xzDistToPlayer.size() != enemyCount) ||
         (!yDistToPlayer.empty() && yDistToPlayer.size() != enemyCount) ||
         (!xyzDistToPlayerSq.empty() && xyzDistToPlayerSq.size() != enemyCount) ||
+        (!enemyTargetClientIds.empty() && enemyTargetClientIds.size() != enemyCount) ||
         freezeTimer.size() != enemyCount || colorFilterTimer.size() != enemyCount ||
         (!colorFilterParams.empty() && colorFilterParams.size() != enemyCount) ||
         (!extraStates.empty() && extraStates.size() != enemyCount) ||
@@ -3999,6 +4007,21 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
                                       colorFilterParams.empty() ? (u16)0 : colorFilterParams[i],
                                       health[i] };
         enemyAuthorityTargets[networkIds[i]] = state;
+        if (!enemyTargetClientIds.empty()) {
+            uint32_t targetClientId = enemyTargetClientIds[i];
+            bool isLocalTarget = targetClientId == ownClientId;
+            bool isValidRemoteTarget = clients.contains(targetClientId) && clients[targetClientId].online &&
+                                       clients[targetClientId].isSaveLoaded && clients[targetClientId].roomStable &&
+                                       clients[targetClientId].stableRoomFrames >= 5 &&
+                                       clients[targetClientId].player != nullptr &&
+                                       clients[targetClientId].sceneNum == gPlayState->sceneNum &&
+                                       clients[targetClientId].curRoomNum == gPlayState->roomCtx.curRoom.num;
+            if (isLocalTarget || isValidRemoteTarget) {
+                this->enemyTargetClientIds[networkIds[i]] = targetClientId;
+            } else {
+                this->enemyTargetClientIds.erase(networkIds[i]);
+            }
+        }
         nlohmann::json extraState = extraStates.empty() ? nlohmann::json::object() : extraStates[i];
         if (IsCarryableActor(target) && extraState.is_object() && extraState.contains("carryOwnerClientId") &&
             extraState["carryOwnerClientId"].is_number_unsigned() && extraState.contains("carryGeneration") &&

@@ -155,6 +155,7 @@ class Anchor : public Network {
     std::vector<std::tuple<s16, s16, Vec3f>> enemySpawnBuffer;
     std::unordered_map<Actor*, u8> enemyHealthTracker;
     std::unordered_map<uint64_t, EnemyAuthorityState> enemyAuthorityTargets;
+    std::unordered_map<uint64_t, uint32_t> enemyTargetClientIds;
     std::unordered_map<uint64_t, nlohmann::json> enemyExtraStates;
     // NetworkIds whose authority state arrived since it was last applied. Replicas consume an entry at most once per
     // frame (right before the actor updates) so stale snapshots never drag a moving actor backwards.
@@ -235,6 +236,7 @@ class Anchor : public Network {
     void ResendPendingEnemyDamageOperations();
     void DetectEnemyDamage();
     void ApplyEnemyAuthorityState(Actor* actor, EnemyAuthorityState state, bool immediate);
+    void ApplyEnemyTargetMetrics(Actor* actor);
     bool ConsumeFreshEnemyAuthorityData(uint64_t networkId);
     void UpdateEnemyCullOverrides(const std::vector<Actor*>& currentEnemies);
     void UpdateHorsePuppets();
@@ -342,6 +344,7 @@ class Anchor : public Network {
     bool HasQuestItemCutsceneReplay(s32 questItem);
     void FinishQuestItemCutsceneReplay(s32 questItem);
     uint32_t GetDummyPlayerClientId(const Actor* actor);
+    Player* GetEnemyTargetPlayer(Actor* actor);
 
     void SendPacket_ClearTeamState(std::string teamId);
     void SendPacket_DamagePlayer(u32 clientId, u8 damageEffect, u8 damage);

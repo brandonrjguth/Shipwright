@@ -13,6 +13,7 @@ void EnAnubiceTag_Init(Actor* thisx, PlayState* play);
 void EnAnubiceTag_Destroy(Actor* thisx, PlayState* play);
 void EnAnubiceTag_Update(Actor* thisx, PlayState* play);
 void EnAnubiceTag_Draw(Actor* thisx, PlayState* play);
+bool Anchor_GetNearestEnemyTargetPos(Actor* actor, Vec3f* outPos);
 
 void EnAnubiceTag_SpawnAnubis(EnAnubiceTag* this, PlayState* play);
 void EnAnubiceTag_ManageAnubis(EnAnubiceTag* this, PlayState* play);
@@ -62,6 +63,7 @@ void EnAnubiceTag_SpawnAnubis(EnAnubiceTag* this, PlayState* play) {
 void EnAnubiceTag_ManageAnubis(EnAnubiceTag* this, PlayState* play) {
     EnAnubice* anubis;
     Vec3f offset;
+    Vec3f targetPos;
 
     if (this->anubis != NULL) {
         anubis = this->anubis;
@@ -78,12 +80,17 @@ void EnAnubiceTag_ManageAnubis(EnAnubiceTag* this, PlayState* play) {
         return;
     }
 
-    if (this->actor.xzDistToPlayer < (200.0f + this->triggerRange)) {
+    targetPos = GET_PLAYER(play)->actor.world.pos;
+    Anchor_GetNearestEnemyTargetPos(&anubis->actor, &targetPos);
+    f32 targetDist = Math_Vec3f_DistXZ(&this->actor.world.pos, &targetPos);
+    s16 targetYaw = Math_Vec3f_Yaw(&this->actor.world.pos, &targetPos);
+
+    if (targetDist < (200.0f + this->triggerRange)) {
         if (!anubis->isLinkOutOfRange) {
             if (!anubis->isKnockedback) {
                 anubis->isMirroringLink = true;
-                offset.x = -Math_SinS(this->actor.yawTowardsPlayer) * this->actor.xzDistToPlayer;
-                offset.z = -Math_CosS(this->actor.yawTowardsPlayer) * this->actor.xzDistToPlayer;
+                offset.x = -Math_SinS(targetYaw) * targetDist;
+                offset.z = -Math_CosS(targetYaw) * targetDist;
                 Math_ApproachF(&anubis->actor.world.pos.x, (this->actor.world.pos.x + offset.x), 0.3f, 10.0f);
                 Math_ApproachF(&anubis->actor.world.pos.z, (this->actor.world.pos.z + offset.z), 0.3f, 10.0f);
                 return;

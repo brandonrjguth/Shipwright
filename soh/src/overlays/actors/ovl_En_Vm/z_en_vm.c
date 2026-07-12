@@ -17,6 +17,7 @@ void EnVm_Init(Actor* thisx, PlayState* play);
 void EnVm_Destroy(Actor* thisx, PlayState* play);
 void EnVm_Update(Actor* thisx, PlayState* play);
 void EnVm_Draw(Actor* thisx, PlayState* play);
+Player* Anchor_GetEnemyTargetPlayer(Actor* actor);
 
 void EnVm_SetupWait(EnVm* this);
 void EnVm_Wait(EnVm* this, PlayState* play);
@@ -179,7 +180,10 @@ void EnVm_SetupWait(EnVm* this) {
 }
 
 void EnVm_Wait(EnVm* this, PlayState* play) {
-    Player* player = GET_PLAYER(play);
+    Player* player = Anchor_GetEnemyTargetPlayer(&this->actor);
+    if (player == NULL) {
+        player = GET_PLAYER(play);
+    }
     f32 dist;
     s16 headRot;
     s16 pad;
@@ -263,7 +267,10 @@ void EnVm_SetupAttack(EnVm* this) {
 }
 
 void EnVm_Attack(EnVm* this, PlayState* play) {
-    Player* player = GET_PLAYER(play);
+    Player* player = Anchor_GetEnemyTargetPlayer(&this->actor);
+    if (player == NULL) {
+        player = GET_PLAYER(play);
+    }
     s16 pitch = Math_Vec3f_Pitch(&this->beamPos1, &player->actor.world.pos);
     f32 dist;
     Vec3f playerPos;
@@ -299,7 +306,7 @@ void EnVm_Attack(EnVm* this, PlayState* play) {
         Math_SmoothStepToS(&this->beamRot.x, pitch, 10, 0xDAC, 0);
         playerPos = player->actor.world.pos;
 
-        if (player->actor.floorHeight > BGCHECK_Y_MIN) {
+        if (player == GET_PLAYER(play) && player->actor.floorHeight > BGCHECK_Y_MIN) {
             playerPos.y = player->actor.floorHeight;
         }
 

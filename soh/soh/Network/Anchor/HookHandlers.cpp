@@ -539,6 +539,7 @@ void Anchor::RegisterHooks() {
         enemyHealthTracker.erase(actor);
         if (networkId != 0) {
             enemyAuthorityTargets.erase(networkId);
+            enemyTargetClientIds.erase(networkId);
             enemyExtraStates.erase(networkId);
             freshEnemyAuthorityData.erase(networkId);
             enemyCarryOwnership.erase(networkId);
@@ -583,9 +584,9 @@ void Anchor::RegisterHooks() {
             // the local simulation extrapolates with the synced action/velocity instead of being dragged back to a
             // stale position, which is what caused fast actors (e.g. Gohma) to rubber-band and jitter.
             if (!ConsumeFreshEnemyAuthorityData(networkId)) {
-                // Even without fresh data, ensure enemies can detect the local player.
-                // The engine already set xzDistToPlayer from GET_PLAYER, so on non-fresh
-                // frames the distance is already correct. Nothing extra needed here.
+                if (actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) {
+                    ApplyEnemyTargetMetrics(actor);
+                }
                 return;
             }
             bool hasPendingLocalDamage = enemyAuthorityTargets.contains(networkId) &&
@@ -601,23 +602,8 @@ void Anchor::RegisterHooks() {
                 !hasPendingLocalExtraState) {
                 ApplyEnemyExtraState(actor, enemyExtraStates[networkId]);
             }
-            // After applying authority state, check if the local player is closer than the
-            // synced distance. This allows enemies (e.g. Beamos) to detect and target the
-            // local player on replicas, not just the authority's nearest player.
-            if ((actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) &&
-                !hasPendingLocalExtraState) {
-                Player* player = GET_PLAYER(gPlayState);
-                f32 dx = player->actor.world.pos.x - actor->world.pos.x;
-                f32 dz = player->actor.world.pos.z - actor->world.pos.z;
-                f32 xzDist = sqrtf(SQ(dx) + SQ(dz));
-                f32 yDist = player->actor.world.pos.y - actor->world.pos.y;
-                f32 xyzDistSq = SQ(xzDist) + SQ(yDist);
-                if (xyzDistSq < actor->xyzDistToPlayerSq) {
-                    actor->xzDistToPlayer = xzDist;
-                    actor->yDistToPlayer = yDist;
-                    actor->xyzDistToPlayerSq = xyzDistSq;
-                    actor->yawTowardsPlayer = Math_Vec3f_Yaw(&actor->world.pos, &player->actor.world.pos);
-                }
+            if (actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS) {
+                ApplyEnemyTargetMetrics(actor);
             }
             return;
         }
@@ -626,8 +612,27 @@ void Anchor::RegisterHooks() {
             return;
         }
 
+        if (actor->id == ACTOR_EN_VM && ((EnVm*)actor)->unk_21C == 1 && networkId != 0 &&
+            enemyTargetClientIds.contains(networkId)) {
+            uint32_t lockedTargetClientId = enemyTargetClientIds[networkId];
+            bool localTargetValid = lockedTargetClientId == ownClientId;
+            bool remoteTargetValid = clients.contains(lockedTargetClientId) && clients[lockedTargetClientId].online &&
+                                     clients[lockedTargetClientId].isSaveLoaded &&
+                                     clients[lockedTargetClientId].roomStable &&
+                                     clients[lockedTargetClientId].stableRoomFrames >= 5 &&
+                                     clients[lockedTargetClientId].player != nullptr &&
+                                     clients[lockedTargetClientId].sceneNum == gPlayState->sceneNum &&
+                                     clients[lockedTargetClientId].curRoomNum == gPlayState->roomCtx.curRoom.num;
+            if (localTargetValid || remoteTargetValid) {
+                ApplyEnemyTargetMetrics(actor);
+                return;
+            }
+        }
+
+        uint32_t targetClientId = ownClientId;
         for (auto& [clientId, client] : clients) {
-            if (!client.online || client.self || !client.isSaveLoaded) {
+            if (!client.online || client.self || !client.isSaveLoaded || !client.roomStable ||
+                client.stableRoomFrames < 5 || client.player == nullptr) {
                 continue;
             }
             if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
@@ -640,11 +645,16 @@ void Anchor::RegisterHooks() {
             f32 yDist = client.posRot.pos.y - actor->world.pos.y;
             f32 xyzDistSq = SQ(xzDist) + SQ(yDist);
             if (xyzDistSq < actor->xyzDistToPlayerSq) {
+                targetClientId = clientId;
                 actor->xzDistToPlayer = xzDist;
                 actor->yDistToPlayer = yDist;
                 actor->xyzDistToPlayerSq = xyzDistSq;
                 actor->yawTowardsPlayer = Math_Vec3f_Yaw(&actor->world.pos, &client.posRot.pos);
             }
+        }
+        if (networkId != 0 && (actor->category == ACTORCAT_ENEMY || actor->category == ACTORCAT_BOSS)) {
+            enemyTargetClientIds[networkId] = targetClientId;
+            ApplyEnemyTargetMetrics(actor);
         }
     });
 

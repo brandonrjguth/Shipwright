@@ -96,7 +96,8 @@ void Anchor::FinishQuestItemCutsceneReplay(s32 questItem) {
 uint32_t Anchor::GetTimeSyncAuthorityClientId() {
     uint32_t authorityClientId = IsSaveLoaded() ? ownClientId : 0;
     for (auto& [clientId, client] : clients) {
-        if (!client.online || client.self || !client.isSaveLoaded) {
+        if (!client.online || client.self || !client.isSaveLoaded || !client.roomStable ||
+            client.stableRoomFrames < 5) {
             continue;
         }
         if (authorityClientId == 0 || clientId < authorityClientId) {
@@ -161,7 +162,8 @@ extern "C" Player* Anchor_GetNearestEnemyTargetPlayer(Actor* actor) {
     Player* bestPlayer = player;
 
     for (auto& [clientId, client] : Anchor::Instance->clients) {
-        if (!client.online || client.self || !client.isSaveLoaded || client.player == nullptr) {
+        if (!client.online || client.self || !client.isSaveLoaded || !client.roomStable ||
+            client.stableRoomFrames < 5 || client.player == nullptr) {
             continue;
         }
         if (client.sceneNum != gPlayState->sceneNum || client.curRoomNum != gPlayState->roomCtx.curRoom.num) {
@@ -179,6 +181,13 @@ extern "C" Player* Anchor_GetNearestEnemyTargetPlayer(Actor* actor) {
     }
 
     return bestPlayer;
+}
+
+extern "C" Player* Anchor_GetEnemyTargetPlayer(Actor* actor) {
+    if (Anchor::Instance == nullptr) {
+        return nullptr;
+    }
+    return Anchor::Instance->GetEnemyTargetPlayer(actor);
 }
 
 // MARK: - Overrides
@@ -457,6 +466,43 @@ static ObjectExtension::Register<EnemySpawnMetadata> EnemySpawnMetadataRegister;
 uint32_t Anchor::GetDummyPlayerClientId(const Actor* actor) {
     const DummyPlayerClientId* clientId = ObjectExtension::GetInstance().Get<DummyPlayerClientId>(actor);
     return clientId != nullptr ? clientId->clientId : 0;
+}
+
+Player* Anchor::GetEnemyTargetPlayer(Actor* actor) {
+    if (actor == nullptr || !IsSaveLoaded()) {
+        return nullptr;
+    }
+
+    uint64_t networkId = GetEnemyNetworkId(actor);
+    auto target = enemyTargetClientIds.find(networkId);
+    if (target == enemyTargetClientIds.end()) {
+        return Anchor_GetNearestEnemyTargetPlayer(actor);
+    }
+    if (target->second == ownClientId) {
+        return GET_PLAYER(gPlayState);
+    }
+    auto client = clients.find(target->second);
+    if (client == clients.end() || !client->second.online || !client->second.isSaveLoaded ||
+        !client->second.roomStable || client->second.stableRoomFrames < 5 ||
+        client->second.sceneNum != gPlayState->sceneNum ||
+        client->second.curRoomNum != gPlayState->roomCtx.curRoom.num || client->second.player == nullptr) {
+        return Anchor_GetNearestEnemyTargetPlayer(actor);
+    }
+    return client->second.player;
+}
+
+void Anchor::ApplyEnemyTargetMetrics(Actor* actor) {
+    Player* target = GetEnemyTargetPlayer(actor);
+    if (actor == nullptr || target == nullptr) {
+        return;
+    }
+
+    f32 dx = target->actor.world.pos.x - actor->world.pos.x;
+    f32 dz = target->actor.world.pos.z - actor->world.pos.z;
+    actor->xzDistToPlayer = sqrtf(SQ(dx) + SQ(dz));
+    actor->yDistToPlayer = target->actor.world.pos.y - actor->world.pos.y;
+    actor->xyzDistToPlayerSq = SQ(actor->xzDistToPlayer) + SQ(actor->yDistToPlayer);
+    actor->yawTowardsPlayer = Math_Vec3f_Yaw(&actor->world.pos, &target->actor.world.pos);
 }
 
 void Anchor::SetDummyPlayerClientId(const Actor* actor, uint32_t clientId) {
@@ -918,6 +964,7 @@ void Anchor::ResetEnemyRoomTransientState() {
     enemySpawnBuffer.clear();
     enemyHealthTracker.clear();
     enemyAuthorityTargets.clear();
+    enemyTargetClientIds.clear();
     enemyExtraStates.clear();
     freshEnemyAuthorityData.clear();
     enemyCullOverrides.clear();
