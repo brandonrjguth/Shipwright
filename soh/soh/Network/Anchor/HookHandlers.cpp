@@ -545,6 +545,7 @@ void Anchor::RegisterHooks() {
             enemyCarryOwnership.erase(networkId);
             enemyDeathDeferralFrames.erase(networkId);
             previouslyHeldEnemyIds.erase(networkId);
+            pendingCarryMigrationIds.erase(networkId);
         }
     });
 

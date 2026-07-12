@@ -136,6 +136,7 @@ struct EnemyCarryOwnershipState {
     uint32_t ownerClientId = 0;
     uint32_t generation = 0;
     uint64_t authoritySessionId = 0;
+    uint32_t authorityRoomKey = 0;
 };
 
 class Anchor : public Network {
@@ -197,6 +198,7 @@ class Anchor : public Network {
     u8 enemyTransformFrameCounter = 0;
     std::unordered_map<uint64_t, u32> enemyDeathDeferralFrames;
     std::unordered_set<uint64_t> previouslyHeldEnemyIds;
+    std::unordered_set<uint64_t> pendingCarryMigrationIds;
     std::atomic_bool connectedEventPending = false;
     std::atomic_bool disconnectedEventPending = false;
     uint32_t networkLifecycleHookId = 0;

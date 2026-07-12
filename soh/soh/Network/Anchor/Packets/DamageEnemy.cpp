@@ -47,6 +47,46 @@ void EnSt_Die(EnSt* thisx, PlayState* play);
 extern nlohmann::json GetEnemyExtraState(Actor* actor);
 extern void ApplyEnemyExtraState(Actor* actor, nlohmann::json extra);
 
+static bool IsCarryableActorId(s16 actorId) {
+    return actorId == ACTOR_EN_NIW || actorId == ACTOR_OBJ_TSUBO || actorId == ACTOR_OBJ_KIBAKO ||
+           actorId == ACTOR_EN_BOMBF || actorId == ACTOR_EN_BOM;
+}
+
+static bool ReadReportedS16(const nlohmann::json& payload, const char* field, s16& value) {
+    if (!payload.contains(field)) {
+        return false;
+    }
+    if (payload[field].is_number_unsigned()) {
+        uint64_t encoded = payload[field].get<uint64_t>();
+        if (encoded > INT16_MAX) {
+            return false;
+        }
+        value = static_cast<s16>(encoded);
+        return true;
+    }
+    if (!payload[field].is_number_integer()) {
+        return false;
+    }
+    int64_t encoded = payload[field].get<int64_t>();
+    if (encoded < INT16_MIN || encoded > INT16_MAX) {
+        return false;
+    }
+    value = static_cast<s16>(encoded);
+    return true;
+}
+
+static bool ReadReportedU32(const nlohmann::json& payload, const char* field, uint32_t& value) {
+    if (!payload.contains(field) || !payload[field].is_number_unsigned()) {
+        return false;
+    }
+    uint64_t encoded = payload[field].get<uint64_t>();
+    if (encoded > UINT32_MAX) {
+        return false;
+    }
+    value = static_cast<uint32_t>(encoded);
+    return true;
+}
+
 static bool HasReportedEnemyState(nlohmann::json payload) {
     return payload.contains("extraState") && payload["extraState"].is_object() &&
            !payload["extraState"].value("kind", std::string("")).empty();
@@ -261,8 +301,7 @@ static bool IsAllowedReportedEnemyState(Actor* target, const nlohmann::json& pay
     if (target->id == ACTOR_EN_GOMA && kind == "EnGoma") {
         return payload.value("health", (u8)target->colChkInfo.health) == 0;
     }
-    if ((target->id == ACTOR_EN_NIW || target->id == ACTOR_OBJ_TSUBO || target->id == ACTOR_OBJ_KIBAKO ||
-         target->id == ACTOR_EN_BOMBF || target->id == ACTOR_EN_BOM) &&
+    if (IsCarryableActorId(target->id) &&
         extraState.contains("held") && extraState["held"].is_boolean()) {
         return true;
     }
@@ -320,8 +359,7 @@ static bool ApplyReportedBossGomaState(Actor* target, nlohmann::json payload) {
 
 static void AddReportedEnemyContextPayload(Actor* actor, nlohmann::json& payload) {
     nlohmann::json extraState = GetEnemyExtraState(actor);
-    bool isCarryable = actor->id == ACTOR_EN_NIW || actor->id == ACTOR_OBJ_TSUBO ||
-                       actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF || actor->id == ACTOR_EN_BOM;
+    bool isCarryable = IsCarryableActorId(actor->id);
     if (!extraState.is_object() ||
         (extraState.value("kind", std::string("")).empty() && !isCarryable)) {
         return;
@@ -475,9 +513,7 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
         return;
     }
 
-    if (target->id == ACTOR_EN_NIW || target->id == ACTOR_OBJ_TSUBO ||
-        target->id == ACTOR_OBJ_KIBAKO || target->id == ACTOR_EN_BOMBF ||
-        target->id == ACTOR_EN_BOM) {
+    if (IsCarryableActorId(target->id)) {
         bool remoteHeld = extraState.value("held", false);
         if (remoteHeld && target->parent == nullptr) {
             target->parent = target;
@@ -485,6 +521,7 @@ static void ApplyReportedEnemyState(Actor* target, nlohmann::json payload) {
             target->parent = nullptr;
         }
         if (remoteHeld) {
+            target->room = -1;
             // Apply reported position so the authority tracks the remote holder's position.
             target->world.pos.x = payload.value("posX", target->world.pos.x);
             target->world.pos.y = payload.value("posY", target->world.pos.y);
@@ -739,11 +776,12 @@ void Anchor::SendPacket_ReportEnemyState(Actor* actor) {
     payload["posZ"] = actor->world.pos.z;
     payload["category"] = actor->category;
     AddReportedEnemyContextPayload(actor, payload);
-    bool isCarryable = actor->id == ACTOR_EN_NIW || actor->id == ACTOR_OBJ_TSUBO ||
-                       actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF || actor->id == ACTOR_EN_BOM;
+    bool isCarryable = IsCarryableActorId(actor->id);
     if (isCarryable) {
+        payload["actorParams"] = GetEnemySpawnParams(actor);
         payload["carryAction"] = actor->parent != nullptr && actor->parent != actor ? "acquire" : "release";
         payload["carryGeneration"] = enemyCarryOwnership[networkId].generation;
+        payload["carryReporterSessionId"] = enemySessionId;
     }
     payload["quiet"] = true;
     SendJsonToRemote(payload);
@@ -791,7 +829,83 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
     }
     u8 health = payload.at("health").get<u8>();
 
+    std::string reportKind = payload.value("reportKind", std::string(""));
     Actor* target = FindActorByEnemyNetworkId(networkId);
+    bool adoptedCarryable = false;
+    if (target == nullptr && reportKind == "state" && payload.contains("carryAction") &&
+        payload["carryAction"].is_string() && payload.contains("extraState") && payload["extraState"].is_object() &&
+        payload["extraState"].contains("held") && payload["extraState"]["held"].is_boolean() &&
+        (payload["carryAction"] == "acquire" || payload["carryAction"] == "release") &&
+        payload["extraState"]["held"].get<bool>() == (payload["carryAction"] == "acquire") &&
+        payload.value("carryReporterSessionId", (uint64_t)0) == client.enemySessionId &&
+        payload.value("sceneNum", (s16)SCENE_ID_MAX) == gPlayState->sceneNum &&
+        payload.value("roomNum", (s8)-1) == gPlayState->roomCtx.curRoom.num) {
+        s16 actorId;
+        s16 actorParams;
+        s16 worldRotX;
+        s16 worldRotY;
+        s16 worldRotZ;
+        Vec3f reportedPos = { payload.value("posX", client.posRot.pos.x),
+                              payload.value("posY", client.posRot.pos.y),
+                              payload.value("posZ", client.posRot.pos.z) };
+        float distanceSq = SQ(reportedPos.x - client.posRot.pos.x) + SQ(reportedPos.y - client.posRot.pos.y) +
+                           SQ(reportedPos.z - client.posRot.pos.z);
+        float velocityX = payload.value("velocityX", 0.0f);
+        float velocityY = payload.value("velocityY", 0.0f);
+        float velocityZ = payload.value("velocityZ", 0.0f);
+        float speedXZ = payload.value("speedXZ", 0.0f);
+        uint32_t reportedGeneration = UINT32_MAX;
+        bool validAdoption = ReadReportedS16(payload, "actorId", actorId) && IsCarryableActorId(actorId) &&
+                             ReadReportedS16(payload, "actorParams", actorParams) &&
+                             ReadReportedS16(payload, "worldRotX", worldRotX) &&
+                             ReadReportedS16(payload, "worldRotY", worldRotY) &&
+                             ReadReportedS16(payload, "worldRotZ", worldRotZ) && distanceSq <= SQ(600.0f) &&
+                             fabsf(velocityX) <= 100.0f && fabsf(velocityY) <= 100.0f &&
+                             fabsf(velocityZ) <= 100.0f && fabsf(speedXZ) <= 100.0f &&
+                             ReadReportedU32(payload, "carryGeneration", reportedGeneration);
+        EnemyCarryOwnershipState adoptedOwnership;
+        auto existingOwnership = enemyCarryOwnership.find(networkId);
+        if (existingOwnership != enemyCarryOwnership.end()) {
+            adoptedOwnership = existingOwnership->second;
+        }
+        if (adoptedOwnership.authoritySessionId != enemySessionId) {
+            adoptedOwnership.authoritySessionId = enemySessionId;
+            adoptedOwnership.generation++;
+            if (adoptedOwnership.generation == 0) {
+                adoptedOwnership.generation++;
+            }
+        }
+        adoptedOwnership.authorityRoomKey =
+            GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+        if (reportedGeneration > adoptedOwnership.generation &&
+            (adoptedOwnership.ownerClientId == 0 || adoptedOwnership.ownerClientId == clientId)) {
+            adoptedOwnership = { clientId, reportedGeneration, enemySessionId, adoptedOwnership.authorityRoomKey };
+        }
+        bool reportedHeld = payload["extraState"]["held"].get<bool>();
+        if (!reportedHeld && reportedGeneration == adoptedOwnership.generation &&
+            adoptedOwnership.ownerClientId == 0) {
+            // The pickup acknowledgement can be lost during the door transition. A session-bound release at the
+            // carrier's position is sufficient to adopt and immediately throw the missing incarnation.
+            adoptedOwnership.ownerClientId = clientId;
+        }
+        validAdoption = validAdoption &&
+                        ((reportedHeld && reportedGeneration == adoptedOwnership.generation &&
+                          (adoptedOwnership.ownerClientId == 0 || adoptedOwnership.ownerClientId == clientId)) ||
+                         (!reportedHeld && reportedGeneration == adoptedOwnership.generation &&
+                          adoptedOwnership.ownerClientId == clientId));
+        if (validAdoption) {
+            target = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorId, reportedPos.x, reportedPos.y,
+                                 reportedPos.z, worldRotX, worldRotY, worldRotZ, actorParams);
+            if (target != nullptr) {
+                CaptureEnemySpawnParams(target);
+                SetEnemyNetworkId(target, networkId);
+                target->room = -1;
+                target->colChkInfo.health = health;
+                enemyCarryOwnership[networkId] = adoptedOwnership;
+                adoptedCarryable = true;
+            }
+        }
+    }
     if (target == nullptr) {
         return;
     }
@@ -800,20 +914,33 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
         return;
     }
 
-    std::string reportKind = payload.value("reportKind", std::string(""));
     if (reportKind == "state") {
-        if (health != target->colChkInfo.health) {
+        if (!adoptedCarryable && health != target->colChkInfo.health) {
             return;
         }
-        bool isCarryable = target->id == ACTOR_EN_NIW || target->id == ACTOR_OBJ_TSUBO ||
-                           target->id == ACTOR_OBJ_KIBAKO || target->id == ACTOR_EN_BOMBF ||
-                           target->id == ACTOR_EN_BOM;
+        bool isCarryable = IsCarryableActorId(target->id);
         if (isCarryable && payload.contains("carryAction") && payload["carryAction"].is_string()) {
             std::string carryAction = payload["carryAction"].get<std::string>();
-            uint32_t reportedGeneration = payload.value("carryGeneration", UINT32_MAX);
-            EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkId];
+            uint32_t reportedGeneration;
+            s16 reportedParams;
+            if (!ReadReportedU32(payload, "carryGeneration", reportedGeneration) ||
+                !ReadReportedS16(payload, "actorParams", reportedParams) ||
+                reportedParams != GetEnemySpawnParams(target)) {
+                return;
+            }
+            EnemyCarryOwnershipState& currentOwnership = enemyCarryOwnership[networkId];
+            EnemyCarryOwnershipState ownership = currentOwnership;
             if (ownership.authoritySessionId != enemySessionId) {
-                ownership = { 0, 0, enemySessionId };
+                ownership.authoritySessionId = enemySessionId;
+                ownership.generation++;
+                if (ownership.generation == 0) {
+                    ownership.generation++;
+                }
+            }
+            ownership.authorityRoomKey = GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
+            if (!payload.contains("extraState") || !payload["extraState"].is_object() ||
+                payload.value("carryReporterSessionId", (uint64_t)0) != client.enemySessionId) {
+                return;
             }
             const nlohmann::json& extraState = payload["extraState"];
             bool reportedHeld = extraState.value("held", false);
@@ -844,8 +971,9 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
             // A newly elected authority may have missed the previous authority's last ownership snapshot. The
             // holder's generation is monotonic and the report is bound to this authority session, so adopt a newer
             // generation before evaluating the requested transition.
-            if (reportedGeneration > ownership.generation) {
-                ownership = { clientId, reportedGeneration, enemySessionId };
+            if (reportedGeneration > ownership.generation &&
+                (ownership.ownerClientId == 0 || ownership.ownerClientId == clientId)) {
+                ownership = { clientId, reportedGeneration, enemySessionId, ownership.authorityRoomKey };
             }
 
             if (target->parent != nullptr && target->parent != target && ownership.ownerClientId != ownClientId) {
@@ -856,6 +984,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
                 }
             }
 
+            bool appliedTransition = false;
             if (carryAction == "acquire" && reportedGeneration == ownership.generation &&
                 (ownership.ownerClientId == 0 || ownership.ownerClientId == clientId)) {
                 if (ownership.ownerClientId == 0) {
@@ -866,6 +995,7 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
                     }
                 }
                 ApplyReportedEnemyState(target, payload);
+                appliedTransition = true;
             } else if (carryAction == "release" && reportedGeneration == ownership.generation &&
                        ownership.ownerClientId == clientId) {
                 ownership.ownerClientId = 0;
@@ -874,6 +1004,10 @@ void Anchor::HandlePacket_ReportEnemyDamage(nlohmann::json payload) {
                     ownership.generation++;
                 }
                 ApplyReportedEnemyState(target, payload);
+                appliedTransition = true;
+            }
+            if (appliedTransition) {
+                currentOwnership = ownership;
             }
             enemyHealthTracker[target] = target->colChkInfo.health;
             return;

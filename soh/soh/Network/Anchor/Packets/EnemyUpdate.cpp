@@ -3695,6 +3695,7 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
         nlohmann::json extraState = GetEnemyExtraState(actor);
         if (IsCarryableActor(actor)) {
             EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkId];
+            uint32_t authorityRoomKey = GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
             if (ownership.authoritySessionId != enemySessionId) {
                 ownership.authoritySessionId = enemySessionId;
                 ownership.generation++;
@@ -3702,9 +3703,11 @@ void Anchor::SendPacket_EnemyUpdate(std::vector<Actor*> actors) {
                     ownership.generation++;
                 }
             }
+            ownership.authorityRoomKey = authorityRoomKey;
             extraState["carryOwnerClientId"] = ownership.ownerClientId;
             extraState["carryGeneration"] = ownership.generation;
             extraState["carryAuthoritySessionId"] = ownership.authoritySessionId;
+            extraState["carryAuthorityRoomKey"] = ownership.authorityRoomKey;
             extraState["held"] = ownership.ownerClientId != 0;
         }
         if (appliedEnemyDamageOperations.contains(networkId) &&
@@ -4028,20 +4031,25 @@ void Anchor::HandlePacket_EnemyUpdate(nlohmann::json payload) {
             extraState["carryGeneration"].is_number_unsigned() &&
             extraState.contains("carryAuthoritySessionId") &&
             extraState["carryAuthoritySessionId"].is_number_unsigned() &&
+            extraState.contains("carryAuthorityRoomKey") && extraState["carryAuthorityRoomKey"].is_number_unsigned() &&
             extraState["carryOwnerClientId"].get<uint64_t>() <= UINT32_MAX &&
-            extraState["carryGeneration"].get<uint64_t>() <= UINT32_MAX) {
+            extraState["carryGeneration"].get<uint64_t>() <= UINT32_MAX &&
+            extraState["carryAuthorityRoomKey"].get<uint64_t>() <= UINT32_MAX) {
             uint32_t ownerClientId = extraState["carryOwnerClientId"].get<uint32_t>();
             uint32_t generation = extraState["carryGeneration"].get<uint32_t>();
             uint64_t carryAuthoritySessionId = extraState["carryAuthoritySessionId"].get<uint64_t>();
+            uint32_t carryAuthorityRoomKey = extraState["carryAuthorityRoomKey"].get<uint32_t>();
             EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkIds[i]];
             if (carryAuthoritySessionId == payload.value("enemySessionId", (uint64_t)0) &&
-                (ownership.authoritySessionId != carryAuthoritySessionId || generation > ownership.generation)) {
+                carryAuthorityRoomKey == GetEnemyRoomKey(gPlayState->sceneNum, authorityRoomNum) &&
+                (ownership.authoritySessionId != carryAuthoritySessionId ||
+                 ownership.authorityRoomKey != carryAuthorityRoomKey || generation > ownership.generation)) {
                 Player* player = GET_PLAYER(gPlayState);
                 bool heldByLocalPlayer = target->parent != nullptr && target->parent != target;
                 if (ownerClientId != ownClientId && heldByLocalPlayer && player->heldActor == target) {
                     Player_DetachHeldActor(gPlayState, player);
                 }
-                ownership = { ownerClientId, generation, carryAuthoritySessionId };
+                ownership = { ownerClientId, generation, carryAuthoritySessionId, carryAuthorityRoomKey };
                 if (ownerClientId == 0) {
                     if (target->parent == target) {
                         target->parent = nullptr;

@@ -942,12 +942,17 @@ void Anchor::AssignEnemyNetworkIds(std::vector<Actor*> actors) {
 }
 
 void Anchor::ResetEnemyRoomTransientState() {
+    pendingCarryMigrationIds.clear();
     if (gPlayState != nullptr) {
         for (s32 category = ACTORCAT_SWITCH; category < ACTORCAT_MAX; category++) {
             for (Actor* actor = gPlayState->actorCtx.actorLists[category].head; actor != nullptr; actor = actor->next) {
                 bool isCarryable = actor->id == ACTOR_EN_NIW || actor->id == ACTOR_OBJ_TSUBO ||
-                                   actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF ||
-                                   actor->id == ACTOR_EN_BOM;
+                                    actor->id == ACTOR_OBJ_KIBAKO || actor->id == ACTOR_EN_BOMBF ||
+                                    actor->id == ACTOR_EN_BOM;
+                uint64_t networkId = GetEnemyNetworkId(actor);
+                if (isCarryable && networkId != 0 && actor->parent != nullptr && actor->parent != actor) {
+                    pendingCarryMigrationIds.insert(networkId);
+                }
                 if (isCarryable && actor->parent == actor) {
                     actor->parent = nullptr;
                 }
@@ -1742,9 +1747,19 @@ void Anchor::DetectEnemyDamage() {
         if (isCarryable && networkId != 0) {
             bool isHeldByLocalPlayer = act->parent != nullptr && act->parent != act;
             bool wasHeldByLocalPlayer = previouslyHeldEnemyIds.contains(networkId);
+            bool migrationPending = pendingCarryMigrationIds.contains(networkId);
+            uint32_t authorityClientId = GetEnemySyncAuthorityClientId();
             EnemyCarryOwnershipState& ownership = enemyCarryOwnership[networkId];
 
             if (HasEnemySyncAuthority()) {
+                if (ownership.authoritySessionId != enemySessionId) {
+                    ownership.authoritySessionId = enemySessionId;
+                    ownership.generation++;
+                    if (ownership.generation == 0) {
+                        ownership.generation++;
+                    }
+                }
+                ownership.authorityRoomKey = GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num);
                 if (isHeldByLocalPlayer && ownership.ownerClientId != ownClientId) {
                     ownership.ownerClientId = ownClientId;
                     ownership.generation++;
@@ -1767,8 +1782,16 @@ void Anchor::DetectEnemyDamage() {
                         act->parent = nullptr;
                     }
                 }
+            } else if (migrationPending && clients.contains(authorityClientId) &&
+                       ownership.authoritySessionId == clients[authorityClientId].enemySessionId &&
+                       ownership.authorityRoomKey ==
+                           GetEnemyRoomKey(gPlayState->sceneNum, gPlayState->roomCtx.curRoom.num) &&
+                       ownership.ownerClientId == (isHeldByLocalPlayer ? ownClientId : 0)) {
+                pendingCarryMigrationIds.erase(networkId);
             } else if (isHeldByLocalPlayer && !wasHeldByLocalPlayer) {
                 previouslyHeldEnemyIds.insert(networkId);
+                SendPacket_ReportEnemyState(act);
+            } else if (migrationPending && gPlayState->state.frames % 10 == 0) {
                 SendPacket_ReportEnemyState(act);
             } else if (isHeldByLocalPlayer && ownership.ownerClientId != ownClientId &&
                        gPlayState->state.frames % 10 == 0) {
